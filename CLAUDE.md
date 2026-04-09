@@ -24,7 +24,24 @@ npm run report      # GA4 성과 리포트
 
 이 파일들은 예진매니저가 작성하고 관리한다. AI는 이 지식을 기반으로 글을 생성한다.
 
-## Blog Generation Pipeline
+## Blog Generation Pipeline (9단계 프레임워크)
+
+한 채팅 세션에서 순차적으로 실행하는 콘텐츠 제작 파이프라인.
+뇌2(미용지식/브랜드), 뇌3(소비자 심리)는 프롬프트 5 단계에서 복붙 입력한다.
+
+| 순서 | 프롬프트 | 핵심 역할 | 사용자 입력 |
+|------|----------|-----------|------------|
+| 1 | `01-longtail-keywords.md` | 롱테일 키워드 50개 생성 | 기본 키워드 |
+| 2 | `02-search-intent.md` | 검색 의도 분석 + 콘텐츠 개요 | 메인 키워드 |
+| 3 | `03-heading-review.md` | GEO 기준 소제목 정리 | 삭제/유지 선택 |
+| 4 | `04-content-writer.md` | SEO+EEAT 본문 초안 작성 | 목적, 톤, CTA |
+| 5 | `05-draft-review.md` | 다듬기 + 팩트체크 + 뇌2/뇌3 반영 | 뇌2, 뇌3 복붙 |
+| 6 | `06-aeo-structure.md` | AEO 구조 최적화 + 이미지 가이드 | - |
+| 7 | `07-second-review.md` | 구조 변경 후 최종 점검 | - |
+| 8 | `08-title-description.md` | 타이틀 5개 + 디스크립션 → 최종 선택 | 최종 선택 |
+| 9 | `09-url-slug.md` | URL 슬러그 3개 → 최종 선택 | 최종 선택 |
+
+### 자동화 파이프라인 (GitHub Actions 연동)
 
 1. **주제 결정**: CLI `--topic` 인자 또는 구글시트에서 `status=planned` 행 조회
 2. **지식 로딩**: `knowledge/` 전체 .md 파일 읽어서 컨텍스트 조합
@@ -32,12 +49,10 @@ npm run report      # GA4 성과 리포트
    - `정보형` → templates/info-post.md
    - `스토리형` → templates/story-post.md
    - `시즌형` → templates/seasonal-post.md
-4. **시스템 프롬프트**: `prompts/blog-writer.md` 로딩
-5. **Claude API 호출**: 지식 + 템플릿 + 주제 → 초안 생성
-6. **SEO 최적화**: `prompts/seo-optimizer.md`로 2차 패스
-7. **구글독스 생성**: Drive 폴더에 새 문서 생성
-8. **시트 업데이트**: status → `draft_ready`, doc_url 기록
-9. **로그**: `status/pipeline-log.jsonl`에 기록
+4. **9단계 프롬프트 순차 실행**: `prompts/01~09` 파이프라인
+5. **구글독스 생성**: Drive 폴더에 새 문서 생성
+6. **시트 업데이트**: status → `draft_ready`, doc_url 기록
+7. **로그**: `status/pipeline-log.jsonl`에 기록
 
 ## Git 협업 규칙
 
@@ -178,7 +193,15 @@ planned → generating → draft_ready → reviewing → published → tracking
 
 ### 프롬프트 수정법
 
-`prompts/` 폴더의 파일을 수정하면 AI의 글쓰기 스타일이 바뀝니다.
-- `blog-writer.md` — 글의 전체 톤과 구조
-- `seo-optimizer.md` — SEO 최적화 기준
-- `title-generator.md` — 제목 스타일
+`prompts/` 폴더의 파일을 수정하면 AI의 글쓰기 스타일이 바뀝니다. 9단계 순서대로 구성되어 있습니다.
+
+- `01-longtail-keywords.md` — 롱테일 키워드 생성
+- `02-search-intent.md` — 검색 의도 분석 + 콘텐츠 개요
+- `03-heading-review.md` — H2/H3 소제목 GEO 기준 정리
+- `04-content-writer.md` — 본문 초안 작성 (SEO + EEAT)
+- `05-draft-review.md` — 다듬기 + 팩트체크 + 뇌2/뇌3 반영
+- `06-aeo-structure.md` — AEO 구조 최적화 + 이미지 가이드
+- `07-second-review.md` — 2차 다듬기 (구조 변경 후 점검)
+- `08-title-description.md` — 타이틀 + 메타 디스크립션
+- `09-url-slug.md` — URL 슬러그 생성
+- `review-checklist.md` — 예진매니저 발행 전 최종 체크리스트
