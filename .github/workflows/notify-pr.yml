@@ -1,0 +1,79 @@
+name: PR 알림 → Google Chat
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Google Chat 알림 전송
+        if: env.GOOGLE_CHAT_WEBHOOK_URL != ''
+        env:
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          PR_ACTION="${{ github.event.action }}"
+
+          if [ "$PR_ACTION" = "opened" ]; then
+            ACTION_TEXT="새 PR 생성"
+          elif [ "$PR_ACTION" = "synchronize" ]; then
+            ACTION_TEXT="PR 업데이트"
+          else
+            ACTION_TEXT="PR 재오픈"
+          fi
+
+          # 변경된 파일 목록
+          CHANGED_FILES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "${{ github.event.pull_request.url }}/files" | \
+            python3 -c "import sys,json; files=json.load(sys.stdin); print(', '.join(f['filename'] for f in files[:10]))" 2>/dev/null || echo "파일 목록 조회 실패")
+
+          curl -X POST "$GOOGLE_CHAT_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d @- <<EOF
+          {
+            "cards": [{
+              "header": {
+                "title": "📝 ${ACTION_TEXT}",
+                "subtitle": "visual-auto"
+              },
+              "sections": [{
+                "widgets": [
+                  {
+                    "keyValue": {
+                      "topLabel": "제목",
+                      "content": "${PR_TITLE}"
+                    }
+                  },
+                  {
+                    "keyValue": {
+                      "topLabel": "작성자",
+                      "content": "${PR_AUTHOR}"
+                    }
+                  },
+                  {
+                    "keyValue": {
+                      "topLabel": "변경 파일",
+                      "content": "${CHANGED_FILES}"
+                    }
+                  },
+                  {
+                    "buttons": [{
+                      "textButton": {
+                        "text": "PR 확인하기",
+                        "onClick": {
+                          "openLink": {
+                            "url": "${PR_URL}"
+                          }
+                        }
+                      }
+                    }]
+                  }
+                ]
+              }]
+            }]
+          }
+          EOF
