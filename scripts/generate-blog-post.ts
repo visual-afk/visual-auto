@@ -1,7 +1,7 @@
 import { appendFileSync } from 'fs';
 import { resolve } from 'path';
 import { fetchTodayRows, fetchPlannedRows, updateStatus, updateDocUrl, updateGeneratedAt } from '../lib/google-sheets.js';
-import { loadKnowledge, loadPrompt, loadTemplate, callClaude, parseJsonResponse } from '../lib/claude-client.js';
+import { loadKnowledge, loadPrompt, loadTemplate, callAI, parseJsonResponse } from '../lib/ai-client.js';
 import { createBlogDoc } from '../lib/google-docs.js';
 import type { GeneratedPost, SeoOptimizedPost, PipelineLogEntry, SheetRow } from '../lib/types.js';
 
@@ -42,7 +42,7 @@ async function generateForRow(row: SheetRow): Promise<void> {
 
     // 2. 초안 생성 (Agent 1+2: 지식 기반 글쓰기)
     console.log('✍️  초안 생성 중...');
-    const draftResult = await callClaude({
+    const draftResult = await callAI({
       system: [
         writerPrompt,
         '\n\n--- 비주얼살롱 지식베이스 ---\n',
@@ -66,7 +66,7 @@ async function generateForRow(row: SheetRow): Promise<void> {
 
     // 3. SEO 최적화 (Agent 3)
     console.log('🔍 SEO 최적화 중...');
-    const seoResult = await callClaude({
+    const seoResult = await callAI({
       system: seoPrompt,
       userMessage: [
         `원본 블로그 글:`,
