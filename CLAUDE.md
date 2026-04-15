@@ -96,6 +96,9 @@ git push origin yejin/작업내용
 | topic | 주제 |
 | keywords | 키워드 (쉼표 구분) |
 | post_type | 글유형: 정보형/스토리형/시즌형 |
+| funnel | 퍼널 단계: 1.인식/2.검색/3.비교/4.불안/5.예약/6.시술/7.재방문 |
+| brain_focus | 주력 뇌: 뇌1(SEO)/뇌2(미용브랜딩)/뇌3(소비자심리) |
+| target_persona | 타겟 페르소나: P01~P07 (복수 가능) |
 | status | planned/generating/draft_ready/reviewing/published/tracking |
 | scheduled_date | 예정일 (YYYY-MM-DD) |
 | generated_at | 생성 완료 시각 |
