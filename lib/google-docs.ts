@@ -4,13 +4,14 @@ import { config } from './config.js';
 export async function createBlogDoc(title: string, content: string): Promise<string> {
   const drive = getDrive();
 
-  // 1. Drive에 빈 문서 생성 (지정 폴더에)
+  // 1. Drive에 빈 문서 생성 (지정 폴더에, 공유 드라이브 지원)
   const file = await drive.files.create({
     requestBody: {
       name: `[비주얼살롱] ${title} - ${new Date().toISOString().split('T')[0]}`,
       mimeType: 'application/vnd.google-apps.document',
       parents: [config.google.docsFolderId],
     },
+    supportsAllDrives: true,
   });
 
   const docId = file.data.id;

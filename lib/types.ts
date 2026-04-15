@@ -5,6 +5,9 @@ export interface SheetRow {
   topic: string;
   keywords: string;
   postType: PostType;
+  funnel: FunnelStage;
+  brainFocus: BrainFocus;
+  targetPersona: string;
   status: PostStatus;
   scheduledDate: string;
   generatedAt: string;
@@ -16,6 +19,8 @@ export interface SheetRow {
 }
 
 export type PostType = '정보형' | '스토리형' | '시즌형';
+export type FunnelStage = '1.인식' | '2.검색' | '3.비교' | '4.불안' | '5.예약' | '6.시술' | '7.재방문';
+export type BrainFocus = '뇌1' | '뇌2' | '뇌3';
 export type PostStatus = 'planned' | 'generating' | 'draft_ready' | 'reviewing' | 'published' | 'tracking';
 
 export interface GeneratedPost {

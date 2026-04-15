@@ -10,7 +10,7 @@
 | 역할 | 파일 경로 | 핵심 내용 |
 |------|-----------|-----------|
 | **뇌2** | `knowledge/brand/brain2_branding_beauty.md` | 브랜드 아이덴티티(Index 01), 모발 과학(02), 결마지 원리(03), 금지어(04), 팩트체크(05), 디자인 시너지(06), 뇌3 매핑(07) |
-| **뇌3** | `knowledge/consumer/brain3_consumer_psychology.md` | 4층 심리 구조(Index 01), 7대 페르소나(02), 7단계 여정(03), 감정 공식(04), 콘텐츠 금기(05), 뇌2 매핑(06) |
+| **뇌3** | `knowledge/consumer/psychology.md` + `knowledge/consumer/personas.md` | 소비자 심리(의심→호기심 전환), 지점별 페르소나, CTA 패턴 |
 | 브랜드 보이스 | `knowledge/brand/brand-voice.md` | 톤앤매너, 좋은/나쁜 문장 예시, 브랜드 키워드 |
 | CTA 패턴 | `knowledge/brand/cta-patterns.md` | CTA 5가지 유형 + 작성 원칙 |
 | 서비스 정보 | `knowledge/brand/services.md` | 서비스 메뉴, 지점 현황, 가격 규칙 |
