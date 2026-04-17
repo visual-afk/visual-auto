@@ -1,7 +1,7 @@
 import { appendFileSync } from 'fs';
 import { resolve } from 'path';
 import { fetchTodayRows, fetchPlannedRows, updateStatus, updateDocUrl, updateGeneratedAt } from '../lib/google-sheets.js';
-import { loadKnowledge, loadPrompt, loadTemplate, callClaude, parseJsonResponse } from '../lib/claude-client.js';
+import { loadKnowledge, loadBranchKnowledge, loadPrompt, loadTemplate, callClaude, parseJsonResponse } from '../lib/claude-client.js';
 import { createBlogDoc } from '../lib/google-docs.js';
 import type { GeneratedPost, SeoOptimizedPost, PipelineLogEntry, SheetRow } from '../lib/types.js';
 
@@ -22,9 +22,11 @@ function getPostTypeTemplate(postType: string): string {
 
 async function generateForRow(row: SheetRow): Promise<void> {
   const startTime = Date.now();
-  console.log(`\n🤖 생성 시작: "${row.topic}" (${row.postType})\n`);
+  const branchLabel = row.branch ? ` [${row.branch}]` : '';
+  const purposeLabel = row.contentPurpose || '노출용';
+  console.log(`\n🤖 생성 시작: "${row.topic}" (${row.postType}, ${purposeLabel})${branchLabel}\n`);
 
-  log({ timestamp: new Date().toISOString(), topic: row.topic, status: 'started' });
+  log({ timestamp: new Date().toISOString(), topic: row.topic, branch: row.branch || undefined, status: 'started' });
 
   // 상태 업데이트: generating
   await updateStatus(row.rowIndex, 'generating');
@@ -34,11 +36,12 @@ async function generateForRow(row: SheetRow): Promise<void> {
   try {
     // 1. 지식베이스 로딩
     const knowledge = loadKnowledge();
+    const branchKnowledge = loadBranchKnowledge(row.branch);
     const template = loadTemplate(getPostTypeTemplate(row.postType));
     const writerPrompt = loadPrompt('blog-writer');
     const seoPrompt = loadPrompt('seo-optimizer');
 
-    console.log(`📚 지식베이스 로딩 완료 (${knowledge.length}자)`);
+    console.log(`📚 지식베이스 로딩 완료 (${knowledge.length}자${branchKnowledge ? ` + 지점 ${branchKnowledge.length}자` : ''})`);
 
     // 2. 초안 생성 (Agent 1+2: 지식 기반 글쓰기)
     console.log('✍️  초안 생성 중...');
@@ -47,15 +50,20 @@ async function generateForRow(row: SheetRow): Promise<void> {
         writerPrompt,
         '\n\n--- 비주얼살롱 지식베이스 ---\n',
         knowledge,
+        ...(branchKnowledge ? ['\n\n--- 지점 특화 컨텍스트 ---\n', `이 글은 **비주얼살롱 ${row.branch}** 지점용 글입니다.\n`, branchKnowledge] : []),
         '\n\n--- 글 구조 템플릿 ---\n',
         template,
       ].join(''),
       userMessage: [
+        ...(row.branch ? [`지점: ${row.branch}`] : []),
         `주제: ${row.topic}`,
         `키워드: ${row.keywords}`,
         `글유형: ${row.postType}`,
+        `글목적: ${purposeLabel}`,
         '',
         '위 주제로 블로그 글을 작성해주세요. 지식베이스와 템플릿을 참고하되, 자연스럽고 읽기 좋은 글을 써주세요.',
+        '글목적에 맞는 톤, CTA 강도, 마무리 링크를 반드시 적용하세요 (links.md 참고).',
+        ...(row.branch ? ['지점 특화 컨텍스트의 톤앤매너, CTA 패턴, 금지 표현을 반드시 준수해주세요.'] : []),
       ].join('\n'),
       temperature: 0.7,
     });
@@ -73,8 +81,9 @@ async function generateForRow(row: SheetRow): Promise<void> {
         JSON.stringify(draft, null, 2),
         '',
         `타겟 키워드: ${row.keywords}`,
+        `글목적: ${purposeLabel}`,
         '',
-        'SEO 관점에서 최적화해주세요.',
+        'SEO 관점에서 최적화해주세요. 글목적에 맞는 SEO 강도를 적용하세요.',
       ].join('\n'),
       temperature: 0.3,
     });
@@ -94,7 +103,7 @@ async function generateForRow(row: SheetRow): Promise<void> {
       ...draft.image_suggestions.map((s, i) => `${i + 1}. ${s}`),
     ].join('\n');
 
-    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent);
+    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined);
 
     // 5. 시트 업데이트
     await updateStatus(row.rowIndex, 'draft_ready');
@@ -108,6 +117,7 @@ async function generateForRow(row: SheetRow): Promise<void> {
     log({
       timestamp: new Date().toISOString(),
       topic: row.topic,
+      branch: row.branch || undefined,
       status: 'completed',
       doc_url: docUrl,
       tokens_used: totalTokens,
@@ -124,6 +134,7 @@ async function generateForRow(row: SheetRow): Promise<void> {
     log({
       timestamp: new Date().toISOString(),
       topic: row.topic,
+      branch: row.branch || undefined,
       status: 'failed',
       error: errorMsg,
       duration_ms: duration,
@@ -134,8 +145,9 @@ async function generateForRow(row: SheetRow): Promise<void> {
 }
 
 async function main() {
-  // --topic "주제" 인자 확인
+  // CLI 인자 확인
   const topicArg = process.argv.find((_, i, arr) => arr[i - 1] === '--topic');
+  const branchArg = process.argv.find((_, i, arr) => arr[i - 1] === '--branch');
 
   let rows: SheetRow[];
 
@@ -154,6 +166,16 @@ async function main() {
       console.log('오늘 예정된 블로그 글이 없습니다.');
       return;
     }
+  }
+
+  // --branch 필터: 특정 지점만 생성
+  if (branchArg) {
+    rows = rows.filter(r => r.branch === branchArg);
+    if (rows.length === 0) {
+      console.log(`"${branchArg}" 지점의 글이 없습니다.`);
+      return;
+    }
+    console.log(`🏪 ${branchArg} 지점 필터 적용`);
   }
 
   console.log(`📝 ${rows.length}건 생성 시작\n`);

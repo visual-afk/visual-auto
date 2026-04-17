@@ -18,4 +18,6 @@ for (const r of rows) {
   console.log(`  funnel: ${r.funnel}`);
   console.log(`  brain_focus: ${r.brainFocus}`);
   console.log(`  target_persona: ${r.targetPersona}`);
+  console.log(`  content_purpose: ${r.contentPurpose}`);
+  console.log(`  branch: ${r.branch}`);
 }

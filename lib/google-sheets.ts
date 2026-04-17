@@ -1,6 +1,6 @@
 import { getSheets } from './google-auth.js';
 import { config, SHEET_COLUMNS, SHEET_RANGE } from './config.js';
-import type { SheetRow, PostStatus, PostType, FunnelStage, BrainFocus } from './types.js';
+import type { SheetRow, PostStatus, PostType, ContentPurpose, FunnelStage, BrainFocus, Branch } from './types.js';
 
 function parseRow(values: string[], index: number): SheetRow {
   return {
@@ -10,6 +10,7 @@ function parseRow(values: string[], index: number): SheetRow {
     topic: values[SHEET_COLUMNS.TOPIC] || '',
     keywords: values[SHEET_COLUMNS.KEYWORDS] || '',
     postType: (values[SHEET_COLUMNS.POST_TYPE] || '정보형') as PostType,
+    contentPurpose: (values[SHEET_COLUMNS.CONTENT_PURPOSE] || '노출용') as ContentPurpose,
     status: (values[SHEET_COLUMNS.STATUS] || 'planned') as PostStatus,
     scheduledDate: values[SHEET_COLUMNS.SCHEDULED_DATE] || '',
     generatedAt: values[SHEET_COLUMNS.GENERATED_AT] || '',
@@ -21,6 +22,7 @@ function parseRow(values: string[], index: number): SheetRow {
     funnel: (values[SHEET_COLUMNS.FUNNEL] || '2.검색') as FunnelStage,
     brainFocus: (values[SHEET_COLUMNS.BRAIN_FOCUS] || '뇌1') as BrainFocus,
     targetPersona: values[SHEET_COLUMNS.TARGET_PERSONA] || '',
+    branch: (values[SHEET_COLUMNS.BRANCH] || '') as Branch,
   };
 }
 

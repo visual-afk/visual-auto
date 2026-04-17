@@ -39,6 +39,25 @@ export function loadKnowledgePillar(pillar: 'seo' | 'brand' | 'consumer'): strin
     .join('\n\n');
 }
 
+/** 특정 지점의 knowledge만 로딩 (branch-{지점}.md + keywords-{지점}.md) */
+export function loadBranchKnowledge(branch: string): string {
+  if (!branch) return '';
+
+  const knowledgeDir = join(PROJECT_ROOT, 'knowledge');
+  const files = collectMdFiles(knowledgeDir)
+    .filter(f => f.includes(`branch-${branch}`) || f.includes(`keywords-${branch}`));
+
+  return files
+    .map(f => {
+      const relativePath = f.replace(PROJECT_ROOT + '/', '');
+      const content = readFileSync(f, 'utf-8').trim();
+      if (content.includes('이 파일을') && content.includes('채워주세요')) return '';
+      return `--- ${relativePath} ---\n${content}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /** prompts/ 폴더에서 특정 프롬프트 파일 읽기 */
 export function loadPrompt(name: string): string {
   const promptPath = join(PROJECT_ROOT, 'prompts', `${name}.md`);

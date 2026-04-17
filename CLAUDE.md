@@ -9,6 +9,7 @@
 npm run sync        # 구글시트 → 캘린더 동기화
 npm run generate    # AI 블로그 글 생성 (오늘 예정된 주제)
 npm run generate -- --topic "봄철 두피케어"  # 특정 주제로 생성
+npm run generate -- --branch 성수점          # 특정 지점만 생성
 npm run schedule    # 이번주 일정 확인
 npm run report      # GA4 성과 리포트
 ```
@@ -21,6 +22,16 @@ npm run report      # GA4 성과 리포트
 - `knowledge/seo/` — SEO 전략, 키워드, 네이버 SEO 규칙
 - `knowledge/brand/` — 비주얼살롱 브랜드 보이스, 서비스, 전문성
 - `knowledge/consumer/` — 소비자 심리, 페르소나, 의사결정 여정
+
+### 지점별 특화 파일
+파이프라인이 시트의 `branch` 컬럼을 읽어 해당 지점의 특화 파일을 자동 로딩한다.
+
+| 지점 | 소비자 심리 | 키워드 | 핵심 타겟 |
+|------|------------|--------|-----------|
+| 성수점 | `consumer/branch-성수점.md` | `seo/keywords-성수점.md` | 외국인, 글로벌 |
+| 마곡나루점 | `consumer/branch-마곡나루점.md` | `seo/keywords-마곡나루점.md` | 전문직, 대기업 |
+| 강남신사점 | `consumer/branch-강남신사점.md` | `seo/keywords-강남신사점.md` | 프리미엄, 고급 |
+| 사가정점 | `consumer/branch-사가정점.md` | `seo/keywords-사가정점.md` | 애기엄마, 동네밀착 |
 
 이 파일들은 예진매니저가 작성하고 관리한다. AI는 이 지식을 기반으로 글을 생성한다.
 
@@ -49,7 +60,11 @@ npm run report      # GA4 성과 리포트
    - `정보형` → templates/info-post.md
    - `스토리형` → templates/story-post.md
    - `시즌형` → templates/seasonal-post.md
-4. **9단계 프롬프트 순차 실행**: `prompts/01~09` 파이프라인
+4. **글목적 분기**: 시트의 `content_purpose` 컬럼에 따라 톤·CTA·링크 자동 분기
+   - `노출용` → SEO 최우선, 소프트 CTA, 유입글 링크
+   - `유입용` → 설득 중심, 미디엄 CTA, 네이버 지도 링크
+   - `전환용` → 전환 중심, 하드 CTA, 다중 예약 경로
+5. **프롬프트 실행**: `prompts/blog-writer.md` (초안) + `prompts/seo-optimizer.md` (SEO)
 5. **구글독스 생성**: Drive 폴더에 새 문서 생성
 6. **시트 업데이트**: status → `draft_ready`, doc_url 기록
 7. **로그**: `status/pipeline-log.jsonl`에 기록
@@ -96,6 +111,7 @@ git push origin yejin/작업내용
 | topic | 주제 |
 | keywords | 키워드 (쉼표 구분) |
 | post_type | 글유형: 정보형/스토리형/시즌형 |
+| content_purpose | 글목적: 노출용/유입용/전환용 (Q열) |
 | funnel | 퍼널 단계: 1.인식/2.검색/3.비교/4.불안/5.예약/6.시술/7.재방문 |
 | brain_focus | 주력 뇌: 뇌1(SEO)/뇌2(미용브랜딩)/뇌3(소비자심리) |
 | target_persona | 타겟 페르소나: P01~P07 (복수 가능) |
@@ -107,16 +123,32 @@ git push origin yejin/작업내용
 | naver_url | 네이버 블로그 URL |
 | views | 조회수 |
 | conversions | 전환수 |
+| branch | 지점: 성수점/마곡나루점/강남신사점/사가정점 (R열) |
 
 ### 상태 흐름
 ```
 planned → generating → draft_ready → reviewing → published → tracking
 ```
 
+### 글 목적별 분기 시스템
+
+구글시트 `content_purpose` 컬럼(Q열)에 따라 글의 톤, CTA 강도, 마무리 링크가 자동으로 달라진다.
+
+| 글목적 | 독자 반응 | CTA 강도 | 마무리 링크 |
+|--------|----------|----------|------------|
+| **노출용** | "어? 내 얘기네" | 소프트 | 유입용 글 링크 |
+| **유입용** | "오~ 해결하고 싶다" | 미디엄~하드 | 네이버 지도/예약 |
+| **전환용** | "당장 예약!" | 하드 | 지도+전화+예약 다중 경로 |
+
+- 프롬프트: `prompts/blog-writer.md` (자동화용), `prompts/04-content-writer.md` (수동 9단계용)
+- 링크 모음: `knowledge/brand/links.md` (지점별 네이버 지도, SNS, 유입용 글 URL)
+- CTA 전략: `knowledge/brand/cta-patterns.md`
+
 ### 캘린더 연동
 - 시트의 각 행이 캘린더 이벤트로 생성됨
-- 이벤트 제목: `[블로그] {주제}`
-- 이벤트 설명: 키워드, 글유형, 독스 URL
+- 이벤트 제목: `[블로그/{목적}] {주제}` (예: `[블로그/노출] 봄철 두피케어`)
+- 목적별 색상: 노출=파랑, 유입=노랑, 전환=빨강
+- 이벤트 설명: 키워드, 글유형, 글목적, 독스 URL
 
 ### 독스 출력
 - 지정된 Drive 폴더에 새 문서 생성

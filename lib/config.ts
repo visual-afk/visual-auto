@@ -46,9 +46,11 @@ export const SHEET_COLUMNS = {
   FUNNEL: 13,
   BRAIN_FOCUS: 14,
   TARGET_PERSONA: 15,
+  CONTENT_PURPOSE: 16,
+  BRANCH: 17,
 } as const;
 
-export const SHEET_RANGE = '시트1!A2:P'; // 헤더 제외, A~P 컬럼 (퍼널/뇌/페르소나 추가)
+export const SHEET_RANGE = '시트1!A2:R'; // 헤더 제외, A~R 컬럼 (지점 추가)
 
 export const POST_STATUSES = {
   PLANNED: 'planned',
