@@ -1,15 +1,16 @@
 import { getDocs, getDrive } from './google-auth.js';
 import { config } from './config.js';
 
-export async function createBlogDoc(title: string, content: string, branch?: string): Promise<string> {
+export async function createBlogDoc(title: string, content: string, branch?: string, platform?: string): Promise<string> {
   const drive = getDrive();
 
   const branchLabel = branch ? ` ${branch}` : '';
+  const platformLabel = platform ? `<${platform}> ` : '';
 
   // 1. Drive에 빈 문서 생성 (지정 폴더에, 공유 드라이브 지원)
   const file = await drive.files.create({
     requestBody: {
-      name: `[비주얼살롱${branchLabel}] ${title} - ${new Date().toISOString().split('T')[0]}`,
+      name: `${platformLabel}[비주얼살롱${branchLabel}] ${title} - ${new Date().toISOString().split('T')[0]}`,
       mimeType: 'application/vnd.google-apps.document',
       parents: [config.google.docsFolderId],
     },

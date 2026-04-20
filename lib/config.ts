@@ -23,8 +23,8 @@ export const config = {
   ga4: {
     propertyId: optionalEnv('GA4_PROPERTY_ID'),
   },
-  anthropic: {
-    apiKey: optionalEnv('ANTHROPIC_API_KEY'),
+  gemini: {
+    apiKey: optionalEnv('GEMINI_API_KEY'),
   },
 } as const;
 
