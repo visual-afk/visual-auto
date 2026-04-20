@@ -1,8 +1,8 @@
 import { appendFileSync } from 'fs';
 import { resolve } from 'path';
 import { fetchTodayRows, fetchPlannedRows, updateStatus, updateDocUrl, updateGeneratedAt } from '../lib/google-sheets.js';
-import { loadKnowledge, loadBranchKnowledge, loadPrompt, loadTemplate, callClaude, parseJsonResponse } from '../lib/claude-client.js';
-import { createBlogDoc } from '../lib/google-docs.js';
+import { loadKnowledge, loadBranchKnowledge, loadPrompt, loadTemplate, callClaude, parseJsonResponse, generateImage } from '../lib/claude-client.js';
+import { createBlogDoc, replaceImageTagsInDoc } from '../lib/google-docs.js';
 import type { GeneratedPost, SeoOptimizedPost, PipelineLogEntry, SheetRow } from '../lib/types.js';
 
 const LOG_PATH = resolve(import.meta.dirname, '..', 'status', 'pipeline-log.jsonl');
@@ -18,6 +18,18 @@ function getPostTypeTemplate(postType: string): string {
     '시즌형': 'seasonal-post',
   };
   return map[postType] || 'info-post';
+}
+
+function extractImageDescriptions(content: string): string[] {
+  const descriptions: string[] = [];
+  // [IMAGE] 블록에서 포인트/구도/종류 정보 추출
+  const imageBlocks = content.split(/\[IMAGE\]/gi).slice(1);
+  for (const block of imageBlocks) {
+    const lines = block.split('\n').filter(l => l.trim().startsWith('-')).slice(0, 4);
+    const desc = lines.map(l => l.replace(/^-\s*/, '').replace(/^(종류|구도|포인트|alt 텍스트)\s*:\s*/i, '')).join(', ');
+    if (desc.trim()) descriptions.push(desc.trim());
+  }
+  return descriptions;
 }
 
 async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
@@ -115,6 +127,25 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
 
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
+
+    // 4-1. AI 이미지 생성 + 독스 [IMAGE] 위치에 삽입
+    const imageDescriptions = extractImageDescriptions(draft.content);
+    if (imageDescriptions.length > 0) {
+      console.log(`🖼️  이미지 ${imageDescriptions.length}장 생성 중...`);
+      const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
+      if (docId) {
+        const imageBuffers: Buffer[] = [];
+        for (const desc of imageDescriptions.slice(0, 5)) {
+          console.log(`  🎨 생성 중: ${desc.slice(0, 40)}...`);
+          const buf = await generateImage(desc);
+          if (buf) imageBuffers.push(buf);
+        }
+        if (imageBuffers.length > 0) {
+          const inserted = await replaceImageTagsInDoc(docId, imageBuffers);
+          console.log(`  ✅ 이미지 ${inserted}장 글 안에 삽입 완료`);
+        }
+      }
+    }
 
     // 5. 시트 업데이트
     await updateStatus(row.rowIndex, 'draft_ready');

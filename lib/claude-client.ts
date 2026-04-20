@@ -173,6 +173,43 @@ export function parseJsonResponse<T>(text: string): T {
   }
 }
 
+/** Gemini 이미지 생성 (실사풍 헤어스타일) */
+export async function generateImage(prompt: string): Promise<Buffer | null> {
+  const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-image' });
+
+  const maxRetries = 3;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await imageModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: `Professional hair salon photograph: ${prompt}. Shot on Canon EOS R5, 85mm lens, f/2.8, soft natural window lighting. Korean woman, modern upscale salon interior. Magazine editorial quality. CRITICAL: Zero text, zero letters, zero watermarks, zero overlays. Only the photograph.` }] }],
+        generationConfig: { responseModalities: ['image', 'text'] } as any,
+      });
+
+      const response = result.response;
+      for (const candidate of response.candidates || []) {
+        for (const part of candidate.content?.parts || []) {
+          if ((part as any).inlineData) {
+            const data = (part as any).inlineData;
+            return Buffer.from(data.data, 'base64');
+          }
+        }
+      }
+      return null;
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (attempt < maxRetries && (msg.includes('503') || msg.includes('429'))) {
+        const wait = attempt * 10;
+        console.log(`    ⏳ 이미지 생성 재시도 ${attempt}/${maxRetries} (${wait}초 대기)...`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+        continue;
+      }
+      console.log(`    ⚠️ 이미지 생성 실패: ${msg.slice(0, 80)}`);
+      return null;
+    }
+  }
+  return null;
+}
+
 function collectMdFiles(dir: string): string[] {
   const results: string[] = [];
 
