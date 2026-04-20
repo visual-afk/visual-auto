@@ -89,3 +89,4 @@
 {"timestamp":"2026-04-20T14:02:26.152Z","topic":"어려보이는 머리","branch":"사가정점","status":"started"}
 {"timestamp":"2026-04-20T14:09:07.446Z","topic":"어려보이는 머리","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1aHkkkfb0PlqJkrmRUEDM_QEWG7iImrdR8oBG6oBLBs8/edit","tokens_used":33745,"duration_ms":401294}
 {"timestamp":"2026-04-20T14:09:07.450Z","topic":"어려보이는 머리","branch":"사가정점","status":"started"}
+{"timestamp":"2026-04-20T14:13:03.896Z","topic":"어려보이는 머리","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1zumJwsAGwzzdvce6Hj6tEsLQNdh8sM1zXYHeBTf3oNA/edit","tokens_used":32947,"duration_ms":236446}
