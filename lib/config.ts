@@ -26,6 +26,9 @@ export const config = {
   gemini: {
     apiKey: optionalEnv('GEMINI_API_KEY'),
   },
+  anthropic: {
+    apiKey: optionalEnv('ANTHROPIC_API_KEY'),
+  },
 } as const;
 
 // 구글시트 컬럼 매핑 (0-indexed)
