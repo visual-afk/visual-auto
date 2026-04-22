@@ -46,9 +46,14 @@ export const SHEET_COLUMNS = {
   NAVER_URL: 10,
   VIEWS: 11,
   CONVERSIONS: 12,
+  FUNNEL: 13,
+  BRAIN_FOCUS: 14,
+  TARGET_PERSONA: 15,
+  CONTENT_PURPOSE: 16,
+  BRANCH: 17,
 } as const;
 
-export const SHEET_RANGE = '시트1!A2:M'; // 헤더 제외, A~M 컬럼
+export const SHEET_RANGE = '시트1!A2:R'; // 헤더 제외, A~R 컬럼 (지점 추가)
 
 export const POST_STATUSES = {
   PLANNED: 'planned',

@@ -1,23 +1,47 @@
 import { getCalendar } from './google-auth.js';
 import { config } from './config.js';
-import type { SheetRow } from './types.js';
+import type { SheetRow, ContentPurpose } from './types.js';
+
+const PURPOSE_LABELS: Record<ContentPurpose, string> = {
+  '노출용': '노출',
+  '유입용': '유입',
+  '전환용': '전환',
+};
+
+const PURPOSE_COLORS: Record<ContentPurpose, string> = {
+  '노출용': '9',   // 블루베리 (파랑)
+  '유입용': '5',   // 바나나 (노랑)
+  '전환용': '11',  // 토마토 (빨강)
+};
+
+function getPurposeLabel(purpose?: ContentPurpose): string {
+  return PURPOSE_LABELS[purpose || '노출용'] || '노출';
+}
+
+function getPurposeColor(purpose?: ContentPurpose): string {
+  return PURPOSE_COLORS[purpose || '노출용'] || '9';
+}
 
 export async function createBlogEvent(row: SheetRow): Promise<string> {
   const calendar = getCalendar();
+  const purposeTag = getPurposeLabel(row.contentPurpose);
+  const branchTag = row.branch ? `-${row.branch}` : '';
 
   const event = await calendar.events.insert({
     calendarId: config.google.calendarId,
     requestBody: {
-      summary: `[블로그] ${row.topic}`,
+      summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
       description: [
         `키워드: ${row.keywords}`,
         `글유형: ${row.postType}`,
+        `글목적: ${row.contentPurpose || '노출용'}`,
+        ...(row.branch ? [`지점: ${row.branch}`] : []),
         `상태: ${row.status}`,
         row.docUrl ? `독스: ${row.docUrl}` : '',
       ].filter(Boolean).join('\n'),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
-      colorId: '9', // 블루베리
+      colorId: getPurposeColor(row.contentPurpose),
     },
   });
 
@@ -43,19 +67,25 @@ export async function findExistingEvent(topic: string, date: string): Promise<st
 export async function updateBlogEvent(eventId: string, row: SheetRow): Promise<void> {
   const calendar = getCalendar();
 
+  const purposeTag = getPurposeLabel(row.contentPurpose);
+  const branchTag = row.branch ? `-${row.branch}` : '';
+
   await calendar.events.patch({
     calendarId: config.google.calendarId,
     eventId,
     requestBody: {
-      summary: `[블로그] ${row.topic}`,
+      summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
       description: [
         `키워드: ${row.keywords}`,
         `글유형: ${row.postType}`,
+        `글목적: ${row.contentPurpose || '노출용'}`,
+        ...(row.branch ? [`지점: ${row.branch}`] : []),
         `상태: ${row.status}`,
         row.docUrl ? `독스: ${row.docUrl}` : '',
       ].filter(Boolean).join('\n'),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
+      colorId: getPurposeColor(row.contentPurpose),
     },
   });
 }
