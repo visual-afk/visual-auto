@@ -100,3 +100,9 @@
 {"timestamp":"2026-04-21T03:53:20.805Z","topic":"두피 리프팅","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1rOzSKHgkQ8FpqAzjavjLaYFgIoF-g6QmQj_r3cVSuno/edit","tokens_used":32292,"duration_ms":197444}
 {"timestamp":"2026-04-21T04:45:22.706Z","topic":"두피 리프팅","branch":"강남신사점","status":"started"}
 {"timestamp":"2026-04-21T04:48:49.720Z","topic":"두피 리프팅","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/100v6D8wYMqKoBmHg2bhygyAn6-S6932KMtBgfWobuQw/edit","tokens_used":34666,"duration_ms":207015}
+{"timestamp":"2026-04-24T01:52:24.983Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:52:26.506Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [404 Not Found] This model models/gemini-2.0-flash is no longer available to new users. Please update your code to use a newer model for the latest features and improvements.","duration_ms":1123}
+{"timestamp":"2026-04-24T01:53:02.534Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:56:26.085Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/1mv0tzmGDHAvs6rGWJ501uHrLcCjC4a3JkSyvx1VD4Bk/edit","tokens_used":48331,"duration_ms":203551}
+{"timestamp":"2026-04-24T01:56:26.089Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:59:38.717Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/15B-qVmk3gx_PFzZlIFWotNHdMOn-FMnFghJ0571gjQU/edit","tokens_used":47159,"duration_ms":192628}
