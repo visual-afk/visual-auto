@@ -81,10 +81,11 @@ async function callGemini(options: {
 }): Promise<{ text: string; inputTokens: number; outputTokens: number; provider: Provider }> {
   const genAI = new GoogleGenerativeAI(config.gemini.apiKey!);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-pro',
     systemInstruction: options.system,
     generationConfig: {
-      maxOutputTokens: options.maxTokens || 4096,
+      maxOutputTokens: options.maxTokens || 65536,
+      responseMimeType: 'application/json',
       temperature: options.temperature ?? 0.7,
     },
   });
