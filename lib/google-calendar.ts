@@ -36,15 +36,15 @@ function buildDescription(row: SheetRow): string {
   ].filter(Boolean).join('\n');
 }
 
-export async function createBlogEvent(row: SheetRow): Promise<string> {
+export async function createBlogEvent(row: SheetRow, platform = '블로그'): Promise<string> {
   const calendar = getCalendar();
   const purposeTag = getPurposeLabel(row.contentPurpose);
-  const branchTag = row.branch ? `-${row.branch}` : '';
+  const branchTag = row.branch ? ` ${row.branch}` : '';
 
   const event = await calendar.events.insert({
     calendarId: config.google.calendarId,
     requestBody: {
-      summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
+      summary: `<${platform}> ${row.topic} - ${row.branch || ''}`.trim(),
       description: buildDescription(row),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
@@ -73,17 +73,14 @@ export async function findExistingEvent(topic: string, date: string): Promise<st
   return match?.id || null;
 }
 
-export async function updateBlogEvent(eventId: string, row: SheetRow): Promise<void> {
+export async function updateBlogEvent(eventId: string, row: SheetRow, platform = '블로그'): Promise<void> {
   const calendar = getCalendar();
-
-  const purposeTag = getPurposeLabel(row.contentPurpose);
-  const branchTag = row.branch ? `-${row.branch}` : '';
 
   await calendar.events.patch({
     calendarId: config.google.calendarId,
     eventId,
     requestBody: {
-      summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
+      summary: `<${platform}> ${row.topic} - ${row.branch || ''}`.trim(),
       description: buildDescription(row),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
@@ -92,7 +89,7 @@ export async function updateBlogEvent(eventId: string, row: SheetRow): Promise<v
   });
 }
 
-export async function syncRowToCalendar(row: SheetRow): Promise<void> {
+export async function syncRowToCalendar(row: SheetRow, platform = '블로그'): Promise<void> {
   if (!row.scheduledDate || !row.topic) return;
 
   const calendar = getCalendar();
@@ -112,10 +109,10 @@ export async function syncRowToCalendar(row: SheetRow): Promise<void> {
   const match = events.find(e => e.description?.includes(rowTag));
 
   if (match?.id) {
-    await updateBlogEvent(match.id, row);
-    console.log(`캘린더 업데이트: ${row.topic} (${row.scheduledDate})`);
+    await updateBlogEvent(match.id, row, platform);
+    console.log(`캘린더 업데이트: <${platform}> ${row.topic} (${row.scheduledDate})`);
   } else {
-    await createBlogEvent(row);
-    console.log(`캘린더 생성: ${row.topic} (${row.scheduledDate})`);
+    await createBlogEvent(row, platform);
+    console.log(`캘린더 생성: <${platform}> ${row.topic} (${row.scheduledDate})`);
   }
 }
