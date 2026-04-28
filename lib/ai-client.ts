@@ -134,12 +134,62 @@ async function callAnthropic(options: {
 /** JSON 응답 파싱 (코드블록 내부의 JSON 추출) */
 export function parseJsonResponse<T>(text: string): T {
   const jsonMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : text;
+  let jsonStr = jsonMatch ? jsonMatch[1] : text;
 
+  // 1차 시도: 그대로 파싱
   try {
     return JSON.parse(jsonStr.trim());
-  } catch (e) {
-    throw new Error(`JSON 파싱 실패: ${(e as Error).message}\n원문: ${text.slice(0, 500)}`);
+  } catch {
+    // 2차 시도: 제어 문자 제거 후 파싱
+    // JSON 문자열 값 안의 실제 줄바꿈/탭/제어문자를 이스케이프 처리
+    const cleaned = jsonStr.replace(/[\x00-\x1F\x7F]/g, (ch) => {
+      if (ch === '\n') return '\\n';
+      if (ch === '\r') return '\\r';
+      if (ch === '\t') return '\\t';
+      return '';
+    });
+    try {
+      return JSON.parse(cleaned.trim());
+    } catch {
+      // 3차 시도: 필드별 개별 추출 (Gemini 긴 글 대응)
+      const titleMatch = jsonStr.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      const metaMatch = jsonStr.match(/"meta_description"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      const tagsMatch = jsonStr.match(/"tags"\s*:\s*(\[[\s\S]*?\])\s*,?\s*"content"/);
+      const contentStart = jsonStr.indexOf('"content"');
+
+      if (titleMatch && contentStart !== -1) {
+        const afterContent = jsonStr.slice(contentStart);
+        const colonPos = afterContent.indexOf(':');
+        const valueStr = afterContent.slice(colonPos + 1).trim();
+        const firstQuote = valueStr.indexOf('"');
+        let content = valueStr.slice(firstQuote + 1);
+        const endPatterns = [/",\s*"image_suggestions"/, /"\s*,\s*"image/, /"\s*\}\s*$/];
+        for (const pattern of endPatterns) {
+          const endMatch = content.match(pattern);
+          if (endMatch && endMatch.index) {
+            content = content.slice(0, endMatch.index);
+            break;
+          }
+        }
+
+        let tags: string[] = [];
+        if (tagsMatch) { try { tags = JSON.parse(tagsMatch[1]); } catch { tags = []; } }
+
+        const imgMatch = jsonStr.match(/"image_suggestions"\s*:\s*(\[[\s\S]*?\])/);
+        let images: string[] = [];
+        if (imgMatch) { try { images = JSON.parse(imgMatch[1]); } catch { images = []; } }
+
+        return {
+          title: titleMatch[1],
+          meta_description: metaMatch ? metaMatch[1] : '',
+          tags,
+          content: content.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/[\x00-\x1F\x7F]/g, ''),
+          image_suggestions: images,
+        } as T;
+      }
+
+      throw new Error(`JSON 파싱 실패\n원문: ${text.slice(0, 500)}`);
+    }
   }
 }
 

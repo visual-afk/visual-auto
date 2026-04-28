@@ -22,6 +22,20 @@ function getPurposeColor(purpose?: ContentPurpose): string {
   return PURPOSE_COLORS[purpose || '노출용'] || '9';
 }
 
+function buildDescription(row: SheetRow): string {
+  return [
+    `ROW:${row.rowIndex}`,
+    `키워드: ${row.keywords}`,
+    `글유형: ${row.postType}`,
+    `글목적: ${row.contentPurpose || '노출용'}`,
+    ...(row.branch ? [`지점: ${row.branch}`] : []),
+    `상태: ${row.status}`,
+    row.docUrl ? `📄 독스: ${row.docUrl}` : '',
+    row.imwebUrl ? `🌐 아임웹: ${row.imwebUrl}` : '',
+    row.naverUrl ? `📝 블로그: ${row.naverUrl}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 export async function createBlogEvent(row: SheetRow): Promise<string> {
   const calendar = getCalendar();
   const purposeTag = getPurposeLabel(row.contentPurpose);
@@ -31,16 +45,7 @@ export async function createBlogEvent(row: SheetRow): Promise<string> {
     calendarId: config.google.calendarId,
     requestBody: {
       summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
-      description: [
-        `키워드: ${row.keywords}`,
-        `글유형: ${row.postType}`,
-        `글목적: ${row.contentPurpose || '노출용'}`,
-        ...(row.branch ? [`지점: ${row.branch}`] : []),
-        `상태: ${row.status}`,
-        row.docUrl ? `📄 독스: ${row.docUrl}` : '',
-        row.imwebUrl ? `🌐 아임웹: ${row.imwebUrl}` : '',
-        row.naverUrl ? `📝 블로그: ${row.naverUrl}` : '',
-      ].filter(Boolean).join('\n'),
+      description: buildDescription(row),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
       colorId: getPurposeColor(row.contentPurpose),
@@ -53,15 +58,17 @@ export async function createBlogEvent(row: SheetRow): Promise<string> {
 export async function findExistingEvent(topic: string, date: string): Promise<string | null> {
   const calendar = getCalendar();
 
+  // 해당 날짜의 모든 이벤트를 가져와서 topic이 포함된 것을 찾음
   const response = await calendar.events.list({
     calendarId: config.google.calendarId,
     timeMin: `${date}T00:00:00Z`,
     timeMax: `${date}T23:59:59Z`,
-    q: `[블로그] ${topic}`,
     singleEvents: true,
+    maxResults: 50,
   });
 
   const events = response.data.items || [];
+  // 제목에 topic이 포함된 이벤트 찾기 (형식 상관없이)
   const match = events.find(e => e.summary?.includes(topic));
   return match?.id || null;
 }
@@ -77,16 +84,7 @@ export async function updateBlogEvent(eventId: string, row: SheetRow): Promise<v
     eventId,
     requestBody: {
       summary: `[블로그${branchTag}/${purposeTag}] ${row.topic}`,
-      description: [
-        `키워드: ${row.keywords}`,
-        `글유형: ${row.postType}`,
-        `글목적: ${row.contentPurpose || '노출용'}`,
-        ...(row.branch ? [`지점: ${row.branch}`] : []),
-        `상태: ${row.status}`,
-        row.docUrl ? `📄 독스: ${row.docUrl}` : '',
-        row.imwebUrl ? `🌐 아임웹: ${row.imwebUrl}` : '',
-        row.naverUrl ? `📝 블로그: ${row.naverUrl}` : '',
-      ].filter(Boolean).join('\n'),
+      description: buildDescription(row),
       start: { date: row.scheduledDate },
       end: { date: row.scheduledDate },
       colorId: getPurposeColor(row.contentPurpose),
@@ -97,10 +95,24 @@ export async function updateBlogEvent(eventId: string, row: SheetRow): Promise<v
 export async function syncRowToCalendar(row: SheetRow): Promise<void> {
   if (!row.scheduledDate || !row.topic) return;
 
-  const existingId = await findExistingEvent(row.topic, row.scheduledDate);
+  const calendar = getCalendar();
+  const rowTag = `ROW:${row.rowIndex}`;
 
-  if (existingId) {
-    await updateBlogEvent(existingId, row);
+  // 전체 이벤트에서 이 행의 고유 태그(ROW:N)로 검색
+  const response = await calendar.events.list({
+    calendarId: config.google.calendarId,
+    timeMin: '2026-04-01T00:00:00Z',
+    timeMax: '2026-12-31T23:59:59Z',
+    q: rowTag,
+    singleEvents: true,
+    maxResults: 5,
+  });
+
+  const events = response.data.items || [];
+  const match = events.find(e => e.description?.includes(rowTag));
+
+  if (match?.id) {
+    await updateBlogEvent(match.id, row);
     console.log(`캘린더 업데이트: ${row.topic} (${row.scheduledDate})`);
   } else {
     await createBlogEvent(row);
