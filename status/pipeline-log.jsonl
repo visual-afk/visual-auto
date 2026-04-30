@@ -114,3 +114,19 @@
 {"timestamp":"2026-04-27T23:09:10.062Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"failed","error":"JSON 파싱 실패: Bad control character in string literal in JSON at position 1710 (line 11 column 1425)\n원문: {\n  \"title\": \"2026 여자머리 트렌드, 진짜 세련된 사람들은 이렇게 합니다 (성수동 헤어스타일)\",\n  \"meta_description\": \"2026년 최신 여자 헤어트렌드를 분석합니다. 꾸안꾸 느낌의 에어리 컷부터 얼굴형에 맞춘 컨투어링 컷, 스킨 톤 브라운 컬러까지. 성수동 비주얼살롱에서 제안하는 최신 여자 헤어스타일을 만나보세요.\",\n  \"tags\": [\n    \"26년여자머리트렌드\",\n    \"헤어트렌드\",\n    \"여자헤어스타일\",\n    \"성수미용실\",\n    \"레이어드컷\"\n  ],\n  \"content\": \"## 2026년 여자머리 트렌드, 아직도 사진만 저장하고 계신가요?\\n\\n인스타그램을 넘기다 마음에 드는 헤어스타일 사진을 발견하고 일단 저장. 아마 많은 분들이 공감하실 거예요. 하지만 막상 미용실에 가져가면 '이건 고데기에요', '손님 모발에서는 느낌이 달라요' 같은 말을 듣기 일쑤죠. 2026년 여자머리 트렌드를 검색해서 오셨다면, 이제 사진만 저장하","duration_ms":62336}
 {"timestamp":"2026-04-28T02:18:37.607Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
 {"timestamp":"2026-04-28T02:21:43.517Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1PU51RsPhpd7VoxdzOpbF1_5K27PKvFXp9kaoyTJpbeY/edit","tokens_used":53339,"duration_ms":185910}
+{"timestamp":"2026-04-28T03:27:27.138Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T03:30:31.066Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1yq6MNCmHr1fWufHs2kPU9cjlC884QAPAehcefVKJWEY/edit","tokens_used":57845,"duration_ms":183927}
+{"timestamp":"2026-04-28T03:30:31.068Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T03:33:41.690Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/122rb2tQjNH3uZxfAPhitoA7_PQUiyO0qUd4eo0tUUsM/edit","tokens_used":54850,"duration_ms":190621}
+{"timestamp":"2026-04-28T04:59:30.521Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T05:02:44.857Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1k5dcfYS1jZhViUrINZg3U3X7gU9XUS5Ig8608wx7g-k/edit","tokens_used":54911,"duration_ms":194336}
+{"timestamp":"2026-04-28T05:02:44.859Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T05:06:12.204Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1hInEIoYvAns9YMUMM_xWXBassp7s0xd62SckIJVARiQ/edit","tokens_used":56186,"duration_ms":207344}
+{"timestamp":"2026-04-29T02:30:30.439Z","topic":"손질 편한 단발","branch":"사가정점","status":"started"}
+{"timestamp":"2026-04-29T02:33:43.845Z","topic":"손질 편한 단발","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1jN1UVQokXIYYz_q2JoKg1Yy-N-G3wkmmbWp7-5eZ6mI/edit","tokens_used":56977,"duration_ms":193406}
+{"timestamp":"2026-04-29T02:33:43.852Z","topic":"손질 편한 단발","branch":"사가정점","status":"started"}
+{"timestamp":"2026-04-29T02:36:38.998Z","topic":"손질 편한 단발","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1CCz6Fkip_KaMv606aM1fpnmfSWhz2YdSISehnk-Wsg0/edit","tokens_used":52562,"duration_ms":175147}
+{"timestamp":"2026-04-30T04:15:32.862Z","topic":"30대 리프팅","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-30T04:18:54.638Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1XzhOTLjwQC_f7kMDbcnE8qrgJk5Tj7P5_m8QOpXXWFc/edit","tokens_used":58127,"duration_ms":201775}
+{"timestamp":"2026-04-30T04:18:54.642Z","topic":"30대 리프팅","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-30T04:22:02.825Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1X91993HmJSkjCH4ogo-RTGstSQl4kxC01jNBP7mVy8k/edit","tokens_used":57073,"duration_ms":188183}
