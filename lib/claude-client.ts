@@ -181,7 +181,7 @@ export async function generateImage(prompt: string): Promise<Buffer | null> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await imageModel.generateContent({
-        contents: [{ role: 'user', parts: [{ text: `Professional hair salon photograph: ${prompt}. Shot on Canon EOS R5, 85mm lens, f/2.8, soft natural window lighting. Korean woman, modern upscale salon interior. Magazine editorial quality. CRITICAL: Zero text, zero letters, zero watermarks, zero overlays. Only the photograph.` }] }],
+        contents: [{ role: 'user', parts: [{ text: `Professional hair salon photograph: ${prompt}. Shot on Canon EOS R5, 85mm lens, f/2.8, soft natural window lighting. Korean woman, modern upscale salon interior. Magazine editorial quality. ABSOLUTE RULES: No text of any kind. No Korean text. No English text. No letters. No numbers. No watermarks. No captions. No labels. No signs. No logos. Nothing written anywhere in the image. Pure photography only.` }] }],
         generationConfig: { responseModalities: ['image', 'text'] } as any,
       });
 

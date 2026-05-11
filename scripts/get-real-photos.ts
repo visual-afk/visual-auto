@@ -33,11 +33,11 @@ export async function getBeforeAfterPhotos(topic: string, maxCount = 3): Promise
     keywords.some(kw => f.name?.includes(kw))
   );
 
-  // 매칭 안 되면 번호 폴더에서 랜덤 3개 선택 (이름 trim 처리)
+  // 매칭 안 되면 번호 폴더에서 랜덤 5개 선택 (이름 trim 처리)
   if (matchedFolders.length === 0) {
     const numbered = allFolders.filter(f => /^\d+\s*$/.test(f.name?.trim() || ''));
     const shuffled = numbered.sort(() => Math.random() - 0.5);
-    matchedFolders = shuffled.slice(0, 3);
+    matchedFolders = shuffled.slice(0, 5);
   }
 
   // 2. 매칭된 폴더들에서 이미지 수집

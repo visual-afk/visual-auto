@@ -138,8 +138,8 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
         const { getBeforeAfterPhotos, getReviewPhotos, makePhotoPublic } = await import('./get-real-photos.js');
         const { insertImageToDoc } = await import('../lib/google-docs.js');
 
-        // 1) 실제 비포애프터 사진
-        const baPhotos = await getBeforeAfterPhotos(row.topic, 3);
+        // 1) 실제 비포애프터 사진 (5장으로 증가)
+        const baPhotos = await getBeforeAfterPhotos(row.topic, 5);
         if (baPhotos.length > 0) {
           console.log(`📸 실제 비포애프터 ${baPhotos.length}장 삽입 중...`);
           for (const photoId of baPhotos) {
@@ -150,15 +150,16 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
           }
         }
 
-        // 2) AI 스타일 이미지 (헤어스타일/모발 클로즈업만 — 매장/상담 사진 제외)
+        // 2) AI 스타일 이미지 (헤어스타일/모발 클로즈업만 — 매장/상담 사진 제외, 3장)
         const imageDescs = extractImageDescriptions(draft.content)
           .filter(d => !d.includes('매장') && !d.includes('상담') && !d.includes('진단'));
         if (imageDescs.length > 0) {
           const { generateImage } = await import('../lib/claude-client.js');
           const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
-          console.log(`🎨 AI 스타일 이미지 ${Math.min(imageDescs.length, 2)}장 생성 중...`);
+          const aiCount = Math.min(imageDescs.length, 3);
+          console.log(`🎨 AI 스타일 이미지 ${aiCount}장 생성 중...`);
           const buffers: Buffer[] = [];
-          for (const desc of imageDescs.slice(0, 2)) {
+          for (const desc of imageDescs.slice(0, aiCount)) {
             const buf = await generateImage(desc);
             if (buf) buffers.push(buf);
           }
@@ -167,8 +168,8 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
           }
         }
 
-        // 3) 실제 리뷰 캡처
-        const reviewPhotos = await getReviewPhotos(row.branch, 2);
+        // 3) 실제 리뷰 캡처 (3장으로 증가)
+        const reviewPhotos = await getReviewPhotos(row.branch, 3);
         if (reviewPhotos.length > 0) {
           console.log(`📸 실제 리뷰 캡처 ${reviewPhotos.length}장 삽입 중...`);
           for (const photoId of reviewPhotos) {
