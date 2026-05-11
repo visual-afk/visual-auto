@@ -131,59 +131,78 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
 
-    // 4-1. 실제 사진 + AI 스타일 이미지 조합 삽입
+    // 4-1. 문단별 이미지 삽입 (실제 사진 + AI 조합 → [IMAGE] 위치에 순서대로)
     const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
     if (docId) {
       try {
         const { getBeforeAfterPhotos, getReviewPhotos, makePhotoPublic } = await import('./get-real-photos.js');
-        const { insertImageToDoc } = await import('../lib/google-docs.js');
+        const { generateImage } = await import('../lib/claude-client.js');
+        const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
 
-        // 1) 실제 비포애프터 사진 (5장으로 증가)
+        const imageDescs = extractImageDescriptions(draft.content);
+        const imageBuffers: Buffer[] = [];
+
+        // 실제 비포애프터 사진 가져오기
         const baPhotos = await getBeforeAfterPhotos(row.topic, 5);
-        if (baPhotos.length > 0) {
-          console.log(`📸 실제 비포애프터 ${baPhotos.length}장 삽입 중...`);
-          for (const photoId of baPhotos) {
-            try {
-              const url = await makePhotoPublic(photoId);
-              await insertImageToDoc(docId, url);
-            } catch { /* 개별 실패 무시 */ }
-          }
-        }
-
-        // 2) AI 스타일 이미지 (헤어스타일/모발 클로즈업만 — 매장/상담 사진 제외, 3장)
-        const imageDescs = extractImageDescriptions(draft.content)
-          .filter(d => !d.includes('매장') && !d.includes('상담') && !d.includes('진단'));
-        if (imageDescs.length > 0) {
-          const { generateImage } = await import('../lib/claude-client.js');
-          const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
-          const aiCount = Math.min(imageDescs.length, 3);
-          console.log(`🎨 AI 스타일 이미지 ${aiCount}장 생성 중...`);
-          const buffers: Buffer[] = [];
-          for (const desc of imageDescs.slice(0, aiCount)) {
-            const buf = await generateImage(desc);
-            if (buf) buffers.push(buf);
-          }
-          if (buffers.length > 0) {
-            await replaceImageTagsInDoc(docId, buffers);
-          }
-        }
-
-        // 3) 실제 리뷰 캡처 (3장으로 증가)
         const reviewPhotos = await getReviewPhotos(row.branch, 3);
-        if (reviewPhotos.length > 0) {
-          console.log(`📸 실제 리뷰 캡처 ${reviewPhotos.length}장 삽입 중...`);
-          for (const photoId of reviewPhotos) {
+
+        console.log(`📸 이미지 준비 중... (비포애프터 ${baPhotos.length}장, 리뷰 ${reviewPhotos.length}장, [IMAGE] ${imageDescs.length}개)`);
+
+        // [IMAGE] 태그 수만큼 이미지를 순서대로 채우기
+        // 패턴: 실제사진 → AI → 실제사진 → AI → 리뷰 (교차 배치)
+        const realPhotos = [...baPhotos, ...reviewPhotos];
+        let realIdx = 0;
+        let aiIdx = 0;
+        const aiDescs = imageDescs.filter(d => !d.includes('매장') && !d.includes('상담') && !d.includes('진단'));
+
+        for (let i = 0; i < imageDescs.length; i++) {
+          // 짝수 → 실제 사진, 홀수 → AI 이미지 (교차)
+          if (i % 2 === 0 && realIdx < realPhotos.length) {
+            // 실제 사진을 Buffer로 다운로드
             try {
-              const url = await makePhotoPublic(photoId);
-              await insertImageToDoc(docId, url);
-            } catch { /* 개별 실패 무시 */ }
+              const url = await makePhotoPublic(realPhotos[realIdx]);
+              const { getDrive } = await import('../lib/google-auth.js');
+              const drive = getDrive();
+              const response = await drive.files.get(
+                { fileId: realPhotos[realIdx], alt: 'media', supportsAllDrives: true },
+                { responseType: 'arraybuffer' }
+              );
+              imageBuffers.push(Buffer.from(response.data as ArrayBuffer));
+              console.log(`  📸 실제 사진 ${realIdx + 1} 준비 완료`);
+              realIdx++;
+            } catch {
+              // 실제 사진 실패하면 AI로 대체
+              if (aiIdx < aiDescs.length) {
+                const buf = await generateImage(aiDescs[aiIdx]);
+                if (buf) { imageBuffers.push(buf); aiIdx++; }
+              }
+            }
+          } else if (aiIdx < aiDescs.length) {
+            // AI 스타일 이미지
+            const buf = await generateImage(aiDescs[aiIdx]);
+            if (buf) { imageBuffers.push(buf); console.log(`  🎨 AI 이미지 ${aiIdx + 1} 생성 완료`); aiIdx++; }
+          } else if (realIdx < realPhotos.length) {
+            // AI 다 쓰면 실제 사진으로 채우기
+            try {
+              const url = await makePhotoPublic(realPhotos[realIdx]);
+              const { getDrive } = await import('../lib/google-auth.js');
+              const drive = getDrive();
+              const response = await drive.files.get(
+                { fileId: realPhotos[realIdx], alt: 'media', supportsAllDrives: true },
+                { responseType: 'arraybuffer' }
+              );
+              imageBuffers.push(Buffer.from(response.data as ArrayBuffer));
+              realIdx++;
+            } catch { /* 스킵 */ }
           }
         }
 
-        const total = baPhotos.length + reviewPhotos.length;
-        console.log(`  ✅ 사진 삽입 완료 (실제 ${total}장 + AI 스타일)`);
+        if (imageBuffers.length > 0) {
+          const inserted = await replaceImageTagsInDoc(docId, imageBuffers);
+          console.log(`  ✅ 문단별 이미지 ${inserted}장 삽입 완료 (실제 ${realIdx}장 + AI ${aiIdx}장)`);
+        }
       } catch (err) {
-        console.log(`  ⚠️ 사진 삽입 스킵: ${(err as Error).message?.slice(0, 50)}`);
+        console.log(`  ⚠️ 사진 삽입 스킵: ${(err as Error).message?.slice(0, 80)}`);
       }
     }
 
