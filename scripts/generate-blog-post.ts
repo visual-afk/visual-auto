@@ -119,6 +119,8 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     // 4. 구글독스 생성
     console.log('📄 구글독스 생성 중...');
     const finalContent = [
+      `# ${optimized.optimized_title}`,
+      '',
       optimized.optimized_content,
       '\n\n---\n',
       `태그: ${(optimized.optimized_tags || []).join(', ')}`,
@@ -129,22 +131,31 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
 
-    // 4-1. AI 이미지 생성 + 독스 [IMAGE] 위치에 삽입
-    const imageDescriptions = extractImageDescriptions(draft.content);
-    if (imageDescriptions.length > 0) {
-      console.log(`🖼️  이미지 ${imageDescriptions.length}장 생성 중...`);
-      const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
-      if (docId) {
-        const imageBuffers: Buffer[] = [];
-        for (const desc of imageDescriptions.slice(0, 5)) {
-          console.log(`  🎨 생성 중: ${desc.slice(0, 40)}...`);
-          const buf = await generateImage(desc);
-          if (buf) imageBuffers.push(buf);
+    // 4-1. 실제 사진 삽입 (비포애프터 + 리뷰 캡처)
+    const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
+    if (docId) {
+      try {
+        const { getBeforeAfterPhotos, getReviewPhotos, photoIdToUrl } = await import('./get-real-photos.js');
+        const { insertImageToDoc } = await import('../lib/google-docs.js');
+
+        // 비포애프터 실제 사진
+        const baPhotos = await getBeforeAfterPhotos(row.topic, 3);
+        // 리뷰 캡처
+        const reviewPhotos = await getReviewPhotos(row.branch, 2);
+
+        const allPhotos = [...baPhotos, ...reviewPhotos];
+        if (allPhotos.length > 0) {
+          console.log(`📸 실제 사진 ${allPhotos.length}장 삽입 중...`);
+          for (const photoId of allPhotos) {
+            try {
+              await insertImageToDoc(docId, photoIdToUrl(photoId));
+              console.log(`  📸 사진 삽입 완료`);
+            } catch { /* 개별 실패 무시 */ }
+          }
+          console.log(`  ✅ 실제 사진 삽입 완료`);
         }
-        if (imageBuffers.length > 0) {
-          const inserted = await replaceImageTagsInDoc(docId, imageBuffers);
-          console.log(`  ✅ 이미지 ${inserted}장 글 안에 삽입 완료`);
-        }
+      } catch (err) {
+        console.log(`  ⚠️ 사진 삽입 스킵: ${(err as Error).message?.slice(0, 50)}`);
       }
     }
 

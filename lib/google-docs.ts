@@ -67,6 +67,41 @@ async function uploadImageToDrive(imageBuffer: Buffer): Promise<string | null> {
   return `https://drive.google.com/uc?id=${fileId}`;
 }
 
+/** Drive 사진 URL을 독스 끝에 삽입 */
+export async function insertImageToDoc(docId: string, imageUrl: string): Promise<void> {
+  const docs = getDocs();
+
+  // 문서 끝 인덱스 가져오기
+  const doc = await docs.documents.get({ documentId: docId });
+  const body = doc.data.body?.content || [];
+  const lastElement = body[body.length - 1];
+  const endIndex = (lastElement?.endIndex || 2) - 1;
+
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          insertText: {
+            location: { index: endIndex },
+            text: '\n',
+          },
+        },
+        {
+          insertInlineImage: {
+            location: { index: endIndex + 1 },
+            uri: imageUrl,
+            objectSize: {
+              width: { magnitude: 400, unit: 'PT' },
+              height: { magnitude: 300, unit: 'PT' },
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
 /** 독스에서 [IMAGE] 블록을 찾아 이미지로 교체 */
 export async function replaceImageTagsInDoc(docId: string, imageBuffers: Buffer[]): Promise<number> {
   const docs = getDocs();

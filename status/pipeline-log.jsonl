@@ -130,3 +130,15 @@
 {"timestamp":"2026-04-30T04:18:54.638Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1XzhOTLjwQC_f7kMDbcnE8qrgJk5Tj7P5_m8QOpXXWFc/edit","tokens_used":58127,"duration_ms":201775}
 {"timestamp":"2026-04-30T04:18:54.642Z","topic":"30대 리프팅","branch":"성수점","status":"started"}
 {"timestamp":"2026-04-30T04:22:02.825Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1X91993HmJSkjCH4ogo-RTGstSQl4kxC01jNBP7mVy8k/edit","tokens_used":57073,"duration_ms":188183}
+{"timestamp":"2026-05-05T13:09:23.604Z","topic":"염색 컬러 추천","branch":"성수점","status":"started"}
+{"timestamp":"2026-05-05T13:12:54.369Z","topic":"염색 컬러 추천","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1JkuZG61pQEJ1Maz3UE72FX0NlgG6D3kopnqSWgzxpE0/edit","tokens_used":59959,"duration_ms":210766}
+{"timestamp":"2026-05-05T13:12:54.373Z","topic":"염색 컬러 추천","branch":"성수점","status":"started"}
+{"timestamp":"2026-05-05T13:16:41.531Z","topic":"염색 컬러 추천","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1VvUAs72d6kN37sV8Q8kiR0w2S1y2cXNHgVXXnw0SG3g/edit","tokens_used":60928,"duration_ms":227159}
+{"timestamp":"2026-05-08T03:03:50.945Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-08T03:07:51.946Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1wfab_wuqKuMcEoBu1wFSlLTbuyvtgj6J9W4rCJIQJWE/edit","tokens_used":69309,"duration_ms":241000}
+{"timestamp":"2026-05-08T03:07:51.949Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-08T03:11:30.733Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/19G4-fHU1Ucgc4R9KdBSHixZsMVeI57bI0gvwOy0zwVs/edit","tokens_used":66241,"duration_ms":218784}
+{"timestamp":"2026-05-11T02:59:13.488Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T03:01:13.639Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1yv5lsuH7cqXHzWzRrnLc4Y003WEBwwiQYJ_brrpAbG4/edit","tokens_used":70014,"duration_ms":120151}
+{"timestamp":"2026-05-11T03:01:13.643Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T03:03:09.869Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1g8AI90Ct_ebX7D7mT_64bbeOKveOLW-tlXnzmsKg0qU/edit","tokens_used":67306,"duration_ms":116226}
