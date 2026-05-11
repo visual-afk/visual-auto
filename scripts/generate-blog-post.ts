@@ -131,76 +131,38 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
 
-    // 4-1. 문단별 이미지 삽입 (실제 사진 + AI 조합 → [IMAGE] 위치에 순서대로)
+    // 4-1. 비포애프터 실제 사진 + 리뷰 캡처만 삽입. 나머지 문단은 [IMAGE] 가이드 유지
     const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
     if (docId) {
       try {
         const { getBeforeAfterPhotos, getReviewPhotos, makePhotoPublic } = await import('./get-real-photos.js');
-        const { generateImage } = await import('../lib/claude-client.js');
-        const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
+        const { insertImageToDoc } = await import('../lib/google-docs.js');
 
-        const imageDescs = extractImageDescriptions(draft.content);
-        const imageBuffers: Buffer[] = [];
-
-        // 실제 비포애프터 사진 가져오기
-        const baPhotos = await getBeforeAfterPhotos(row.topic, 5);
-        const reviewPhotos = await getReviewPhotos(row.branch, 3);
-
-        console.log(`📸 이미지 준비 중... (비포애프터 ${baPhotos.length}장, 리뷰 ${reviewPhotos.length}장, [IMAGE] ${imageDescs.length}개)`);
-
-        // [IMAGE] 태그 수만큼 이미지를 순서대로 채우기
-        // 패턴: 실제사진 → AI → 실제사진 → AI → 리뷰 (교차 배치)
-        const realPhotos = [...baPhotos, ...reviewPhotos];
-        let realIdx = 0;
-        let aiIdx = 0;
-        const aiDescs = imageDescs.filter(d => !d.includes('매장') && !d.includes('상담') && !d.includes('진단'));
-
-        for (let i = 0; i < imageDescs.length; i++) {
-          // 짝수 → 실제 사진, 홀수 → AI 이미지 (교차)
-          if (i % 2 === 0 && realIdx < realPhotos.length) {
-            // 실제 사진을 Buffer로 다운로드
+        // 비포애프터 실제 사진 (글 중간에 2장)
+        const baPhotos = await getBeforeAfterPhotos(row.topic, 2);
+        if (baPhotos.length > 0) {
+          console.log(`📸 비포애프터 실제 사진 ${baPhotos.length}장 삽입...`);
+          for (const photoId of baPhotos) {
             try {
-              const url = await makePhotoPublic(realPhotos[realIdx]);
-              const { getDrive } = await import('../lib/google-auth.js');
-              const drive = getDrive();
-              const response = await drive.files.get(
-                { fileId: realPhotos[realIdx], alt: 'media', supportsAllDrives: true },
-                { responseType: 'arraybuffer' }
-              );
-              imageBuffers.push(Buffer.from(response.data as ArrayBuffer));
-              console.log(`  📸 실제 사진 ${realIdx + 1} 준비 완료`);
-              realIdx++;
-            } catch {
-              // 실제 사진 실패하면 AI로 대체
-              if (aiIdx < aiDescs.length) {
-                const buf = await generateImage(aiDescs[aiIdx]);
-                if (buf) { imageBuffers.push(buf); aiIdx++; }
-              }
-            }
-          } else if (aiIdx < aiDescs.length) {
-            // AI 스타일 이미지
-            const buf = await generateImage(aiDescs[aiIdx]);
-            if (buf) { imageBuffers.push(buf); console.log(`  🎨 AI 이미지 ${aiIdx + 1} 생성 완료`); aiIdx++; }
-          } else if (realIdx < realPhotos.length) {
-            // AI 다 쓰면 실제 사진으로 채우기
-            try {
-              const url = await makePhotoPublic(realPhotos[realIdx]);
-              const { getDrive } = await import('../lib/google-auth.js');
-              const drive = getDrive();
-              const response = await drive.files.get(
-                { fileId: realPhotos[realIdx], alt: 'media', supportsAllDrives: true },
-                { responseType: 'arraybuffer' }
-              );
-              imageBuffers.push(Buffer.from(response.data as ArrayBuffer));
-              realIdx++;
+              const url = await makePhotoPublic(photoId);
+              await insertImageToDoc(docId, url);
             } catch { /* 스킵 */ }
           }
         }
 
-        if (imageBuffers.length > 0) {
-          const inserted = await replaceImageTagsInDoc(docId, imageBuffers);
-          console.log(`  ✅ 문단별 이미지 ${inserted}장 삽입 완료 (실제 ${realIdx}장 + AI ${aiIdx}장)`);
+        // 리뷰 캡처 (글 마지막에 2장)
+        const reviewPhotos = await getReviewPhotos(row.branch, 2);
+        if (reviewPhotos.length > 0) {
+          console.log(`📸 리뷰 캡처 ${reviewPhotos.length}장 삽입...`);
+          for (const photoId of reviewPhotos) {
+            try {
+              const url = await makePhotoPublic(photoId);
+              await insertImageToDoc(docId, url);
+            } catch { /* 스킵 */ }
+          }
         }
+
+        console.log(`  ✅ 실제 사진 삽입 완료 (나머지 [IMAGE]는 가이드로 유지 → 예진매니저님이 직접 추가)`);
       } catch (err) {
         console.log(`  ⚠️ 사진 삽입 스킵: ${(err as Error).message?.slice(0, 80)}`);
       }
