@@ -21,36 +21,46 @@ export async function getBeforeAfterPhotos(topic: string, maxCount = 3): Promise
     fields: 'files(id, name)',
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
+    corpora: 'allDrives',
+    pageSize: 50,
   });
 
   const allFolders = folders.data.files || [];
 
   // 키워드 매칭으로 관련 폴더 찾기
   const keywords = topic.split(/\s+/);
-  let matchedFolder = allFolders.find(f =>
+  let matchedFolders = allFolders.filter(f =>
     keywords.some(kw => f.name?.includes(kw))
   );
 
-  // 매칭 안 되면 번호 폴더에서 랜덤 선택
-  if (!matchedFolder) {
-    const numbered = allFolders.filter(f => /^\d+$/.test(f.name || ''));
-    if (numbered.length > 0) {
-      matchedFolder = numbered[Math.floor(Math.random() * numbered.length)];
+  // 매칭 안 되면 번호 폴더에서 랜덤 3개 선택 (이름 trim 처리)
+  if (matchedFolders.length === 0) {
+    const numbered = allFolders.filter(f => /^\d+\s*$/.test(f.name?.trim() || ''));
+    const shuffled = numbered.sort(() => Math.random() - 0.5);
+    matchedFolders = shuffled.slice(0, 3);
+  }
+
+  // 2. 매칭된 폴더들에서 이미지 수집
+  const photoIds: string[] = [];
+  for (const folder of matchedFolders) {
+    if (photoIds.length >= maxCount) break;
+    if (!folder.id) continue;
+
+    const images = await drive.files.list({
+      q: `'${folder.id}' in parents and mimeType contains 'image/' and trashed=false`,
+      fields: 'files(id, name)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: 'allDrives',
+      pageSize: maxCount - photoIds.length,
+    });
+
+    for (const img of images.data.files || []) {
+      if (img.id) photoIds.push(img.id);
     }
   }
 
-  if (!matchedFolder?.id) return [];
-
-  // 2. 해당 폴더의 이미지 가져오기
-  const images = await drive.files.list({
-    q: `'${matchedFolder.id}' in parents and mimeType contains 'image/' and trashed=false`,
-    fields: 'files(id, name)',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-    pageSize: maxCount,
-  });
-
-  return (images.data.files || []).map(f => f.id!).filter(Boolean);
+  return photoIds.slice(0, maxCount);
 }
 
 /** 지점별 리뷰 캡처 가져오기 */
@@ -69,7 +79,19 @@ export async function getReviewPhotos(branch: string, maxCount = 2): Promise<str
   return (images.data.files || []).map(f => f.id!).filter(Boolean);
 }
 
-/** 사진 ID를 공개 URL로 변환 */
+/** 사진을 공개 접근 가능하게 설정 + URL 반환 */
+export async function makePhotoPublic(fileId: string): Promise<string> {
+  try {
+    await drive.permissions.create({
+      fileId,
+      requestBody: { role: 'reader', type: 'anyone' },
+      supportsAllDrives: true,
+    });
+  } catch { /* 이미 공개일 수 있음 */ }
+  return `https://drive.google.com/uc?id=${fileId}`;
+}
+
+/** 사진 ID를 공개 URL로 변환 (권한 설정 없이) */
 export function photoIdToUrl(fileId: string): string {
   return `https://drive.google.com/uc?id=${fileId}`;
 }

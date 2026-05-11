@@ -131,29 +131,56 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
 
-    // 4-1. 실제 사진 삽입 (비포애프터 + 리뷰 캡처)
+    // 4-1. 실제 사진 + AI 스타일 이미지 조합 삽입
     const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
     if (docId) {
       try {
-        const { getBeforeAfterPhotos, getReviewPhotos, photoIdToUrl } = await import('./get-real-photos.js');
+        const { getBeforeAfterPhotos, getReviewPhotos, makePhotoPublic } = await import('./get-real-photos.js');
         const { insertImageToDoc } = await import('../lib/google-docs.js');
 
-        // 비포애프터 실제 사진
+        // 1) 실제 비포애프터 사진
         const baPhotos = await getBeforeAfterPhotos(row.topic, 3);
-        // 리뷰 캡처
-        const reviewPhotos = await getReviewPhotos(row.branch, 2);
-
-        const allPhotos = [...baPhotos, ...reviewPhotos];
-        if (allPhotos.length > 0) {
-          console.log(`📸 실제 사진 ${allPhotos.length}장 삽입 중...`);
-          for (const photoId of allPhotos) {
+        if (baPhotos.length > 0) {
+          console.log(`📸 실제 비포애프터 ${baPhotos.length}장 삽입 중...`);
+          for (const photoId of baPhotos) {
             try {
-              await insertImageToDoc(docId, photoIdToUrl(photoId));
-              console.log(`  📸 사진 삽입 완료`);
+              const url = await makePhotoPublic(photoId);
+              await insertImageToDoc(docId, url);
             } catch { /* 개별 실패 무시 */ }
           }
-          console.log(`  ✅ 실제 사진 삽입 완료`);
         }
+
+        // 2) AI 스타일 이미지 (헤어스타일/모발 클로즈업만 — 매장/상담 사진 제외)
+        const imageDescs = extractImageDescriptions(draft.content)
+          .filter(d => !d.includes('매장') && !d.includes('상담') && !d.includes('진단'));
+        if (imageDescs.length > 0) {
+          const { generateImage } = await import('../lib/claude-client.js');
+          const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
+          console.log(`🎨 AI 스타일 이미지 ${Math.min(imageDescs.length, 2)}장 생성 중...`);
+          const buffers: Buffer[] = [];
+          for (const desc of imageDescs.slice(0, 2)) {
+            const buf = await generateImage(desc);
+            if (buf) buffers.push(buf);
+          }
+          if (buffers.length > 0) {
+            await replaceImageTagsInDoc(docId, buffers);
+          }
+        }
+
+        // 3) 실제 리뷰 캡처
+        const reviewPhotos = await getReviewPhotos(row.branch, 2);
+        if (reviewPhotos.length > 0) {
+          console.log(`📸 실제 리뷰 캡처 ${reviewPhotos.length}장 삽입 중...`);
+          for (const photoId of reviewPhotos) {
+            try {
+              const url = await makePhotoPublic(photoId);
+              await insertImageToDoc(docId, url);
+            } catch { /* 개별 실패 무시 */ }
+          }
+        }
+
+        const total = baPhotos.length + reviewPhotos.length;
+        console.log(`  ✅ 사진 삽입 완료 (실제 ${total}장 + AI 스타일)`);
       } catch (err) {
         console.log(`  ⚠️ 사진 삽입 스킵: ${(err as Error).message?.slice(0, 50)}`);
       }
