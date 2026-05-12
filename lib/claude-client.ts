@@ -181,7 +181,17 @@ export async function generateImage(prompt: string): Promise<Buffer | null> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await imageModel.generateContent({
-        contents: [{ role: 'user', parts: [{ text: `Professional hair salon photograph: ${prompt}. Shot on Canon EOS R5, 85mm lens, f/2.8, soft natural window lighting. Korean woman, modern upscale salon interior. Magazine editorial quality. ABSOLUTE RULES: No text of any kind. No Korean text. No English text. No letters. No numbers. No watermarks. No captions. No labels. No signs. No logos. Nothing written anywhere in the image. Pure photography only.` }] }],
+        contents: [{ role: 'user', parts: [{ text: `Natural candid lifestyle photograph: ${prompt}.
+
+Style: Authentic and unposed, like a real Instagram post by a Korean beauty influencer. Soft natural window light, warm tones. NOT studio-staged. NOT salon-promotional looking. Subject can be facing away, looking down, or partially visible. Casual everyday setting (could be at home mirror, cafe, outdoor, or natural salon environment).
+
+Mood: Warm, intimate, real. As if a friend casually took a photo.
+
+Technical: Shot on Canon EOS R5, 85mm f/2.8, shallow depth of field, soft natural light. Magazine editorial quality but feels candid.
+
+Subject: Korean woman, natural skin, realistic hair texture (not overly perfect or shiny). Real human imperfections OK.
+
+ABSOLUTE RULES: No text. No Korean letters. No English letters. No numbers. No watermarks. No captions. No labels. No logos. No signs. No salon name. No subtitles. Nothing written anywhere. Pure photography only. If you would add any text, replace it with empty space.` }] }],
         generationConfig: { responseModalities: ['image', 'text'] } as any,
       });
 
