@@ -131,29 +131,36 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
 
-    // 4-1. 문단별로 AI 이미지 자동 생성 + 삽입 ([IMAGE] 위치마다 매칭)
+    // 4-1. 문단별로 Unsplash 실제 사진 자동 검색 + 삽입 ([IMAGE] 위치마다 매칭)
     const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
     if (docId) {
       try {
-        const { generateImage } = await import('../lib/claude-client.js');
+        const { searchUnsplash, downloadImage } = await import('./unsplash.js');
         const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
 
         const imageDescs = extractImageDescriptions(draft.content);
         if (imageDescs.length > 0) {
-          console.log(`🎨 AI 이미지 ${imageDescs.length}장 생성 중...`);
+          console.log(`📸 Unsplash 실제 사진 ${imageDescs.length}장 검색 중...`);
           const buffers: Buffer[] = [];
           for (let i = 0; i < imageDescs.length; i++) {
-            const buf = await generateImage(imageDescs[i]);
-            if (buf) {
-              buffers.push(buf);
-              console.log(`  🎨 ${i + 1}/${imageDescs.length} 생성 완료`);
+            // 각 [IMAGE] 설명 + 글 주제를 합쳐서 검색
+            const query = `${row.topic} ${imageDescs[i]}`;
+            const urls = await searchUnsplash(query, 1);
+            if (urls.length > 0) {
+              const buf = await downloadImage(urls[0]);
+              if (buf) {
+                buffers.push(buf);
+                console.log(`  📸 ${i + 1}/${imageDescs.length} 다운로드 완료`);
+              } else {
+                console.log(`  ⚠️ ${i + 1} 다운로드 실패`);
+              }
             } else {
-              console.log(`  ⚠️ ${i + 1} 실패`);
+              console.log(`  ⚠️ ${i + 1} 검색 결과 없음`);
             }
           }
           if (buffers.length > 0) {
             await replaceImageTagsInDoc(docId, buffers);
-            console.log(`  ✅ 문단별 AI 이미지 ${buffers.length}장 삽입 완료`);
+            console.log(`  ✅ 문단별 Unsplash 사진 ${buffers.length}장 삽입 완료`);
           }
         }
       } catch (err) {
