@@ -10,12 +10,17 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   generate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -41,9 +46,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: 파이프라인 로그 커밋
+        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
           git add status/pipeline-log.jsonl
           git diff --cached --quiet || git commit -m "chore: update pipeline log"
           git push
