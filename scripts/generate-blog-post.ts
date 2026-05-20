@@ -236,11 +236,18 @@ async function main() {
 
   console.log(`📝 ${rows.length}건 생성 시작\n`);
 
-  // 같은 주제가 2번 나오면 두번째는 워싱(리라이팅) 모드
-  const seenTopics = new Set<string>();
+  // 같은 주제 첫번째 행 = 아임웹, 두번째 행 = 블로그 (워싱)
+  // 재시도 시에도 일관되게 동작하도록 rowIndex 기준으로 판단
+  const { fetchAllRows } = await import('../lib/google-sheets.js');
+  const allRows = await fetchAllRows();
+  const topicFirstRowIndex = new Map<string, number>();
+  for (const r of allRows) {
+    if (!topicFirstRowIndex.has(r.topic)) topicFirstRowIndex.set(r.topic, r.rowIndex);
+  }
+
   for (const row of rows) {
-    const isWashing = seenTopics.has(row.topic);
-    seenTopics.add(row.topic);
+    // 이 행이 해당 주제의 첫번째 행보다 뒤에 있으면 워싱(블로그)
+    const isWashing = row.rowIndex !== topicFirstRowIndex.get(row.topic);
     await generateForRow(row, isWashing);
   }
 
