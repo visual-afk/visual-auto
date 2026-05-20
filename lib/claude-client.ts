@@ -70,7 +70,7 @@ export function loadTemplate(name: string): string {
   return readFileSync(templatePath, 'utf-8').trim();
 }
 
-/** Gemini API 호출 */
+/** Gemini API 호출 (2.5 Pro 실패 시 2.5 Flash로 fallback) */
 export async function callClaude(options: {
   system: string;
   userMessage: string;
@@ -78,41 +78,51 @@ export async function callClaude(options: {
   maxTokens?: number;
   temperature?: number;
 }): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
-  const model = genAI.getGenerativeModel({
-    model: options.model || 'gemini-2.5-pro',
-    systemInstruction: options.system,
-    generationConfig: {
-      maxOutputTokens: options.maxTokens || 65536,
-      temperature: options.temperature ?? 0.7,
-      responseMimeType: 'application/json',
-    },
-  });
+  const models = options.model ? [options.model] : ['gemini-2.5-pro', 'gemini-2.5-flash'];
 
-  const maxRetries = 5;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await model.generateContent(options.userMessage);
-      const response = result.response;
-      const text = response.text();
-      const usage = response.usageMetadata;
+  for (const modelName of models) {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: options.system,
+      generationConfig: {
+        maxOutputTokens: options.maxTokens || 65536,
+        temperature: options.temperature ?? 0.7,
+        responseMimeType: 'application/json',
+      },
+    });
 
-      return {
-        text,
-        inputTokens: usage?.promptTokenCount || 0,
-        outputTokens: usage?.candidatesTokenCount || 0,
-      };
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (attempt < maxRetries && (msg.includes('503') || msg.includes('429'))) {
-        const wait = attempt * 15;
-        console.log(`  ⏳ 서버 혼잡, ${wait}초 후 재시도 (${attempt}/${maxRetries})...`);
-        await new Promise(r => setTimeout(r, wait * 1000));
-        continue;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await model.generateContent(options.userMessage);
+        const response = result.response;
+        const text = response.text();
+        const usage = response.usageMetadata;
+
+        if (modelName !== models[0]) console.log(`  ✓ ${modelName}로 성공`);
+        return {
+          text,
+          inputTokens: usage?.promptTokenCount || 0,
+          outputTokens: usage?.candidatesTokenCount || 0,
+        };
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (attempt < maxRetries && (msg.includes('503') || msg.includes('429'))) {
+          const wait = attempt * 10;
+          console.log(`  ⏳ ${modelName} 혼잡, ${wait}초 후 재시도 (${attempt}/${maxRetries})...`);
+          await new Promise(r => setTimeout(r, wait * 1000));
+          continue;
+        }
+        // 마지막 시도도 실패 → 다음 모델로
+        if (attempt === maxRetries && modelName !== models[models.length - 1]) {
+          console.log(`  ⚠️ ${modelName} 실패, 다음 모델로 fallback`);
+          break;
+        }
+        throw err;
       }
-      throw err;
     }
   }
-  throw new Error('최대 재시도 횟수 초과');
+  throw new Error('모든 모델 실패');
 }
 
 /** JSON 응답 파싱 (코드블록 내부의 JSON 추출) */
