@@ -2,17 +2,21 @@ import { getDocs, getDrive } from './google-auth.js';
 import { config } from './config.js';
 import { Readable } from 'stream';
 
-export async function createBlogDoc(title: string, content: string, branch?: string, platform?: string): Promise<string> {
+export async function createBlogDoc(title: string, content: string, branch?: string, platform?: string, scheduledDate?: string): Promise<string> {
   const drive = getDrive();
 
   const branchLabel = branch ? ` ${branch}` : '';
   const platformLabel = platform ? `<${platform}> ` : '';
-  const date = new Date().toISOString().split('T')[0];
+  // KST 기준 오늘 날짜 (scheduledDate 우선)
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const todayKst = new Date(now.getTime() + kstOffset).toISOString().split('T')[0];
+  const date = scheduledDate || todayKst;
 
   // 1. Drive에 빈 문서 생성 (지정 폴더에, 공유 드라이브 지원)
   const file = await drive.files.create({
     requestBody: {
-      name: `${platformLabel}[비주얼살롱${branchLabel}] ${title} - ${date}`,
+      name: `${date} ${platformLabel}[비주얼살롱${branchLabel}] ${title}`,
       mimeType: 'application/vnd.google-apps.document',
       parents: [config.google.docsFolderId],
     },

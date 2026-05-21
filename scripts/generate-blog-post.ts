@@ -129,7 +129,7 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     ].join('\n');
 
     const platform = isWashing ? '블로그' : '아임웹';
-    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
+    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform, row.scheduledDate);
 
     // 4-1. 문단별로 Gemini AI 이미지 자동 생성 + 삽입 ([IMAGE] 위치마다 매칭)
     const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
