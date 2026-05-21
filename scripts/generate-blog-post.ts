@@ -118,7 +118,14 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
 
     // 4. 구글독스 생성
     console.log('📄 구글독스 생성 중...');
+    const mainKeyword = (row.keywords || '').split(',')[0].trim();
+    const allKeywords = (row.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
     const finalContent = [
+      `🔑 메인 키워드: ${mainKeyword}`,
+      `🏷️ 전체 키워드: ${allKeywords.join(', ')}`,
+      '',
+      '---',
+      '',
       `# ${optimized.optimized_title}`,
       '',
       optimized.optimized_content,
