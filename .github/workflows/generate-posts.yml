@@ -2,7 +2,12 @@ name: AI 블로그 글 생성
 
 on:
   schedule:
-    - cron: '0 15 * * 0,2,4' # 월/수/금 00:00 KST (전날 15:00 UTC)
+    # 월/수/금 새벽 3시 KST (전날 18:00 UTC) — 1차 실행
+    - cron: '0 18 * * 0,2,4'
+    # 월/수/금 새벽 4시 KST (전날 19:00 UTC) — 1차 실패 시 재시도
+    - cron: '0 19 * * 0,2,4'
+    # 월/수/금 새벽 5시 KST (전날 20:00 UTC) — 2차 실패 시 재시도
+    - cron: '0 20 * * 0,2,4'
   workflow_dispatch:
     inputs:
       topic:
