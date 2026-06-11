@@ -80,27 +80,50 @@ async function callGemini(options: {
   temperature?: number;
 }): Promise<{ text: string; inputTokens: number; outputTokens: number; provider: Provider }> {
   const genAI = new GoogleGenerativeAI(config.gemini.apiKey!);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-pro',
-    systemInstruction: options.system,
-    generationConfig: {
-      maxOutputTokens: options.maxTokens || 65536,
-      responseMimeType: 'application/json',
-      temperature: options.temperature ?? 0.7,
-    },
-  });
+  const models = ['gemini-2.5-pro', 'gemini-2.5-flash'];
 
-  const result = await model.generateContent(options.userMessage);
-  const response = result.response;
-  const text = response.text();
-  const usage = response.usageMetadata;
+  for (const modelName of models) {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: options.system,
+      generationConfig: {
+        maxOutputTokens: options.maxTokens || 65536,
+        responseMimeType: 'application/json',
+        temperature: options.temperature ?? 0.7,
+      },
+    });
 
-  return {
-    text,
-    inputTokens: usage?.promptTokenCount || 0,
-    outputTokens: usage?.candidatesTokenCount || 0,
-    provider: 'gemini',
-  };
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await model.generateContent(options.userMessage);
+        const response = result.response;
+        const text = response.text();
+        const usage = response.usageMetadata;
+        if (modelName !== models[0]) console.log(`  ✓ ${modelName}로 성공`);
+        return {
+          text,
+          inputTokens: usage?.promptTokenCount || 0,
+          outputTokens: usage?.candidatesTokenCount || 0,
+          provider: 'gemini',
+        };
+      } catch (err) {
+        const msg = (err as Error).message;
+        if (attempt < maxRetries && (msg.includes('503') || msg.includes('429'))) {
+          const wait = attempt * 10;
+          console.log(`  ⏳ ${modelName} 혼잡, ${wait}초 후 재시도 (${attempt}/${maxRetries})...`);
+          await new Promise(r => setTimeout(r, wait * 1000));
+          continue;
+        }
+        if (attempt === maxRetries && modelName !== models[models.length - 1]) {
+          console.log(`  ⚠️ ${modelName} 실패, 다음 모델로 fallback`);
+          break;
+        }
+        throw err;
+      }
+    }
+  }
+  throw new Error('모든 Gemini 모델 실패');
 }
 
 async function callAnthropic(options: {

@@ -32,6 +32,7 @@ npm run report      # GA4 성과 리포트
 | 마곡나루점 | `consumer/branch-마곡나루점.md` | `seo/keywords-마곡나루점.md` | 전문직, 대기업 |
 | 강남신사점 | `consumer/branch-강남신사점.md` | `seo/keywords-강남신사점.md` | 프리미엄, 고급 |
 | 사가정점 | `consumer/branch-사가정점.md` | `seo/keywords-사가정점.md` | 애기엄마, 동네밀착 |
+| 서면전포점 | `consumer/branch-서면전포점.md` | `seo/keywords-서면전포점.md` (예정) | 부산 도심, 디자이너별 시그니처 (강민/수민/순돌) |
 
 이 파일들은 예진매니저가 작성하고 관리한다. AI는 이 지식을 기반으로 글을 생성한다.
 
