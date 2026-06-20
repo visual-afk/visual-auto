@@ -16,7 +16,7 @@
 | 마곡나루점 | https://naver.me/5k7jlk97 |
 | 성수점 | https://naver.me/FRLTsCEs |
 | 강남신사점 | https://naver.me/G8hvr7IB |
-| 부산 서면전포점 | (준비 중) |
+| 부산 서면전포점 | https://naver.me/x1uuPQij |
 
 ## SNS
 
