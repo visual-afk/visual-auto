@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: theme('colors.canvas');
+  color: theme('colors.ink.DEFAULT');
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 모바일 퍼스트: 본문은 폰 폭으로 중앙정렬 */
+.app-shell {
+  margin-inline: auto;
+  max-width: theme('maxWidth.phone');
+  min-height: 100dvh;
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full rounded-2xl bg-brand px-5 py-4 text-center text-base font-semibold text-brand-ink
+           transition active:scale-[0.99] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply w-full rounded-2xl border border-line bg-surface px-5 py-4 text-center text-base
+           font-semibold text-ink transition active:scale-[0.99];
+  }
+  .field {
+    @apply w-full rounded-2xl border border-line bg-surface px-4 py-3.5 text-base text-ink
+           placeholder:text-ink-faint outline-none focus:border-brand focus:ring-2 focus:ring-brand/20;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-soft;
+  }
+  .card {
+    @apply rounded-xl2 border border-line bg-surface p-5 shadow-card;
+  }
+  .chip {
+    @apply rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-soft
+           transition active:scale-95;
+  }
+  .chip-on {
+    @apply border-brand bg-brand text-brand-ink;
+  }
+}

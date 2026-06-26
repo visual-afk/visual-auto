@@ -1,0 +1,109 @@
+import Link from 'next/link';
+import { getMember } from '@/lib/auth';
+import { getAdminSupabase } from '@/lib/supabase/admin';
+
+export const dynamic = 'force-dynamic';
+
+const TARGET_LABEL: Record<string, string> = { naver: '네이버', imweb: '아임웹' };
+
+function fmtDate(s: string | null) {
+  if (!s) return '-';
+  const d = new Date(s);
+  return `${d.getMonth() + 1}.${d.getDate()}`;
+}
+
+export default async function TrackPage() {
+  const member = (await getMember())!;
+  const admin = getAdminSupabase();
+  const { data: posts } = await admin
+    .from('posts')
+    .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
+    .eq('author_id', member.userId)
+    .order('created_at', { ascending: false });
+
+  const list = posts || [];
+  const now = new Date();
+  const monthCount = list.filter((p) => {
+    const d = new Date(p.created_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+  const withViews = list.filter((p) => p.views != null);
+  const totalViews = withViews.reduce((s, p) => s + (p.views || 0), 0);
+  const avgViews = withViews.length ? Math.round(totalViews / withViews.length) : 0;
+  const today = now.toISOString().slice(0, 10);
+
+  return (
+    <div className="py-6 md:py-0">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">내 글·조회수</h1>
+        <Link href="/write" className="rounded-2xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink">
+          + 오늘 글쓰기
+        </Link>
+      </div>
+
+      {/* 통계 */}
+      <div className="mt-6 grid grid-cols-3 gap-3">
+        <Stat label="이번 달 글" value={`${monthCount}개`} />
+        <Stat label="총 조회수" value={totalViews.toLocaleString()} accent />
+        <Stat label="평균 조회수" value={avgViews.toLocaleString()} />
+      </div>
+
+      {/* 목록 */}
+      <div className="mt-6 overflow-hidden rounded-xl2 border border-line bg-surface">
+        <div className="hidden grid-cols-[1fr_5rem_6rem_4rem] gap-2 border-b border-line px-5 py-3 text-xs font-semibold text-ink-faint md:grid">
+          <span>제목</span>
+          <span>올린 곳</span>
+          <span className="text-right">조회수</span>
+          <span className="text-right">올린 날</span>
+        </div>
+        {list.length === 0 && (
+          <p className="px-5 py-10 text-center text-sm text-ink-faint">아직 글이 없어요. 첫 글을 써보세요!</p>
+        )}
+        <ul className="divide-y divide-line">
+          {list.map((p) => {
+            const due = p.next_check_at && p.next_check_at <= today;
+            return (
+              <li
+                key={p.id}
+                className="grid grid-cols-[1fr_auto] items-center gap-2 px-5 py-4 md:grid-cols-[1fr_5rem_6rem_4rem]"
+              >
+                <Link href={`/track/${p.id}`} className="truncate font-semibold">
+                  {p.title || '제목 없음'}
+                </Link>
+                <span className="hidden text-sm text-ink-soft md:block">
+                  {p.publish_target ? TARGET_LABEL[p.publish_target] : '-'}
+                </span>
+                <span className="text-right text-sm md:col-auto">
+                  {p.views != null ? (
+                    <span className="font-bold text-brand">{p.views.toLocaleString()}</span>
+                  ) : (
+                    <Link
+                      href={`/track/${p.id}`}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                        due ? 'border-warn text-warn' : 'border-brand text-brand'
+                      }`}
+                    >
+                      조회수 입력
+                    </Link>
+                  )}
+                </span>
+                <span className="hidden text-right text-sm text-ink-faint md:block">
+                  {fmtDate(p.published_at || p.created_at)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="rounded-xl2 border border-line bg-surface p-4">
+      <p className="text-xs text-ink-soft">{label}</p>
+      <p className={`mt-1 text-2xl font-bold ${accent ? 'text-brand' : ''}`}>{value}</p>
+    </div>
+  );
+}
