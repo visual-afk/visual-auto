@@ -114,9 +114,14 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     systemInstruction: opts.system,
-    generationConfig: { maxOutputTokens: opts.maxTokens || 8000, temperature: opts.temperature ?? 0.7 },
+    // thinkingBudget:0 → 추론 토큰이 출력 예산을 잡아먹어 JSON이 잘리는 문제 방지 (2.5-flash는 thinking 끄기 가능)
+    generationConfig: {
+      maxOutputTokens: opts.maxTokens || 8000,
+      temperature: opts.temperature ?? 0.7,
+      thinkingConfig: { thinkingBudget: 0 },
+    } as any,
   });
   const result = await model.generateContent(opts.userMessage);
   const usage = result.response.usageMetadata;
@@ -139,8 +144,8 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: { temperature: 0 },
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingBudget: 0 } } as any,
   });
   const result = await model.generateContent([
     {

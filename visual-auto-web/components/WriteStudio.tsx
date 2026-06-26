@@ -380,14 +380,16 @@ export default function WriteStudio({
         {/* 우측: AI 초안 */}
         <section>
           <div className="card min-h-[24rem]">
-            {!post ? (
+            {post ? (
+              <DraftView post={post} onRewrite={generate} rewriting={generating} />
+            ) : generating ? (
+              <WritingPlaceholder />
+            ) : (
               <div className="flex h-full min-h-[20rem] flex-col items-center justify-center text-center text-ink-faint">
                 <PenLine size={36} />
                 <p className="mt-3 text-sm">왼쪽에서 주제를 고르면
                   <br />AI 초안이 여기 나타나요</p>
               </div>
-            ) : (
-              <DraftView post={post} onRewrite={generate} rewriting={generating} />
             )}
           </div>
         </section>
@@ -413,21 +415,80 @@ export default function WriteStudio({
   );
 }
 
+/** 생성 대기 중 — 오른쪽 패널이 "쓰는 중"으로 살아있게 */
+function WritingPlaceholder() {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-sm font-medium text-brand">
+        <span className="inline-flex gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand [animation-delay:-0.3s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand [animation-delay:-0.15s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand" />
+        </span>
+        AI가 글을 쓰고 있어요…
+      </div>
+      <div className="mt-4 space-y-2.5">
+        <div className="h-5 w-2/3 animate-pulse rounded bg-line" />
+        <div className="h-3 w-full animate-pulse rounded bg-line" />
+        <div className="h-3 w-full animate-pulse rounded bg-line" />
+        <div className="h-3 w-5/6 animate-pulse rounded bg-line" />
+        <div className="h-3 w-11/12 animate-pulse rounded bg-line" />
+      </div>
+    </div>
+  );
+}
+
+const CARET = '▍';
+
 function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () => void; rewriting: boolean }) {
   const guideByPos = new Map<number, PhotoGuideItem>();
   (post.photo_guide || []).forEach((g) => guideByPos.set(g.position, g));
 
+  const fullTitle = post.title || '';
+  const fullBody = post.content || '';
+  const total = fullTitle.length + fullBody.length;
+  const [reveal, setReveal] = useState(0);
+
+  // 새 글이 오면 제목→본문 순서로 한 글자씩 타이핑 (ChatGPT 느낌)
+  useEffect(() => {
+    setReveal(0);
+    const step = Math.max(2, Math.round(total / 400)); // 약 6초 안에 완성
+    const id = setInterval(() => {
+      setReveal((n) => {
+        const next = n + step;
+        if (next >= total) {
+          clearInterval(id);
+          return total;
+        }
+        return next;
+      });
+    }, 16);
+    return () => clearInterval(id);
+  }, [post.id, total]);
+
+  const done = reveal >= total;
+  const typingTitle = !done && reveal <= fullTitle.length;
+  const typingBody = !done && reveal > fullTitle.length;
+  const shownTitle = fullTitle.slice(0, reveal) + (typingTitle ? CARET : '');
+  const shownBody = (reveal > fullTitle.length ? fullBody.slice(0, reveal - fullTitle.length) : '') + (typingBody ? CARET : '');
+
   return (
-    <div>
+    <div onClick={() => !done && setReveal(total)}>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">AI 초안</span>
-        <button onClick={onRewrite} className="flex items-center gap-1 text-sm font-medium text-brand" disabled={rewriting}>
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          {done ? 'AI 초안' : '쓰는 중… (탭하면 바로 보기)'}
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onRewrite(); }}
+          className="flex items-center gap-1 text-sm font-medium text-brand"
+          disabled={rewriting}
+        >
           {rewriting ? '고쳐쓰는 중…' : <><Pencil size={14} /> 고쳐쓰기</>}
         </button>
       </div>
-      <h2 className="text-lg font-bold leading-snug">{post.title}</h2>
+      <h2 className="text-lg font-bold leading-snug">{shownTitle}</h2>
       <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink">
-        {(post.content || '').split('\n').map((line, i) => {
+        {shownBody.split('\n').map((line, i) => {
           const m = line.match(/^\[사진(\d+)\]\s*(.*)$/);
           if (m) {
             const pos = Number(m[1]);
@@ -451,7 +512,7 @@ function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () =
           return <p key={i}>{line}</p>;
         })}
       </div>
-      {(post.tags || []).length > 0 && (
+      {done && (post.tags || []).length > 0 && (
         <p className="mt-4 text-sm text-ink-faint">{(post.tags || []).map((t) => `#${t}`).join(' ')}</p>
       )}
     </div>
