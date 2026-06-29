@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, type LucideIcon } from 'lucide-react';
+import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, type LucideIcon } from 'lucide-react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { roleLabel, type Role } from '@/lib/roles';
 
@@ -13,6 +13,7 @@ function navFor(role: Role): NavItem[] {
   if (role === 'hq_admin') {
     return [
       { href: '/overview', label: '전체 현황', icon: LayoutGrid },
+      { href: '/branches', label: '지점 관리', icon: Building2 },
       { href: '/write', label: '글쓰기', icon: PenLine },
       { href: '/track', label: '내 글·조회수', icon: BarChart3 },
       { href: '/members', label: '지점·사람', icon: Users },
