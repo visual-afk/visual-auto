@@ -34,6 +34,7 @@ npm run report      # GA4 성과 리포트
 | 사가정점 | `consumer/branch-사가정점.md` | `seo/keywords-사가정점.md` | 애기엄마, 동네밀착 |
 | 서면전포점 | `consumer/branch-서면전포점.md` | `seo/keywords-서면전포점.md` | 부산 도심, 자기관리 30~60대 여성, 결마지 |
 | 부천신중동점 | `consumer/branch-부천신중동점.md` | `seo/keywords-부천신중동점.md` | 부천 신중동(리뉴얼 오픈), 30~40대 여성 사업가, 우아·고급 |
+| 서초방배점 | `consumer/branch-서초방배점.md` | `seo/keywords-서초방배점.md` | 강남권(서초·방배·반포, 오픈 예정), VIP·전문직 남녀·신혼부부, 이미지 관리 |
 
 이 파일들은 예진매니저가 작성하고 관리한다. AI는 이 지식을 기반으로 글을 생성한다.
 
