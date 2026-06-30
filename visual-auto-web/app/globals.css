@@ -14,6 +14,27 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* 캡처 억제: 본문 텍스트 선택/복사·롱프레스 콜아웃 차단 (입력은 예외) */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable],
+[contenteditable] * {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* 탭 전환·포커스 이탈 시 화면 흐리기 (CaptureGuard가 토글) */
+.capture-blur body {
+  filter: blur(12px);
+  transition: filter 0.1s ease;
+}
+
 /* 모바일 퍼스트: 본문은 폰 폭으로 중앙정렬 */
 .app-shell {
   margin-inline: auto;
