@@ -22,6 +22,7 @@ export default function InviteForm({
   const [role, setRole] = useState<string>('designer');
   const [branchId, setBranchId] = useState<string>(branches?.[0]?.id ?? '');
   const [link, setLink] = useState('');
+  const [kakaoSent, setKakaoSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
@@ -62,6 +63,7 @@ export default function InviteForm({
       return;
     }
     setLink(data.link);
+    setKakaoSent(!!data.kakaoSent);
     router.refresh();
   }
 
@@ -127,7 +129,11 @@ export default function InviteForm({
         <div className="space-y-2 rounded-2xl border border-line bg-canvas p-3">
           <div className="flex items-start gap-2 text-sm text-brand">
             <Info size={16} className="mt-0.5 shrink-0" />
-            <span>링크를 받은 사람만 가입할 수 있어요. 카톡·문자로 보내주세요.</span>
+            <span>
+              {kakaoSent
+                ? '입력한 번호로 가입 카톡을 보냈어요. 안 받았다면 아래 링크를 직접 보내주세요.'
+                : '링크를 받은 사람만 가입할 수 있어요. 카톡·문자로 보내주세요.'}
+            </span>
           </div>
           <div className="break-all rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink-soft">
             {link}

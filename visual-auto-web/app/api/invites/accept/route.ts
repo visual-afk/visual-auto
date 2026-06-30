@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase, loginIdToEmail } from '@/lib/supabase/admin';
+import { sendInviteAcceptedAlimtalk } from '@/lib/notifications/invites';
 
 /** 초대 수락 = 디자이너 가입 (공개 — 단, 유효한 토큰 필수). 이름+휴대폰+비번만. */
 export async function POST(request: Request) {
@@ -64,6 +65,25 @@ export async function POST(request: Request) {
     .from('invites')
     .update({ status: 'accepted', accepted_by: created.user.id, accepted_at: new Date().toISOString() })
     .eq('id', invite.id);
+
+  // 6) 초대한 사람(원장/본사)에게 "가입 완료" 카톡 (전용 템플릿 등록 시에만, best-effort)
+  if (invite.invited_by) {
+    try {
+      const [{ data: inviter }, { data: br }] = await Promise.all([
+        admin.from('branch_users').select('phone').eq('user_id', invite.invited_by).maybeSingle(),
+        admin.from('branches').select('name').eq('id', invite.branch_id).maybeSingle(),
+      ]);
+      if (inviter?.phone) {
+        await sendInviteAcceptedAlimtalk({
+          toPhone: inviter.phone,
+          newMemberName: displayName,
+          branchName: br?.name || '',
+        });
+      }
+    } catch (e) {
+      console.error('[invite accepted notify]', (e as Error).message); // 알림 실패해도 가입은 성공
+    }
+  }
 
   // 클라이언트는 이 login_id(휴대폰)+비번으로 바로 로그인
   return NextResponse.json({ ok: true, login_id: phone });

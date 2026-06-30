@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { callAI, loadFileSafe, loadBranchKnowledge, parseJsonResponse } from '@/lib/generation/ai-client';
+import { loadKeywordContext } from '@/lib/generation/keywords';
 
 export const maxDuration = 60;
 
@@ -17,17 +18,22 @@ export async function POST(request: Request) {
 
   // 본사는 고른 지점 기준, 그 외엔 본인 지점
   let branchName = member.branchName;
+  let branchId = member.branchId;
   if (member.role === 'hq_admin' && body.branch_id) {
     const { data: b } = await getAdminSupabase()
       .from('branches')
-      .select('name')
+      .select('id, name')
       .eq('id', body.branch_id)
       .maybeSingle();
-    if (b) branchName = b.name;
+    if (b) {
+      branchName = b.name;
+      branchId = b.id;
+    }
   }
 
   const rules = loadFileSafe('knowledge/seo/topic-rules.md');
   const branchKnowledge = loadBranchKnowledge(branchName);
+  const keywordContext = await loadKeywordContext(branchId);
 
   // AI 없거나 실패 시 폴백: 규칙 파일에서 캠페인/지점 강조 주제 뽑기
   const fallback = () => fallbackTopics(rules, branchName);
@@ -46,6 +52,9 @@ export async function POST(request: Request) {
         '',
         '--- 추천 규칙 (topic-rules.md) ---',
         rules || '(규칙 파일 비어있음 — 기본 미용 주제로)',
+        keywordContext
+          ? `\n--- 이번 달 키워드 조사 (검색량/경쟁도 — ⭐는 우선 추천) ---\n${keywordContext}`
+          : '',
         branchKnowledge ? `\n--- 지점 컨텍스트 (${branchName}) ---\n${branchKnowledge}` : '',
       ].join('\n'),
       userMessage: [

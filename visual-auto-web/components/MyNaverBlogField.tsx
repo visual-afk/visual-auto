@@ -12,10 +12,12 @@ export default function MyNaverBlogField({
   initialUrl,
   onChange,
   onOpen,
+  disabled = false,
 }: {
   initialUrl: string | null;
   onChange: (url: string | null) => void; // 부모(WriteStudio)의 publish 대상 갱신
   onOpen: () => void; // "네이버 블로그 열기" 클릭 = 발행 흐름 실행
+  disabled?: boolean; // 검토 전에는 발행 잠금
 }) {
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [editing, setEditing] = useState(!initialUrl);
@@ -51,7 +53,7 @@ export default function MyNaverBlogField({
   if (url && !editing) {
     return (
       <div className="flex flex-col items-stretch gap-1 md:items-end">
-        <button className="btn-primary md:w-auto md:px-6" onClick={onOpen}>
+        <button className="btn-primary md:w-auto md:px-6 disabled:opacity-40" onClick={onOpen} disabled={disabled}>
           네이버 블로그 열기
         </button>
         <button className="text-xs text-ink-faint underline" onClick={() => setEditing(true)}>

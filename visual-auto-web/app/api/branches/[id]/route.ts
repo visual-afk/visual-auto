@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
 
   const body = await request.json().catch(() => ({}));
-  const update: Record<string, string | null> = {};
+  const update: Record<string, string | number | null> = {};
   if (typeof body.name === 'string') {
     const name = body.name.trim();
     if (!name) return NextResponse.json({ error: '지점 이름을 입력해주세요' }, { status: 400 });
@@ -26,6 +26,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   for (const key of ['region', 'knowledge_slug', 'naver_blog_url', 'imweb_url'] as const) {
     if (typeof body[key] === 'string') update[key] = body[key].trim() || null;
+  }
+  // GPS 좌표·반경 (숫자 또는 null)
+  for (const key of ['lat', 'lng', 'geofence_radius_m'] as const) {
+    if (key in body) {
+      const v = body[key];
+      update[key] = v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v);
+    }
   }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: '변경할 내용이 없어요' }, { status: 400 });

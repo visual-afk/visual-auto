@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
+/** 숫자로 파싱, 비거나 NaN이면 null */
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** 지점 관리는 본사 전용 */
 async function requireHq() {
   const res = await requireMember();
@@ -19,7 +26,7 @@ export async function GET() {
 
   const admin = getAdminSupabase();
   const [{ data: branches }, { data: members }, { data: posts }] = await Promise.all([
-    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url').order('name'),
+    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, lat, lng, geofence_radius_m').order('name'),
     admin.from('branch_users').select('branch_id'),
     admin.from('posts').select('branch_id'),
   ]);
@@ -55,6 +62,9 @@ export async function POST(request: Request) {
       knowledge_slug: (body.knowledge_slug || '').trim() || null,
       naver_blog_url: (body.naver_blog_url || '').trim() || null,
       imweb_url: (body.imweb_url || '').trim() || null,
+      lat: numOrNull(body.lat),
+      lng: numOrNull(body.lng),
+      geofence_radius_m: numOrNull(body.geofence_radius_m) ?? 200,
     })
     .select('id')
     .single();

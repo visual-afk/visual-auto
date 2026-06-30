@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember, canManage } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { sendInviteAlimtalk } from '@/lib/notifications/invites';
 
 /** 요청이 들어온 실제 도메인에서 초대 링크 베이스를 뽑는다 (로컬·Vercel 프리뷰·프로덕션 자동 대응). */
 function getOrigin(request: Request): string {
@@ -68,5 +69,26 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const link = `${getOrigin(request)}/invite/${data.token}`;
-  return NextResponse.json({ token: data.token, link });
+
+  // 지점명(알림톡 문구용) — 원장은 본인 지점, 본사는 선택한 지점
+  let branchName = member.branchName || '';
+  if (!branchName) {
+    const { data: br } = await admin.from('branches').select('name').eq('id', branchId).maybeSingle();
+    branchName = br?.name || '비주얼살롱';
+  }
+
+  // 초대받는 사람 번호로 가입 링크 카톡 자동 발송 (번호 있고 키 설정됐을 때).
+  // 실패해도 초대 자체는 유효 — 화면의 '링크 복사'로 폴백 가능.
+  let kakaoSent = false;
+  if (inviteeContact) {
+    const r = await sendInviteAlimtalk({
+      toPhone: inviteeContact,
+      inviteeName,
+      branchName,
+      token: data.token,
+    });
+    kakaoSent = r.sent;
+  }
+
+  return NextResponse.json({ token: data.token, link, kakaoSent });
 }

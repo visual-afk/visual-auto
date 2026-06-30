@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { Hand, Eye } from 'lucide-react';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { kstDayRangeUtc } from '@/lib/kst';
+import AttendancePanel from '@/components/AttendancePanel';
+import type { AttendanceEventType } from '@/lib/attendance';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,12 +13,25 @@ export default async function HomePage() {
   const member = (await getMember())!;
   if (member.role === 'hq_admin') redirect('/overview'); // 본사는 전체 현황으로
   const admin = getAdminSupabase();
-  const { data: posts } = await admin
-    .from('posts')
-    .select('id, title, views, status, published_at, created_at')
-    .eq('author_id', member.userId)
-    .order('created_at', { ascending: false })
-    .limit(5);
+  const today = kstDayRangeUtc();
+  const [{ data: posts }, { data: lastEvent }] = await Promise.all([
+    admin
+      .from('posts')
+      .select('id, title, views, status, published_at, created_at')
+      .eq('author_id', member.userId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+    admin
+      .from('attendance_events')
+      .select('event_type')
+      .eq('member_id', member.memberId)
+      .gte('created_at', today.gte)
+      .lt('created_at', today.lt)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const lastToday = (lastEvent?.event_type ?? null) as AttendanceEventType | null;
 
   return (
     <div className="py-6 md:py-0">
@@ -27,6 +43,11 @@ export default async function HomePage() {
       <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
         {member.displayName} 디자이너님 <Hand size={22} className="text-brand" />
       </h1>
+
+      {/* 출근 체크 */}
+      <div className="mt-6">
+        <AttendancePanel lastToday={lastToday} />
+      </div>
 
       {/* 오늘 글쓰기 */}
       <Link
@@ -44,7 +65,7 @@ export default async function HomePage() {
           {posts.map((p) => (
             <li key={p.id}>
               <Link
-                href={`/track/${p.id}`}
+                href={p.status === 'published' ? `/track/${p.id}` : `/write?post=${p.id}`}
                 className="flex items-center justify-between rounded-xl2 border border-line bg-surface px-4 py-3.5"
               >
                 <span className="truncate font-medium">{p.title || '제목 없음'}</span>

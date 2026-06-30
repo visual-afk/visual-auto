@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Camera, RotateCw, PenLine, Pencil, Mic, Square } from 'lucide-react';
+import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Copy, Check, Save, Eye } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
 import MyNaverBlogField from './MyNaverBlogField';
 
@@ -23,6 +24,11 @@ function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/** 붙여넣기용 텍스트 — 제목 + 본문 + 해시태그 */
+function buildPostText(post: Post): string {
+  return [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
 }
 
 /** 녹음 중 마이크 소리에 맞춰 움직이는 실시간 파형 (클로드 음성입력 느낌) */
@@ -81,13 +87,17 @@ export default function WriteStudio({
   branches,
   needsBranchPick,
   myNaverUrl,
+  initialPost,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
   myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
+  initialPost?: Post | null; // 임시저장 글 다시 열기 (홈 '지난 글' → /write?post=)
 }) {
   const router = useRouter();
-  const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
+  const [branchId, setBranchId] = useState<string>(
+    initialPost?.branch_id ?? (needsBranchPick ? '' : branches[0]?.id ?? ''),
+  );
   const selectedBranch = branches.find((b) => b.id === branchId) ?? null;
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
@@ -99,7 +109,10 @@ export default function WriteStudio({
   const [topic, setTopic] = useState('');
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [post, setPost] = useState<Post | null>(null);
+  const [post, setPost] = useState<Post | null>(initialPost ?? null);
+  const [reviewed, setReviewed] = useState(false); // 검토 후 1단어 이상 고쳤는지 (발행 게이트)
+  const [published, setPublished] = useState(false); // 발행 버튼 눌러 블로그 연 뒤
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [streamContent, setStreamContent] = useState('');
   const [recording, setRecording] = useState(false);
@@ -224,6 +237,8 @@ export default function WriteStudio({
     setGenerating(true);
     setError('');
     setPost(null);
+    setReviewed(false); // 새로 쓰면 다시 검토 필요
+    setPublished(false);
     setStreamContent('');
     try {
       const res = await fetch('/api/generate', {
@@ -270,34 +285,64 @@ export default function WriteStudio({
     }
   }
 
-  async function publish(target: 'naver' | 'imweb') {
+  // 글을 절대 잃지 않게 — 언제든 눌러서 복사 (제목 + 본문 + 해시태그)
+  async function copyPost() {
     if (!post) return;
-    // 1) 본문 복사
-    const text = [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(buildPostText(post));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* 클립보드 거부 시 무시 */
+      setError('복사가 안 됐어요. 글을 직접 드래그해서 복사해 주세요.');
     }
-    // 2) 사진 갤러리에 저장(다운로드)
+  }
+
+  // 검토 편집 — 수정 내용을 즉시 상위 post에 반영(복사·발행이 수정본을 쓰도록) + 발행 게이트 해제
+  function onEdit(title: string, content: string, changed: boolean) {
+    setPost((p) => (p ? { ...p, title, content } : p));
+    if (changed) setReviewed(true);
+  }
+
+  // 임시저장 — 수정본을 DB에 저장(status는 draft 유지)
+  async function saveDraft(title: string, content: string) {
+    if (!post) return;
+    const res = await fetch('/api/posts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: post.id, title, content, tags: post.tags }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.post) setPost(data.post);
+    else if (!res.ok) throw new Error(data.error || '저장 실패');
+  }
+
+  function publish(target: 'naver' | 'imweb') {
+    if (!post) return;
+    const url = target === 'naver' ? naverUrl : imwebUrl;
+    // 1) 새 탭 먼저 연다 — await 이전(사용자 클릭 제스처 안)이라 팝업 차단이 안 걸린다
+    const win = url ? window.open(url, '_blank') : null;
+    // 2) 본문 복사 (붙여넣기용)
+    copyPost();
+    // 3) 사진 갤러리에 저장(다운로드) — 다시 연 글은 로컬 사진이 없어 자연히 스킵
     photos.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
+      const objectUrl = URL.createObjectURL(f);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = objectUrl;
       a.download = `${post.title || 'photo'}-${i + 1}.${f.name.split('.').pop() || 'jpg'}`;
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
     });
-    // 3) 발행 상태 기록
-    await fetch('/api/posts', {
+    // 4) 발행 상태 기록 (백그라운드 — 화면은 그대로 유지, 자동 이동 없음)
+    fetch('/api/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
-    });
-    // 4) 발행처 열기 + 조회수 입력 화면으로
-    const url = target === 'naver' ? naverUrl : imwebUrl;
-    if (url) window.open(url, '_blank');
-    router.push(`/track/${post.id}`);
+    }).catch(() => {});
+    setPublished(true);
+    if (url && !win) {
+      // 팝업이 차단된 경우: 아래 '복사하기'로 안내
+      setError('새 탭이 안 열렸어요. 블로그를 직접 연 뒤 "복사하기"로 붙여넣어 주세요.');
+    }
   }
 
   return (
@@ -421,7 +466,7 @@ export default function WriteStudio({
         <section>
           <div className="card min-h-[24rem]">
             {post ? (
-              <DraftView post={post} onRewrite={generate} rewriting={generating} />
+              <DraftView post={post} onRewrite={generate} rewriting={generating} onEdit={onEdit} onSaveDraft={saveDraft} />
             ) : streamContent ? (
               <StreamingView content={streamContent} />
             ) : generating ? (
@@ -439,20 +484,47 @@ export default function WriteStudio({
 
       {/* 하단: 발행 (반자동 복붙) */}
       {post && (
-        <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start">
-            {imwebUrl && (
-              <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
-                아임웹 열기
+        <div className="mt-6 border-t border-line pt-5">
+          <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-ink-soft">
+              {reviewed ? '올린 뒤 붙여넣기만 하면 돼요' : '먼저 검토하고 1단어 이상 고쳐야 발행할 수 있어요'}
+            </p>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start">
+              {/* 글을 절대 잃지 않게 — 언제든 복사 */}
+              <button className="btn-ghost md:w-auto md:px-6" onClick={copyPost}>
+                {copied ? (
+                  <span className="inline-flex items-center gap-1.5"><Check size={16} /> 복사됨!</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5"><Copy size={16} /> 복사하기</span>
+                )}
               </button>
-            )}
-            <MyNaverBlogField
-              initialUrl={naverUrl}
-              onChange={setNaverUrl}
-              onOpen={() => publish('naver')}
-            />
+              {imwebUrl && (
+                <button
+                  className="btn-ghost md:w-auto md:px-6 disabled:opacity-40"
+                  onClick={() => publish('imweb')}
+                  disabled={!reviewed}
+                >
+                  아임웹 열기
+                </button>
+              )}
+              <MyNaverBlogField
+                initialUrl={naverUrl}
+                onChange={setNaverUrl}
+                onOpen={() => publish('naver')}
+                disabled={!reviewed}
+              />
+            </div>
           </div>
+
+          {/* 발행 후 — 화면은 유지, 조회수 입력은 사용자가 원할 때 */}
+          {published && post && (
+            <div className="mt-4 flex flex-col items-stretch gap-2 rounded-2xl bg-brand-wash px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <p className="text-sm font-medium text-brand">새 탭에 붙여넣고 발행하셨나요? 글은 여기 그대로 있어요.</p>
+              <Link href={`/track/${post.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-brand underline">
+                <Eye size={15} /> 조회수 입력하러 가기 →
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -530,21 +602,106 @@ function StreamingView({ content }: { content: string }) {
   );
 }
 
-function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () => void; rewriting: boolean }) {
+function DraftView({
+  post,
+  onRewrite,
+  rewriting,
+  onEdit,
+  onSaveDraft,
+}: {
+  post: Post;
+  onRewrite: () => void;
+  rewriting: boolean;
+  onEdit: (title: string, content: string, changed: boolean) => void;
+  onSaveDraft: (title: string, content: string) => Promise<void>;
+}) {
   const guideByPos = new Map<number, PhotoGuideItem>();
   (post.photo_guide || []).forEach((g) => guideByPos.set(g.position, g));
+
+  // 검토/편집 모드 — 진입 시점의 글을 원본(baseline)으로 잡고, 한 글자라도 달라지면 발행 게이트 해제
+  const [editing, setEditing] = useState(false);
+  const baseline = useRef({ title: post.title || '', content: post.content || '' });
+  const [draftTitle, setDraftTitle] = useState(post.title || '');
+  const [draftContent, setDraftContent] = useState(post.content || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function startReview() {
+    baseline.current = { title: post.title || '', content: post.content || '' };
+    setDraftTitle(post.title || '');
+    setDraftContent(post.content || '');
+    setEditing(true);
+  }
+
+  function applyChange(title: string, content: string) {
+    setDraftTitle(title);
+    setDraftContent(content);
+    const changed = title !== baseline.current.title || content !== baseline.current.content;
+    onEdit(title, content, changed);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSaveDraft(draftTitle, draftContent);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch {
+      /* 상위에서 에러 표시 */
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-brand">검토 중 — 1단어 이상 고쳐주세요</span>
+          <button onClick={() => setEditing(false)} className="text-sm font-medium text-ink-soft">
+            검토 완료
+          </button>
+        </div>
+        <input
+          className="field text-lg font-bold"
+          value={draftTitle}
+          onChange={(e) => applyChange(e.target.value, draftContent)}
+          placeholder="제목"
+        />
+        <textarea
+          className="field mt-3 min-h-[20rem] resize-y text-[15px] leading-relaxed"
+          value={draftContent}
+          onChange={(e) => applyChange(draftTitle, e.target.value)}
+          placeholder="본문"
+        />
+        <div className="mt-3 flex gap-3">
+          <button onClick={handleSave} disabled={saving} className="btn-ghost flex-1 disabled:opacity-50">
+            {saving ? '저장 중…' : saved ? <span className="inline-flex items-center justify-center gap-1.5"><Check size={16} /> 저장됨</span> : <span className="inline-flex items-center justify-center gap-1.5"><Save size={16} /> 임시저장</span>}
+          </button>
+          <button onClick={() => setEditing(false)} className="btn-primary flex-1">
+            검토 완료
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">AI 초안</span>
-        <button
-          onClick={onRewrite}
-          className="flex items-center gap-1 text-sm font-medium text-brand"
-          disabled={rewriting}
-        >
-          {rewriting ? '고쳐쓰는 중…' : <><Pencil size={14} /> 고쳐쓰기</>}
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={startReview} className="flex items-center gap-1 text-sm font-medium text-brand">
+            <Pencil size={14} /> 검토하기
+          </button>
+          <button
+            onClick={onRewrite}
+            className="flex items-center gap-1 text-sm font-medium text-ink-soft"
+            disabled={rewriting}
+          >
+            {rewriting ? '고쳐쓰는 중…' : <><RotateCw size={14} /> 고쳐쓰기</>}
+          </button>
+        </div>
       </div>
       <h2 className="text-lg font-bold leading-snug">{post.title}</h2>
       <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink">

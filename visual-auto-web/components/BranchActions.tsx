@@ -45,7 +45,12 @@ export default function BranchActions({ branch }: { branch: BranchRowData }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3.5">
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-semibold">{branch.name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate font-semibold">{branch.name}</span>
+          {branch.lat == null || branch.lng == null ? (
+            <span className="shrink-0 rounded bg-warn/10 px-1.5 py-0.5 text-[11px] font-semibold text-warn">위치 미설정</span>
+          ) : null}
+        </span>
         <span className="block truncate text-xs text-ink-faint">{branch.region || '지역 미입력'}</span>
       </span>
       <span className="flex items-center gap-1 text-sm text-ink-soft">
