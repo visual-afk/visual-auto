@@ -10,6 +10,7 @@ export interface MemberContext {
   userId: string;
   memberId: string;
   displayName: string;
+  phone: string | null; // 휴대폰(=로그인 아이디). 워터마크 식별자에 뒷4자리 사용
   role: Role;
   isActive: boolean;
   branchId: string | null;
@@ -35,7 +36,7 @@ export async function getMember(): Promise<MemberContext | null> {
   const admin = getAdminSupabase();
   const { data: member } = await admin
     .from('branch_users')
-    .select('id, display_name, role, is_active, branch_id, branches(name, region, naver_blog_url, imweb_url)')
+    .select('id, display_name, phone, role, is_active, branch_id, branches(name, region, naver_blog_url, imweb_url)')
     .eq('user_id', user.id)
     .maybeSingle();
 
@@ -57,6 +58,7 @@ export async function getMember(): Promise<MemberContext | null> {
     userId: user.id,
     memberId: member.id,
     displayName: member.display_name,
+    phone: (member as { phone?: string | null }).phone ?? null,
     role: member.role as Role,
     isActive: member.is_active,
     branchId: member.branch_id,
