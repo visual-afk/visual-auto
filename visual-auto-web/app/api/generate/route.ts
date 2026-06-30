@@ -11,6 +11,7 @@ import {
   parseJsonResponse,
 } from '@/lib/generation/ai-client';
 import { parsePhotoGuide } from '@/lib/generation/photo-guide';
+import { loadKeywordContext } from '@/lib/generation/keywords';
 import type { GeneratedPost, SeoOptimizedPost } from '@/lib/types';
 
 export const maxDuration = 300;
@@ -57,6 +58,7 @@ export async function POST(request: Request) {
   try {
     const knowledge = loadKnowledge();
     const branchKnowledge = loadBranchKnowledge(branchName);
+    const keywordContext = await loadKeywordContext(branchId);
     const template = loadTemplate(TEMPLATE_BY_TYPE[postType] || 'info-post');
     const writerPrompt = loadPrompt('blog-writer');
     const seoPrompt = loadPrompt('seo-optimizer');
@@ -68,6 +70,9 @@ export async function POST(request: Request) {
         '\n\n--- 비주얼살롱 지식베이스 ---\n',
         knowledge,
         branchKnowledge ? `\n\n--- 지점 특화 (${branchName}) ---\n${branchKnowledge}` : '',
+        keywordContext
+          ? `\n\n--- 이번 달 키워드 조사 (이 키워드를 본문에 우선 반영, ⭐ 최우선) ---\n${keywordContext}`
+          : '',
         '\n\n--- 글 구조 템플릿 ---\n',
         template,
         '\n\n--- 중요 지침 ---\n',

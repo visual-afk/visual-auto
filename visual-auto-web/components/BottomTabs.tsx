@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PenLine, TrendingUp, Users, LayoutGrid, type LucideIcon } from 'lucide-react';
+import { Home, PenLine, TrendingUp, Users, LayoutGrid, MessageSquare, MapPin, PieChart, type LucideIcon } from 'lucide-react';
 import type { Role } from '@/lib/roles';
 
 type Tab = { href: string; label: string; icon: LucideIcon };
@@ -11,18 +11,28 @@ function tabsFor(role: Role): Tab[] {
   if (role === 'hq_admin') {
     return [
       { href: '/overview', label: '현황', icon: LayoutGrid },
+      { href: '/performance', label: '대시보드', icon: PieChart },
       { href: '/write', label: '글쓰기', icon: PenLine },
       { href: '/track', label: '성과', icon: TrendingUp },
-      { href: '/members', label: '지점', icon: Users },
+      { href: '/members', label: '사람', icon: Users },
     ];
   }
-  const base: Tab[] = [
+  if (role === 'branch_owner') {
+    return [
+      { href: '/performance', label: '대시보드', icon: PieChart },
+      { href: '/write', label: '글쓰기', icon: PenLine },
+      { href: '/review', label: '리뷰', icon: MessageSquare },
+      { href: '/track', label: '내 글', icon: TrendingUp },
+      { href: '/members', label: '멤버', icon: Users },
+    ];
+  }
+  return [
     { href: '/', label: '홈', icon: Home },
+    { href: '/attendance', label: '출근', icon: MapPin },
     { href: '/write', label: '글쓰기', icon: PenLine },
+    { href: '/review', label: '리뷰', icon: MessageSquare },
     { href: '/track', label: '성과', icon: TrendingUp },
   ];
-  if (role === 'branch_owner') base.push({ href: '/members', label: '멤버', icon: Users });
-  return base;
 }
 
 export default function BottomTabs({ role }: { role: Role }) {
