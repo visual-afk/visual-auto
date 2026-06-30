@@ -44,7 +44,7 @@ async function upsertRow(
 /** 하루치 크롤. onlyPk 주면 해당 지점만(대시보드 새로고침용). */
 export async function crawlDate(
   date: string,
-  opts: { onlyPk?: string; sleepBranches?: number; sleepDesigners?: number; jar?: CookieJar } = {},
+  opts: { onlyPk?: string; skipDesigners?: boolean; sleepBranches?: number; sleepDesigners?: number; jar?: CookieJar } = {},
 ): Promise<CrawlResult> {
   const jar = opts.jar ?? (await login());
   const branchMap = await loadBranchMap();
@@ -63,18 +63,20 @@ export async function crawlDate(
       const totalHtml = await fetchStaffSale(jar, pk, date, '');
       await upsertRow(branchId, date, 'branch', '', totalHtml);
 
-      // 2) 디자이너별
-      const designers = parseDesigners(totalHtml);
+      // 2) 디자이너별 (빠른 새로고침 모드면 생략 — 지점 총합만)
       let count = 0;
-      for (const d of designers) {
-        try {
-          const dHtml = await fetchStaffSale(jar, pk, date, d.pk);
-          await upsertRow(branchId, date, 'designer', d.name, dHtml);
-          count++;
-        } catch {
-          /* 개별 디자이너 실패는 건너뜀 */
+      if (!opts.skipDesigners) {
+        const designers = parseDesigners(totalHtml);
+        for (const d of designers) {
+          try {
+            const dHtml = await fetchStaffSale(jar, pk, date, d.pk);
+            await upsertRow(branchId, date, 'designer', d.name, dHtml);
+            count++;
+          } catch {
+            /* 개별 디자이너 실패는 건너뜀 */
+          }
+          if (opts.sleepDesigners) await sleep(opts.sleepDesigners);
         }
-        if (opts.sleepDesigners) await sleep(opts.sleepDesigners);
       }
       result.branches.push({ branch: branchName, designers: count, ok: true });
     } catch (e) {
