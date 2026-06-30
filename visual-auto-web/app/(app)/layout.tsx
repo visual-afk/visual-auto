@@ -2,10 +2,18 @@ import { redirect } from 'next/navigation';
 import { getMember } from '@/lib/auth';
 import Sidebar from '@/components/Sidebar';
 import BottomTabs from '@/components/BottomTabs';
+import Watermark from '@/components/Watermark';
+import CaptureGuard from '@/components/CaptureGuard';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const member = await getMember();
   if (!member) redirect('/login');
+
+  // 워터마크 식별자: 이름 · 지점 · 번호뒷4자리 (캡처물에서 유출자 특정용)
+  const last4 = member.phone?.replace(/\D/g, '').slice(-4);
+  const identity = [member.displayName, member.branchName, last4]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="flex min-h-dvh">
@@ -21,6 +29,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="md:hidden">
         <BottomTabs role={member.role} />
       </div>
+
+      {/* 캡처 억제 + 유출 추적 (인증 화면 전체에 적용) */}
+      <Watermark identity={identity} />
+      <CaptureGuard />
     </div>
   );
 }

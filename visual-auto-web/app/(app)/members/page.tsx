@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { getMember, canManage, roleLabel, type Role } from '@/lib/auth';
+import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import InviteForm from '@/components/InviteForm';
 import MemberActions from '@/components/MemberActions';
@@ -34,6 +35,9 @@ export default async function MembersPage() {
   const member = (await getMember())!;
   if (!canManage(member.role)) redirect('/');
   const isHq = member.role === 'hq_admin';
+
+  // 멤버 이름·휴대폰을 보는 화면 → 접근 로그
+  await logAccess(member, '/members', 'view_members');
 
   const admin = getAdminSupabase();
 
