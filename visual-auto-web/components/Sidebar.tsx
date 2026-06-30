@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, Search, MessageSquare, MapPin, type LucideIcon } from 'lucide-react';
+import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, Search, MessageSquare, MapPin, PieChart, GraduationCap, type LucideIcon } from 'lucide-react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { roleLabel, type Role } from '@/lib/roles';
 
@@ -13,11 +13,13 @@ function navFor(role: Role): NavItem[] {
   if (role === 'hq_admin') {
     return [
       { href: '/overview', label: '전체 현황', icon: LayoutGrid },
+      { href: '/performance', label: '성과 대시보드', icon: PieChart },
       { href: '/branches', label: '지점 관리', icon: Building2 },
       { href: '/keyword-research', label: '키워드 조사', icon: Search },
       { href: '/write', label: '글쓰기', icon: PenLine },
       { href: '/review', label: '리뷰 답글', icon: MessageSquare },
       { href: '/track', label: '내 글·조회수', icon: BarChart3 },
+      { href: '/academy', label: '아카데미', icon: GraduationCap },
       { href: '/attendance', label: '출근 현황', icon: MapPin },
       { href: '/members', label: '지점·사람', icon: Users },
     ];
@@ -28,7 +30,10 @@ function navFor(role: Role): NavItem[] {
     { href: '/track', label: '내 글·조회수', icon: BarChart3 },
     { href: '/attendance', label: '출근', icon: MapPin },
   ];
-  if (role === 'branch_owner') base.push({ href: '/members', label: '우리 지점 사람', icon: Users });
+  if (role === 'branch_owner') {
+    base.unshift({ href: '/performance', label: '성과 대시보드', icon: PieChart });
+    base.push({ href: '/members', label: '우리 지점 사람', icon: Users });
+  }
   return base;
 }
 
