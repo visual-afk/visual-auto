@@ -118,7 +118,16 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
 
     // 4. 구글독스 생성
     console.log('📄 구글독스 생성 중...');
+    const mainKeyword = (row.keywords || '').split(',')[0].trim();
+    const allKeywords = (row.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
     const finalContent = [
+      `🔑 메인 키워드: ${mainKeyword}`,
+      `🏷️ 전체 키워드: ${allKeywords.join(', ')}`,
+      '',
+      '---',
+      '',
+      `# ${optimized.optimized_title}`,
+      '',
       optimized.optimized_content,
       '\n\n---\n',
       `태그: ${(optimized.optimized_tags || []).join(', ')}`,
@@ -127,24 +136,35 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     ].join('\n');
 
     const platform = isWashing ? '블로그' : '아임웹';
-    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform);
+    const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform, row.scheduledDate);
 
-    // 4-1. AI 이미지 생성 + 독스 [IMAGE] 위치에 삽입
-    const imageDescriptions = extractImageDescriptions(draft.content);
-    if (imageDescriptions.length > 0) {
-      console.log(`🖼️  이미지 ${imageDescriptions.length}장 생성 중...`);
-      const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
-      if (docId) {
-        const imageBuffers: Buffer[] = [];
-        for (const desc of imageDescriptions.slice(0, 5)) {
-          console.log(`  🎨 생성 중: ${desc.slice(0, 40)}...`);
-          const buf = await generateImage(desc);
-          if (buf) imageBuffers.push(buf);
+    // 4-1. 문단별로 Gemini AI 이미지 자동 생성 + 삽입 ([IMAGE] 위치마다 매칭)
+    const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
+    if (docId) {
+      try {
+        const { generateImage } = await import('../lib/claude-client.js');
+        const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
+
+        const imageDescs = extractImageDescriptions(draft.content);
+        if (imageDescs.length > 0) {
+          console.log(`🎨 Gemini AI 이미지 ${imageDescs.length}장 생성 중...`);
+          const buffers: Buffer[] = [];
+          for (let i = 0; i < imageDescs.length; i++) {
+            const buf = await generateImage(imageDescs[i]);
+            if (buf) {
+              buffers.push(buf);
+              console.log(`  🎨 ${i + 1}/${imageDescs.length} 생성 완료`);
+            } else {
+              console.log(`  ⚠️ ${i + 1} 실패`);
+            }
+          }
+          if (buffers.length > 0) {
+            await replaceImageTagsInDoc(docId, buffers);
+            console.log(`  ✅ 문단별 AI 이미지 ${buffers.length}장 삽입 완료`);
+          }
         }
-        if (imageBuffers.length > 0) {
-          const inserted = await replaceImageTagsInDoc(docId, imageBuffers);
-          console.log(`  ✅ 이미지 ${inserted}장 글 안에 삽입 완료`);
-        }
+      } catch (err) {
+        console.log(`  ⚠️ 이미지 삽입 스킵: ${(err as Error).message?.slice(0, 80)}`);
       }
     }
 
@@ -223,11 +243,18 @@ async function main() {
 
   console.log(`📝 ${rows.length}건 생성 시작\n`);
 
-  // 같은 주제가 2번 나오면 두번째는 워싱(리라이팅) 모드
-  const seenTopics = new Set<string>();
+  // 같은 주제 첫번째 행 = 아임웹, 두번째 행 = 블로그 (워싱)
+  // 재시도 시에도 일관되게 동작하도록 rowIndex 기준으로 판단
+  const { fetchAllRows } = await import('../lib/google-sheets.js');
+  const allRows = await fetchAllRows();
+  const topicFirstRowIndex = new Map<string, number>();
+  for (const r of allRows) {
+    if (!topicFirstRowIndex.has(r.topic)) topicFirstRowIndex.set(r.topic, r.rowIndex);
+  }
+
   for (const row of rows) {
-    const isWashing = seenTopics.has(row.topic);
-    seenTopics.add(row.topic);
+    // 이 행이 해당 주제의 첫번째 행보다 뒤에 있으면 워싱(블로그)
+    const isWashing = row.rowIndex !== topicFirstRowIndex.get(row.topic);
     await generateForRow(row, isWashing);
   }
 

@@ -34,9 +34,15 @@
 > 노출용 글 마무리에서 "더 알아보기" 링크로 사용한다.
 > 유입용/전환용 글이 새로 발행될 때마다 여기에 추가한다.
 
-| 주제 | 링크 |
-|------|------|
-| 비포애프터 후기 | https://blog.naver.com/yygg0422/223983951962 |
+| 주제 | 플랫폼 | 링크 |
+|------|--------|------|
+| 비포애프터 후기 | 블로그 | https://blog.naver.com/yygg0422/223983951962 |
+| 어려보이는 머리 (유입용) | 아임웹 | https://visualsalon.co.kr/hair-beauty-contents/?q=YToxOntzOjEyOiJrZXl3b3JkX3R5cGUiO3M6MzoiYWxsIjt9&bmode=view&idx=170945718&t=board |
+| 어려보이는 머리 (유입용) | 블로그 | https://blog.naver.com/yygg0422/224259553225 |
+| 두피 리프팅 (유입용) | 아임웹 | https://visualsalon.co.kr/hair-beauty-contents/?q=YToxOntzOjEyOiJrZXl3b3JkX3R5cGUiO3M6MzoiYWxsIjt9&bmode=view&idx=170962677&t=board |
+| 두피 리프팅 (유입용) | 블로그 | https://blog.naver.com/yygg0422/224262307616 |
+| 부스스한 머리 관리법 (전환용) | 아임웹 | https://visualsalon.co.kr/hair-beauty-contents/?q=YToxOntzOjEyOiJrZXl3b3JkX3R5cGUiO3M6MzoiYWxsIjt9&bmode=view&idx=170992963&t=board |
+| 부스스한 머리 관리법 (전환용) | 블로그 | https://blog.naver.com/yygg0422/224266559633 |
 
 ---
 

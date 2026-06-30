@@ -114,14 +114,9 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     systemInstruction: opts.system,
-    // thinkingBudget:0 → 추론 토큰이 출력 예산을 잡아먹어 JSON이 잘리는 문제 방지 (2.5-flash는 thinking 끄기 가능)
-    generationConfig: {
-      maxOutputTokens: opts.maxTokens || 8000,
-      temperature: opts.temperature ?? 0.7,
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
+    generationConfig: { maxOutputTokens: opts.maxTokens || 8000, temperature: opts.temperature ?? 0.7 },
   });
   const result = await model.generateContent(opts.userMessage);
   const usage = result.response.usageMetadata;
@@ -131,57 +126,6 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
     outputTokens: usage?.candidatesTokenCount || 0,
     provider: 'gemini',
   };
-}
-
-/**
- * 스트리밍 생성 — 토큰(텍스트 조각)을 생성되는 즉시 순서대로 yield 한다.
- * provider는 callAI와 동일하게 Anthropic 우선, 없으면 Gemini.
- */
-export async function* streamAI(opts: AICallOptions): AsyncGenerator<string> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    yield* streamAnthropic(opts);
-  } else if (process.env.GEMINI_API_KEY) {
-    yield* streamGemini(opts);
-  } else {
-    throw new Error('ANTHROPIC_API_KEY 또는 GEMINI_API_KEY 가 필요해요');
-  }
-}
-
-async function* streamAnthropic(opts: AICallOptions): AsyncGenerator<string> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
-  const stream = client.messages.stream({
-    model,
-    max_tokens: opts.maxTokens || 8000,
-    temperature: opts.temperature ?? 0.7,
-    system: opts.system,
-    messages: [{ role: 'user', content: opts.userMessage }],
-  });
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text;
-    }
-  }
-}
-
-async function* streamGemini(opts: AICallOptions): AsyncGenerator<string> {
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    systemInstruction: opts.system,
-    generationConfig: {
-      maxOutputTokens: opts.maxTokens || 8000,
-      temperature: opts.temperature ?? 0.7,
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
-  });
-  const result = await model.generateContentStream(opts.userMessage);
-  for await (const chunk of result.stream) {
-    const text = chunk.text();
-    if (text) yield text;
-  }
 }
 
 /**
@@ -195,8 +139,8 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    generationConfig: { temperature: 0, thinkingConfig: { thinkingBudget: 0 } } as any,
+    model: 'gemini-2.0-flash',
+    generationConfig: { temperature: 0 },
   });
   const result = await model.generateContent([
     {

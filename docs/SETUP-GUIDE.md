@@ -47,7 +47,7 @@ blog-automation@company-tasks-bot.iam.gserviceaccount.com
 
 ### 1-3. Drive 폴더 공유
 
-1. 이 링크 열기: https://drive.google.com/drive/folders/1pKS2ntPXL2NyDQueJiKLiDlqTPuyCHoy
+1. 이 링크 열기: https://drive.google.com/drive/folders/1M6i96IOx4rNs-0Cz6dxrG-44szlhua6P
 2. 폴더 이름 우클릭 → **"공유"** → **"공유"**
 3. 위 이메일 붙여넣기
 4. 권한: **"편집자"**
@@ -150,7 +150,7 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL=blog-automation@company-tasks-bot.iam.gserviceaccou
 GOOGLE_PRIVATE_KEY=<Service Account JSON 파일의 private_key 값 그대로 붙여넣기>
 GOOGLE_SHEET_ID=1OMGankS1nQN1S3nTy0OM6-BbxsQK1T2T6gb4P_Y_dqQ
 GOOGLE_CALENDAR_ID=c_0f4cc29c24ac0d22281bb44451cc6b40f511cf34416ea7b2a228fb82013a01450@group.calendar.google.com
-GOOGLE_DOCS_FOLDER_ID=1pKS2ntPXL2NyDQueJiKLiDlqTPuyCHoy
+GOOGLE_DOCS_FOLDER_ID=1M6i96IOx4rNs-0Cz6dxrG-44szlhua6P
 GEMINI_API_KEY=<Gemini API 키>
 ```
 

@@ -14,7 +14,6 @@ const ADMINS = [
   { phone: '01039687452', name: '대표님' },
   { phone: '01055360442', name: '본부장' },
   { phone: '01031459382', name: '실장님' },
-  { phone: '01043417220', name: '관리자' },
 ];
 
 function emailOf(phone: string) {

@@ -100,3 +100,115 @@
 {"timestamp":"2026-04-21T03:53:20.805Z","topic":"두피 리프팅","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1rOzSKHgkQ8FpqAzjavjLaYFgIoF-g6QmQj_r3cVSuno/edit","tokens_used":32292,"duration_ms":197444}
 {"timestamp":"2026-04-21T04:45:22.706Z","topic":"두피 리프팅","branch":"강남신사점","status":"started"}
 {"timestamp":"2026-04-21T04:48:49.720Z","topic":"두피 리프팅","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/100v6D8wYMqKoBmHg2bhygyAn6-S6932KMtBgfWobuQw/edit","tokens_used":34666,"duration_ms":207015}
+{"timestamp":"2026-04-24T01:52:24.983Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:52:26.506Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent: [404 Not Found] This model models/gemini-2.0-flash is no longer available to new users. Please update your code to use a newer model for the latest features and improvements.","duration_ms":1123}
+{"timestamp":"2026-04-24T01:53:02.534Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:56:26.085Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/1mv0tzmGDHAvs6rGWJ501uHrLcCjC4a3JkSyvx1VD4Bk/edit","tokens_used":48331,"duration_ms":203551}
+{"timestamp":"2026-04-24T01:56:26.089Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-04-24T01:59:38.717Z","topic":"부스스한 머리 관리법","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/15B-qVmk3gx_PFzZlIFWotNHdMOn-FMnFghJ0571gjQU/edit","tokens_used":47159,"duration_ms":192628}
+{"timestamp":"2026-04-27T23:03:51.617Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-27T23:06:43.740Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1gaqNKIXN9WlMp2EIk_kn91SbPG0hEMo23wdkBDiD4ik/edit","tokens_used":52960,"duration_ms":172123}
+{"timestamp":"2026-04-27T23:06:43.745Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-27T23:07:45.175Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"failed","error":"JSON 파싱 실패: Bad control character in string literal in JSON at position 1627 (line 13 column 1292)\n원문: {\n  \"title\": \"2026 여자머리 트렌드, '꾸안꾸' 시대는 끝? 진짜 고급스러움은 '결'에서 시작됩니다\",\n  \"meta_description\": \"2026년 여자 헤어스타일을 관통하는 키워드는 '조용한 럭셔리'. 과시하지 않으면서도 고급스러운 분위기를 만드는 허쉬 레이어드 컷, 스킨 브라운 컬러, 슬릭백 스타일까지. 성수동 비주얼살롱에서 제안하는 최신 헤어트렌드를 만나보세요.\",\n  \"tags\": [\n    \"26년여자머리트렌드\",\n    \"헤어트렌드\",\n    \"여자헤어스타일\",\n    \"성수동미용실\",\n    \"허쉬레이어드컷\",\n    \"스킨브라운\",\n    \"결마지\"\n  ],\n  \"content\": \"## 2026 헤어 트렌드, 검색창에 치고 오셨다면 잠시만요.\\n\\n아마 이 글을 클릭하셨다면 '내년엔 어떤 머리가 유행할까?' 하는 궁금증 때문이셨을 거예요. 하지만 2026년의 헤어 트렌드는 단순히 '어떤 스타일'이라고 정의하기 조금 어렵습니다. 거대한 패러다임의 ","duration_ms":60639}
+{"timestamp":"2026-04-27T23:08:06.865Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-27T23:09:10.062Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"failed","error":"JSON 파싱 실패: Bad control character in string literal in JSON at position 1710 (line 11 column 1425)\n원문: {\n  \"title\": \"2026 여자머리 트렌드, 진짜 세련된 사람들은 이렇게 합니다 (성수동 헤어스타일)\",\n  \"meta_description\": \"2026년 최신 여자 헤어트렌드를 분석합니다. 꾸안꾸 느낌의 에어리 컷부터 얼굴형에 맞춘 컨투어링 컷, 스킨 톤 브라운 컬러까지. 성수동 비주얼살롱에서 제안하는 최신 여자 헤어스타일을 만나보세요.\",\n  \"tags\": [\n    \"26년여자머리트렌드\",\n    \"헤어트렌드\",\n    \"여자헤어스타일\",\n    \"성수미용실\",\n    \"레이어드컷\"\n  ],\n  \"content\": \"## 2026년 여자머리 트렌드, 아직도 사진만 저장하고 계신가요?\\n\\n인스타그램을 넘기다 마음에 드는 헤어스타일 사진을 발견하고 일단 저장. 아마 많은 분들이 공감하실 거예요. 하지만 막상 미용실에 가져가면 '이건 고데기에요', '손님 모발에서는 느낌이 달라요' 같은 말을 듣기 일쑤죠. 2026년 여자머리 트렌드를 검색해서 오셨다면, 이제 사진만 저장하","duration_ms":62336}
+{"timestamp":"2026-04-28T02:18:37.607Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T02:21:43.517Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1PU51RsPhpd7VoxdzOpbF1_5K27PKvFXp9kaoyTJpbeY/edit","tokens_used":53339,"duration_ms":185910}
+{"timestamp":"2026-04-28T03:27:27.138Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T03:30:31.066Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1yq6MNCmHr1fWufHs2kPU9cjlC884QAPAehcefVKJWEY/edit","tokens_used":57845,"duration_ms":183927}
+{"timestamp":"2026-04-28T03:30:31.068Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T03:33:41.690Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/122rb2tQjNH3uZxfAPhitoA7_PQUiyO0qUd4eo0tUUsM/edit","tokens_used":54850,"duration_ms":190621}
+{"timestamp":"2026-04-28T04:59:30.521Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T05:02:44.857Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1k5dcfYS1jZhViUrINZg3U3X7gU9XUS5Ig8608wx7g-k/edit","tokens_used":54911,"duration_ms":194336}
+{"timestamp":"2026-04-28T05:02:44.859Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-28T05:06:12.204Z","topic":"2026 여자머리 트렌드","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1hInEIoYvAns9YMUMM_xWXBassp7s0xd62SckIJVARiQ/edit","tokens_used":56186,"duration_ms":207344}
+{"timestamp":"2026-04-29T02:30:30.439Z","topic":"손질 편한 단발","branch":"사가정점","status":"started"}
+{"timestamp":"2026-04-29T02:33:43.845Z","topic":"손질 편한 단발","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1jN1UVQokXIYYz_q2JoKg1Yy-N-G3wkmmbWp7-5eZ6mI/edit","tokens_used":56977,"duration_ms":193406}
+{"timestamp":"2026-04-29T02:33:43.852Z","topic":"손질 편한 단발","branch":"사가정점","status":"started"}
+{"timestamp":"2026-04-29T02:36:38.998Z","topic":"손질 편한 단발","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1CCz6Fkip_KaMv606aM1fpnmfSWhz2YdSISehnk-Wsg0/edit","tokens_used":52562,"duration_ms":175147}
+{"timestamp":"2026-04-30T04:15:32.862Z","topic":"30대 리프팅","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-30T04:18:54.638Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1XzhOTLjwQC_f7kMDbcnE8qrgJk5Tj7P5_m8QOpXXWFc/edit","tokens_used":58127,"duration_ms":201775}
+{"timestamp":"2026-04-30T04:18:54.642Z","topic":"30대 리프팅","branch":"성수점","status":"started"}
+{"timestamp":"2026-04-30T04:22:02.825Z","topic":"30대 리프팅","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1X91993HmJSkjCH4ogo-RTGstSQl4kxC01jNBP7mVy8k/edit","tokens_used":57073,"duration_ms":188183}
+{"timestamp":"2026-05-05T13:09:23.604Z","topic":"염색 컬러 추천","branch":"성수점","status":"started"}
+{"timestamp":"2026-05-05T13:12:54.369Z","topic":"염색 컬러 추천","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1JkuZG61pQEJ1Maz3UE72FX0NlgG6D3kopnqSWgzxpE0/edit","tokens_used":59959,"duration_ms":210766}
+{"timestamp":"2026-05-05T13:12:54.373Z","topic":"염색 컬러 추천","branch":"성수점","status":"started"}
+{"timestamp":"2026-05-05T13:16:41.531Z","topic":"염색 컬러 추천","branch":"성수점","status":"completed","doc_url":"https://docs.google.com/document/d/1VvUAs72d6kN37sV8Q8kiR0w2S1y2cXNHgVXXnw0SG3g/edit","tokens_used":60928,"duration_ms":227159}
+{"timestamp":"2026-05-08T03:03:50.945Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-08T03:07:51.946Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1wfab_wuqKuMcEoBu1wFSlLTbuyvtgj6J9W4rCJIQJWE/edit","tokens_used":69309,"duration_ms":241000}
+{"timestamp":"2026-05-08T03:07:51.949Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-08T03:11:30.733Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/19G4-fHU1Ucgc4R9KdBSHixZsMVeI57bI0gvwOy0zwVs/edit","tokens_used":66241,"duration_ms":218784}
+{"timestamp":"2026-05-11T02:59:13.488Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T03:01:13.639Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1yv5lsuH7cqXHzWzRrnLc4Y003WEBwwiQYJ_brrpAbG4/edit","tokens_used":70014,"duration_ms":120151}
+{"timestamp":"2026-05-11T03:01:13.643Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T03:03:09.869Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1g8AI90Ct_ebX7D7mT_64bbeOKveOLW-tlXnzmsKg0qU/edit","tokens_used":67306,"duration_ms":116226}
+{"timestamp":"2026-05-11T06:12:17.564Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T06:14:26.765Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1kfVcxNJ07Xj-YWx1KGstllReGRyhvxi53Lk8R8tp8uQ/edit","tokens_used":67102,"duration_ms":129201}
+{"timestamp":"2026-05-11T06:14:26.769Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T06:14:55.317Z","topic":"머릿결 관리법","branch":"강남신사점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","duration_ms":27985}
+{"timestamp":"2026-05-11T06:15:29.603Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T06:17:40.184Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1YKfnGpUJkq1cuWoTuZ54yzVu5PnZHFXWZNscY7Vv3cY/edit","tokens_used":67920,"duration_ms":130582}
+{"timestamp":"2026-05-11T06:26:29.196Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T06:29:16.108Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1GIiLWstp1bvg3iUU-VGD-4pzDmBM0PPPTEzn2puDNJU/edit","tokens_used":67688,"duration_ms":166913}
+{"timestamp":"2026-05-11T06:29:16.113Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T06:32:15.692Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/10xNddmXdBkm7u5WEsehdqdadGRtks0d-3bdi5q1BmVs/edit","tokens_used":70165,"duration_ms":179580}
+{"timestamp":"2026-05-11T06:32:29.673Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T06:34:38.080Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1H1hdhlhrrYLeWJmFajK5yxBf7ZNchajHUjBzPamgg1I/edit","tokens_used":66090,"duration_ms":128408}
+{"timestamp":"2026-05-11T06:34:38.082Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T06:36:44.379Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1Rp2b3UDVeRlwul5PffSPCt1ZAccWk6RentwVec7Y_kU/edit","tokens_used":68884,"duration_ms":126297}
+{"timestamp":"2026-05-11T07:34:49.377Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T07:35:45.588Z","topic":"동안 헤어스타일","branch":"사가정점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","duration_ms":55282}
+{"timestamp":"2026-05-11T07:36:21.992Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T07:39:40.383Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1v5QL1Mm8A-X6sjI18bgGWDbsO5C2VDQ3c5hP8uQiIEI/edit","tokens_used":70271,"duration_ms":198391}
+{"timestamp":"2026-05-11T07:42:57.141Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T07:46:00.822Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1UmHIvmHBhIGiJKX54dk0--adTKrLyCcydVXrfcwMaMg/edit","tokens_used":65702,"duration_ms":183651}
+{"timestamp":"2026-05-11T07:46:17.448Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T07:49:27.746Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1JeJ6HHl6GoRgMh2Kgx5u70Deduz9ys_rrQG8-UxKVA8/edit","tokens_used":67120,"duration_ms":190298}
+{"timestamp":"2026-05-11T07:49:27.748Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T07:52:44.232Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1WuGtKfFteBzKvWy3B1tW-tVGkQT5dCiodPGPLmpSyQY/edit","tokens_used":68986,"duration_ms":196484}
+{"timestamp":"2026-05-11T08:26:04.328Z","topic":"동안 헤어스타일","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-11T08:29:04.487Z","topic":"동안 헤어스타일","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/162nKk9kguIhaz5Q_4B30x_Hn_98Sl4Zn3rbMbinbKPo/edit","tokens_used":67663,"duration_ms":180160}
+{"timestamp":"2026-05-11T08:33:46.702Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T08:37:21.583Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1L3Euq_edh4ddjrbSyjZQk1MNmeI40UAAZcbtBo9kL2U/edit","tokens_used":71636,"duration_ms":214881}
+{"timestamp":"2026-05-11T08:37:21.590Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T08:40:57.725Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1BTQOVVYTy38PTWfNQuDB6cz9QLhYBoSRd4481HXaryU/edit","tokens_used":68567,"duration_ms":216135}
+{"timestamp":"2026-05-11T23:04:57.896Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T23:06:54.992Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1u2ZYMbu_Qb6FBmCIBcrUVe_9RYOty5LKv4s7cbHtURA/edit","tokens_used":68565,"duration_ms":117096}
+{"timestamp":"2026-05-11T23:06:54.995Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-11T23:09:00.883Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1MwQ9Mn3kZMyIqWmZhw_k9tkPOmPz66ikUoFLxKDpkEA/edit","tokens_used":68646,"duration_ms":125888}
+{"timestamp":"2026-05-12T01:35:08.837Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T01:38:47.143Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1hGstzIBqurIjc6ZjAi7huubt9eWjVSfKpYJI5Pty8TI/edit","tokens_used":69235,"duration_ms":218306}
+{"timestamp":"2026-05-12T01:38:47.150Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T01:42:27.844Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/198SpecpHAdbxly5IUPwFuFJszIiOsW5z5sREOlwccYc/edit","tokens_used":70053,"duration_ms":220694}
+{"timestamp":"2026-05-12T02:13:28.330Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T02:15:33.270Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1P9RGdjDoIZ7pTirhyN66MIMHFp-zqjkW3R7WUyEPZcs/edit","tokens_used":66163,"duration_ms":124940}
+{"timestamp":"2026-05-12T02:15:33.271Z","topic":"머릿결 관리법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T02:18:10.183Z","topic":"머릿결 관리법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1WbxBBhfWQRoKg_MQgE7U3mfmPdnOoN19V3LHAnjvPOU/edit","tokens_used":68685,"duration_ms":156912}
+{"timestamp":"2026-05-12T02:31:27.352Z","topic":"손상모 트리트먼트","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T02:34:40.983Z","topic":"손상모 트리트먼트","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1TvtLcgHjSTrTnG7YjuHTJN22_gk84mUFGfWMY3b2AO4/edit","tokens_used":68447,"duration_ms":193630}
+{"timestamp":"2026-05-12T02:34:40.987Z","topic":"손상모 트리트먼트","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-12T02:38:05.686Z","topic":"손상모 트리트먼트","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1eNlx_ASnq3MhDyB9lCU6iOzj9OKfWmLS9i8AnLOmYus/edit","tokens_used":68132,"duration_ms":204700}
+{"timestamp":"2026-05-18T02:55:11.425Z","topic":"크리닉 받아도 효과 없는 이유","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-05-18T02:58:53.951Z","topic":"크리닉 받아도 효과 없는 이유","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/1LbN_n2nl284x2I_VQGVNt0ExoH1Ijsk9ZI_G1h0Ckos/edit","tokens_used":73790,"duration_ms":222527}
+{"timestamp":"2026-05-18T02:58:53.955Z","topic":"크리닉 받아도 효과 없는 이유","branch":"마곡나루점","status":"started"}
+{"timestamp":"2026-05-18T03:02:43.206Z","topic":"크리닉 받아도 효과 없는 이유","branch":"마곡나루점","status":"completed","doc_url":"https://docs.google.com/document/d/1q69cm43eUoYaANJjjHTy-mP-C3mdPpO1FVB6EPaY_jk/edit","tokens_used":74234,"duration_ms":229252}
+{"timestamp":"2026-05-19T23:25:44.221Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-19T23:34:54.301Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1hm-ILnGc3eaXHwcDYZgSbNyf8ojsAdNKaqIPaWPPf1M/edit","tokens_used":77856,"duration_ms":550080}
+{"timestamp":"2026-05-19T23:34:54.304Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-19T23:34:56.257Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","duration_ms":1307}
+{"timestamp":"2026-05-19T23:35:37.836Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-19T23:35:40.086Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"failed","error":"[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","duration_ms":1648}
+{"timestamp":"2026-05-19T23:38:15.026Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"started"}
+{"timestamp":"2026-05-20T00:21:43.179Z","topic":"손상모 레벨 자가진단법","branch":"강남신사점","status":"completed","doc_url":"https://docs.google.com/document/d/1ncYxZjO5u7_r8P9nhFt7Kij3yXxfqLslfSlCnBjeSH8/edit","tokens_used":76685,"duration_ms":2608153}
+{"timestamp":"2026-05-22T00:50:56.855Z","topic":"머릿결 좋아지는 법","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-22T00:54:43.836Z","topic":"머릿결 좋아지는 법","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/14GUAWv_S-tXqe2v14SaM7cY4AqHAGUnSFzMsHm3EQoY/edit","tokens_used":76177,"duration_ms":226980}
+{"timestamp":"2026-05-22T00:54:43.840Z","topic":"머릿결 좋아지는 법","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-22T00:58:39.453Z","topic":"머릿결 좋아지는 법","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1yX7fqp5ES6mgksnNgtl1Hb3fwij5GdlZs3llyabip2g/edit","tokens_used":80313,"duration_ms":235613}
+{"timestamp":"2026-05-22T02:44:35.664Z","topic":"미용실 상술 구별법","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-22T02:47:36.906Z","topic":"미용실 상술 구별법","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1LOkiGUCYGacJUX12gZKqJlN2jND1jR3BK_IyCyXDpYQ/edit","tokens_used":78816,"duration_ms":181243}
+{"timestamp":"2026-05-22T02:47:36.912Z","topic":"미용실 상술 구별법","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-22T02:51:14.845Z","topic":"미용실 상술 구별법","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1zJUx-7w2BNBGfRYbLkNkDtePIxqJLP6OQ9EA2jneTqE/edit","tokens_used":79185,"duration_ms":217934}
+{"timestamp":"2026-05-26T03:12:50.946Z","topic":"여름 단발 스타일 추천","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-26T03:16:37.974Z","topic":"여름 단발 스타일 추천","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1F1j_sZW6o9k9xotYyTsuNEVO0MrEg6XYJjwZkAUgqv4/edit","tokens_used":79403,"duration_ms":227028}
+{"timestamp":"2026-05-26T03:16:37.975Z","topic":"여름 단발 스타일 추천","branch":"사가정점","status":"started"}
+{"timestamp":"2026-05-26T03:20:13.144Z","topic":"여름 단발 스타일 추천","branch":"사가정점","status":"completed","doc_url":"https://docs.google.com/document/d/1XtomKAkFFSmTGEiJXTcgljeRwbWoyy_gddA_ZNG34PM/edit","tokens_used":79689,"duration_ms":215168}

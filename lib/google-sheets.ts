@@ -43,7 +43,12 @@ export async function fetchPlannedRows(): Promise<SheetRow[]> {
 }
 
 export async function fetchTodayRows(): Promise<SheetRow[]> {
-  const today = new Date().toISOString().split('T')[0];
+  // KST 기준으로 오늘 날짜 계산 (UTC+9)
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const kstDate = new Date(now.getTime() + kstOffset);
+  const today = kstDate.toISOString().split('T')[0];
+
   const rows = await fetchPlannedRows();
   return rows.filter(r => r.scheduledDate === today);
 }

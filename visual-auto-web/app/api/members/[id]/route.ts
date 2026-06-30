@@ -57,28 +57,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (body.action === 'set_role') {
     const newRole: string = body.role;
-    // 원장은 디자이너↔인턴만, 본사는 본사/원장/디자이너/인턴 전환 가능
+    // 원장은 디자이너↔인턴만, 본사는 원장/디자이너/인턴 전환 가능 (본사 역할 부여는 불가)
     const allowed: string[] =
-      member.role === 'hq_admin' ? ['hq_admin', 'branch_owner', 'designer', 'intern'] : ['designer', 'intern'];
+      member.role === 'hq_admin' ? ['branch_owner', 'designer', 'intern'] : ['designer', 'intern'];
     if (!allowed.includes(newRole)) {
       return NextResponse.json({ error: '바꿀 수 없는 역할이에요' }, { status: 400 });
     }
-
-    const update: { role: string; branch_id?: string | null } = { role: newRole };
-
-    if (newRole === 'hq_admin') {
-      // 본사로 승격 → 지점 소속 해제
-      update.branch_id = null;
-    } else {
-      // 지점 역할로: 지점이 필요. 본사(지점 없음)에서 강등 시 body.branch_id 로 지정.
-      const branchId = target.branch_id ?? (body.branch_id || null);
-      if (!branchId) {
-        return NextResponse.json({ error: '지점을 지정해야 해요' }, { status: 400 });
-      }
-      update.branch_id = branchId;
+    if (newRole === 'branch_owner' && !target.branch_id) {
+      return NextResponse.json({ error: '지점이 없는 멤버는 원장으로 지정할 수 없어요' }, { status: 400 });
     }
-
-    const { error } = await admin.from('branch_users').update(update).eq('id', id);
+    const { error } = await admin.from('branch_users').update({ role: newRole }).eq('id', id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }

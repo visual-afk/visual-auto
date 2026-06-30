@@ -9,12 +9,18 @@ async function main() {
 
   console.log(`총 ${rows.length}행 중 ${withDate.length}건 동기화 대상\n`);
 
+  // 같은 주제 첫번째 = 아임웹, 두번째 = 블로그
+  const seenTopics = new Set<string>();
   let synced = 0;
   let failed = 0;
 
   for (const row of withDate) {
+    const isSecond = seenTopics.has(row.topic);
+    seenTopics.add(row.topic);
+    const platform = isSecond ? '블로그' : '아임웹';
+
     try {
-      await syncRowToCalendar(row);
+      await syncRowToCalendar(row, platform);
       synced++;
     } catch (err) {
       console.error(`❌ 실패: ${row.topic} - ${(err as Error).message}`);

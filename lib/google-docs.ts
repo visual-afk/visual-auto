@@ -2,16 +2,21 @@ import { getDocs, getDrive } from './google-auth.js';
 import { config } from './config.js';
 import { Readable } from 'stream';
 
-export async function createBlogDoc(title: string, content: string, branch?: string, platform?: string): Promise<string> {
+export async function createBlogDoc(title: string, content: string, branch?: string, platform?: string, scheduledDate?: string): Promise<string> {
   const drive = getDrive();
 
   const branchLabel = branch ? ` ${branch}` : '';
   const platformLabel = platform ? `<${platform}> ` : '';
+  // KST 기준 오늘 날짜 (scheduledDate 우선)
+  const now = new Date();
+  const kstOffset = 9 * 60 * 60 * 1000;
+  const todayKst = new Date(now.getTime() + kstOffset).toISOString().split('T')[0];
+  const date = scheduledDate || todayKst;
 
   // 1. Drive에 빈 문서 생성 (지정 폴더에, 공유 드라이브 지원)
   const file = await drive.files.create({
     requestBody: {
-      name: `${platformLabel}[비주얼살롱${branchLabel}] ${title} - ${new Date().toISOString().split('T')[0]}`,
+      name: `${date} ${platformLabel}[비주얼살롱${branchLabel}] ${title}`,
       mimeType: 'application/vnd.google-apps.document',
       parents: [config.google.docsFolderId],
     },
@@ -64,6 +69,41 @@ async function uploadImageToDrive(imageBuffer: Buffer): Promise<string | null> {
   });
 
   return `https://drive.google.com/uc?id=${fileId}`;
+}
+
+/** Drive 사진 URL을 독스 끝에 삽입 */
+export async function insertImageToDoc(docId: string, imageUrl: string): Promise<void> {
+  const docs = getDocs();
+
+  // 문서 끝 인덱스 가져오기
+  const doc = await docs.documents.get({ documentId: docId });
+  const body = doc.data.body?.content || [];
+  const lastElement = body[body.length - 1];
+  const endIndex = (lastElement?.endIndex || 2) - 1;
+
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          insertText: {
+            location: { index: endIndex },
+            text: '\n',
+          },
+        },
+        {
+          insertInlineImage: {
+            location: { index: endIndex + 1 },
+            uri: imageUrl,
+            objectSize: {
+              width: { magnitude: 400, unit: 'PT' },
+              height: { magnitude: 300, unit: 'PT' },
+            },
+          },
+        },
+      ],
+    },
+  });
 }
 
 /** 독스에서 [IMAGE] 블록을 찾아 이미지로 교체 */

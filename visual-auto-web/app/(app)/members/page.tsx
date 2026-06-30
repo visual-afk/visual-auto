@@ -4,7 +4,6 @@ import { getMember, canManage, roleLabel, type Role } from '@/lib/auth';
 import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import InviteForm from '@/components/InviteForm';
-import DirectMemberForm from '@/components/DirectMemberForm';
 import MemberActions from '@/components/MemberActions';
 import PendingInvite from '@/components/PendingInvite';
 
@@ -96,17 +95,9 @@ export default async function MembersPage() {
         {isHq ? `전체 ${members.length}명` : `${member.branchName} · ${roleSummary(members) || '아직 멤버 없음'}`}
       </p>
 
-      {/* 바로 추가하기 (초대 링크 없이 즉시 계정 발급) */}
-      <section className="mt-6 rounded-xl2 border border-line bg-surface p-4 shadow-card">
-        <h2 className="mb-1 text-base font-bold">바로 추가하기</h2>
-        <p className="mb-3 text-xs text-ink-soft">휴대폰·임시비번으로 계정을 즉시 만들어요. 아이디·비번을 전달하면 바로 로그인돼요.</p>
-        <DirectMemberForm myRole={member.role} branches={isHq ? branches : undefined} />
-      </section>
-
       {/* 새로 초대하기 */}
-      <section className="mt-4 rounded-xl2 border border-line bg-surface p-4 shadow-card">
-        <h2 className="mb-1 text-base font-bold">초대 링크로 보내기</h2>
-        <p className="mb-3 text-xs text-ink-soft">본인이 직접 이름·비번을 정해 가입하게 하려면 링크를 보내세요.</p>
+      <section className="mt-6 rounded-xl2 border border-line bg-surface p-4 shadow-card">
+        <h2 className="mb-3 text-base font-bold">새로 초대하기</h2>
         <InviteForm myRole={member.role} branches={isHq ? branches : undefined} />
       </section>
 
@@ -179,10 +170,8 @@ export default async function MembersPage() {
                           <MemberActions
                             memberId={m.id}
                             memberRole={m.role}
-                            memberBranchId={m.branch_id}
                             isActive={m.is_active}
                             myRole={member.role}
-                            branches={isHq ? branches : undefined}
                           />
                         )}
                       </span>
