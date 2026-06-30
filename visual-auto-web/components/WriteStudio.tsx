@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, RotateCw, PenLine, Pencil, Mic, Square } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
+import MyNaverBlogField from './MyNaverBlogField';
 
 const CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
 
@@ -79,14 +80,17 @@ type BranchOpt = { id: string; name: string; naverBlogUrl: string | null; imwebU
 export default function WriteStudio({
   branches,
   needsBranchPick,
+  myNaverUrl,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
+  myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
 }) {
   const router = useRouter();
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
   const selectedBranch = branches.find((b) => b.id === branchId) ?? null;
-  const naverBlogUrl = selectedBranch?.naverBlogUrl ?? null;
+  // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
+  const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
   const [chips, setChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
@@ -97,9 +101,11 @@ export default function WriteStudio({
   const [generating, setGenerating] = useState(false);
   const [post, setPost] = useState<Post | null>(null);
   const [error, setError] = useState('');
+  const [streamContent, setStreamContent] = useState('');
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -212,19 +218,53 @@ export default function WriteStudio({
       setError('주제를 골라주세요');
       return;
     }
+    abortRef.current?.abort(); // 진행 중인 생성이 있으면 취소
+    const ac = new AbortController();
+    abortRef.current = ac;
     setGenerating(true);
     setError('');
+    setPost(null);
+    setStreamContent('');
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recommended_topic: topic, treatment_chips: chips, user_notes: notes, branch_id: branchId }),
+        signal: ac.signal,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '생성 실패');
-      setPost(data.post);
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || '생성 실패');
+      }
+      // NDJSON 스트림 읽기 — 토큰을 받는 즉시 화면에 흘림
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let msg: { type: string; text?: string; post?: Post; error?: string };
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (msg.type === 'token' && msg.text) {
+            setStreamContent((c) => c + msg.text);
+          } else if (msg.type === 'done' && msg.post) {
+            setPost(msg.post);
+          } else if (msg.type === 'error') {
+            setError(msg.error || '생성 실패');
+          }
+        }
+      }
     } catch (e) {
-      setError((e as Error).message);
+      if ((e as Error).name !== 'AbortError') setError((e as Error).message);
     } finally {
       setGenerating(false);
     }
@@ -255,7 +295,7 @@ export default function WriteStudio({
       body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
     });
     // 4) 발행처 열기 + 조회수 입력 화면으로
-    const url = target === 'naver' ? naverBlogUrl : imwebUrl;
+    const url = target === 'naver' ? naverUrl : imwebUrl;
     if (url) window.open(url, '_blank');
     router.push(`/track/${post.id}`);
   }
@@ -382,6 +422,8 @@ export default function WriteStudio({
           <div className="card min-h-[24rem]">
             {post ? (
               <DraftView post={post} onRewrite={generate} rewriting={generating} />
+            ) : streamContent ? (
+              <StreamingView content={streamContent} />
             ) : generating ? (
               <WritingPlaceholder />
             ) : (
@@ -399,15 +441,17 @@ export default function WriteStudio({
       {post && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start">
             {imwebUrl && (
               <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
                 아임웹 열기
               </button>
             )}
-            <button className="btn-primary md:w-auto md:px-6" onClick={() => publish('naver')}>
-              네이버 블로그 열기
-            </button>
+            <MyNaverBlogField
+              initialUrl={naverUrl}
+              onChange={setNaverUrl}
+              onOpen={() => publish('naver')}
+            />
           </div>
         </div>
       )}
@@ -440,55 +484,71 @@ function WritingPlaceholder() {
 
 const CARET = '▍';
 
+/** 스트리밍 중 — AI가 쓰는 즉시 흘러나오는 날(raw) 마크다운을 실시간 렌더 */
+function StreamingView({ content }: { content: string }) {
+  // 첫 줄 `# 제목` 분리 (아직 제목만 타이핑 중일 수도 있음)
+  const nl = content.indexOf('\n');
+  const firstLine = (nl === -1 ? content : content.slice(0, nl)).trim();
+  const hasHeader = firstLine.startsWith('#');
+  const title = hasHeader ? firstLine.replace(/^#+\s*/, '') : '';
+  const rawBody = hasHeader ? (nl === -1 ? '' : content.slice(nl + 1)) : content;
+
+  // 커서(▍)는 현재 타이핑되는 끝에 붙임
+  const titleText = rawBody.trim() ? title : title + CARET;
+  const bodyText = rawBody.trim() ? rawBody + CARET : '';
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-flex gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand [animation-delay:-0.3s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand [animation-delay:-0.15s]" />
+          <span className="h-2 w-2 animate-bounce rounded-full bg-brand" />
+        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-brand">실시간으로 쓰는 중…</span>
+      </div>
+      {titleText.trim() && <h2 className="text-lg font-bold leading-snug">{titleText}</h2>}
+      {bodyText && (
+        <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink">
+          {bodyText.split('\n').map((line, i) => {
+            const t = line.trim();
+            if (!t) return <div key={i} className="h-1" />;
+            if (/^\[IMAGE\]/i.test(t)) {
+              return (
+                <div key={i} className="my-1 flex items-center gap-1.5 rounded-2xl bg-brand-wash px-4 py-2 text-sm font-semibold text-brand">
+                  <Camera size={15} /> 사진 들어갈 자리
+                </div>
+              );
+            }
+            if (/^##\s+/.test(t)) return <p key={i} className="pt-2 text-base font-bold">{t.replace(/^#+\s*/, '')}</p>;
+            if (/^###\s+/.test(t)) return <p key={i} className="pt-1 font-semibold">{t.replace(/^#+\s*/, '')}</p>;
+            return <p key={i}>{line}</p>;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () => void; rewriting: boolean }) {
   const guideByPos = new Map<number, PhotoGuideItem>();
   (post.photo_guide || []).forEach((g) => guideByPos.set(g.position, g));
 
-  const fullTitle = post.title || '';
-  const fullBody = post.content || '';
-  const total = fullTitle.length + fullBody.length;
-  const [reveal, setReveal] = useState(0);
-
-  // 새 글이 오면 제목→본문 순서로 한 글자씩 타이핑 (ChatGPT 느낌)
-  useEffect(() => {
-    setReveal(0);
-    const step = Math.max(2, Math.round(total / 400)); // 약 6초 안에 완성
-    const id = setInterval(() => {
-      setReveal((n) => {
-        const next = n + step;
-        if (next >= total) {
-          clearInterval(id);
-          return total;
-        }
-        return next;
-      });
-    }, 16);
-    return () => clearInterval(id);
-  }, [post.id, total]);
-
-  const done = reveal >= total;
-  const typingTitle = !done && reveal <= fullTitle.length;
-  const typingBody = !done && reveal > fullTitle.length;
-  const shownTitle = fullTitle.slice(0, reveal) + (typingTitle ? CARET : '');
-  const shownBody = (reveal > fullTitle.length ? fullBody.slice(0, reveal - fullTitle.length) : '') + (typingBody ? CARET : '');
-
   return (
-    <div onClick={() => !done && setReveal(total)}>
+    <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-          {done ? 'AI 초안' : '쓰는 중… (탭하면 바로 보기)'}
-        </span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">AI 초안</span>
         <button
-          onClick={(e) => { e.stopPropagation(); onRewrite(); }}
+          onClick={onRewrite}
           className="flex items-center gap-1 text-sm font-medium text-brand"
           disabled={rewriting}
         >
           {rewriting ? '고쳐쓰는 중…' : <><Pencil size={14} /> 고쳐쓰기</>}
         </button>
       </div>
-      <h2 className="text-lg font-bold leading-snug">{shownTitle}</h2>
+      <h2 className="text-lg font-bold leading-snug">{post.title}</h2>
       <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink">
-        {shownBody.split('\n').map((line, i) => {
+        {(post.content || '').split('\n').map((line, i) => {
           const m = line.match(/^\[사진(\d+)\]\s*(.*)$/);
           if (m) {
             const pos = Number(m[1]);
@@ -512,7 +572,7 @@ function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () =
           return <p key={i}>{line}</p>;
         })}
       </div>
-      {done && (post.tags || []).length > 0 && (
+      {(post.tags || []).length > 0 && (
         <p className="mt-4 text-sm text-ink-faint">{(post.tags || []).map((t) => `#${t}`).join(' ')}</p>
       )}
     </div>

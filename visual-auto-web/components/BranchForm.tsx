@@ -26,7 +26,6 @@ export default function BranchForm({
   const [name, setName] = useState(initial?.name ?? '');
   const [region, setRegion] = useState(initial?.region ?? '');
   const [slug, setSlug] = useState(initial?.knowledge_slug ?? '');
-  const [naver, setNaver] = useState(initial?.naver_blog_url ?? '');
   const [imweb, setImweb] = useState(initial?.imweb_url ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,7 +45,6 @@ export default function BranchForm({
         name,
         region,
         knowledge_slug: slug,
-        naver_blog_url: naver,
         imweb_url: imweb,
       }),
     });
@@ -60,7 +58,6 @@ export default function BranchForm({
       setName('');
       setRegion('');
       setSlug('');
-      setNaver('');
       setImweb('');
     }
     onDone?.();
@@ -82,17 +79,8 @@ export default function BranchForm({
           <span className="label">지식베이스 slug</span>
           <input className="field" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="예: 잠실점" />
         </label>
-        <label className="block">
-          <span className="label">네이버 글쓰기 링크</span>
-          <input
-            className="field"
-            value={naver}
-            onChange={(e) => setNaver(e.target.value)}
-            placeholder="https://blog.naver.com/아이디?Redirect=Write&"
-          />
-        </label>
-        <label className="block">
-          <span className="label">아임웹 글쓰기 링크</span>
+        <label className="block md:col-span-2">
+          <span className="label">아임웹 글쓰기 링크 (지점 공용)</span>
           <input
             className="field"
             value={imweb}
@@ -103,8 +91,9 @@ export default function BranchForm({
       </div>
 
       <p className="rounded-xl border border-line bg-canvas px-3 py-2 text-xs text-ink-soft">
-        디자이너가 글쓰기 후 <b>네이버 블로그 열기 / 아임웹 열기</b>를 누르면 이 주소가 새 탭으로 바로 열려요.
-        글쓰기 화면으로 바로 가려면 네이버는 <code>?Redirect=Write&</code> 형식을 넣으세요. 한 번 로그인해두면 계속 유지돼요.
+        디자이너가 글쓰기 후 <b>아임웹 열기</b>를 누르면 이 주소가 새 탭으로 열려요(지점 공용). 한 번 로그인해두면 계속 유지돼요.
+        <br />
+        <b>네이버</b>는 디자이너 각자 글쓰기 화면에서 본인 개인 블로그 주소를 등록합니다.
       </p>
 
       {error && <p className="text-sm text-warn">{error}</p>}
