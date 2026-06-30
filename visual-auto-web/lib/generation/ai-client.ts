@@ -155,6 +155,27 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
   return result.response.text().trim();
 }
 
+/**
+ * 영상 분석 (Gemini). 릴스 레퍼런스 영상을 받아 instruction 대로 분석한다.
+ * Claude는 영상 입력 불가 → 항상 Gemini. v1은 inlineData(base64, ≲20MB) 사용.
+ */
+export async function analyzeVideo(base64Video: string, mimeType: string, instruction: string): Promise<string> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('영상 분석에는 GEMINI_API_KEY 가 필요해요');
+  }
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    generationConfig: { temperature: 0.4, maxOutputTokens: 2000 },
+  });
+  const result = await model.generateContent([
+    { text: instruction },
+    { inlineData: { mimeType, data: base64Video } },
+  ]);
+  return result.response.text().trim();
+}
+
 /** ```json ...``` 또는 본문에서 JSON 추출 */
 export function parseJsonResponse<T>(text: string): T {
   const match = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);

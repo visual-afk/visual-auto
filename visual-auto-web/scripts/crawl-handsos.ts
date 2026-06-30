@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import { crawlDate, crawlRange } from '../lib/handsos/crawl';
+// env는 실행 환경(GitHub Actions env / Vercel)에서 주입한다 (dotenv 미사용).
 
 /**
  * HandSOS 일별 성과 크롤 → Supabase metrics_daily.

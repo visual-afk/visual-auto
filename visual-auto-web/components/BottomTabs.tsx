@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PenLine, TrendingUp, Users, LayoutGrid, MessageSquare, MapPin, PieChart, type LucideIcon } from 'lucide-react';
+import { PenLine, TrendingUp, Users, LayoutGrid, MessageSquare, MapPin, PieChart, Film, type LucideIcon } from 'lucide-react';
 import type { Role } from '@/lib/roles';
 
 type Tab = { href: string; label: string; icon: LucideIcon };
@@ -13,7 +13,7 @@ function tabsFor(role: Role): Tab[] {
       { href: '/overview', label: '현황', icon: LayoutGrid },
       { href: '/performance', label: '대시보드', icon: PieChart },
       { href: '/write', label: '글쓰기', icon: PenLine },
-      { href: '/track', label: '성과', icon: TrendingUp },
+      { href: '/reels', label: '릴스', icon: Film },
       { href: '/members', label: '사람', icon: Users },
     ];
   }
@@ -21,15 +21,15 @@ function tabsFor(role: Role): Tab[] {
     return [
       { href: '/performance', label: '대시보드', icon: PieChart },
       { href: '/write', label: '글쓰기', icon: PenLine },
+      { href: '/reels', label: '릴스', icon: Film },
       { href: '/review', label: '리뷰', icon: MessageSquare },
-      { href: '/track', label: '내 글', icon: TrendingUp },
       { href: '/members', label: '멤버', icon: Users },
     ];
   }
   return [
-    { href: '/', label: '홈', icon: Home },
     { href: '/attendance', label: '출근', icon: MapPin },
     { href: '/write', label: '글쓰기', icon: PenLine },
+    { href: '/reels', label: '릴스', icon: Film },
     { href: '/review', label: '리뷰', icon: MessageSquare },
     { href: '/track', label: '성과', icon: TrendingUp },
   ];
