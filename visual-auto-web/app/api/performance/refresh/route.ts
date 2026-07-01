@@ -39,7 +39,8 @@ export async function POST(request: Request) {
   const date = d.toISOString().slice(0, 10);
 
   try {
-    const result = await crawlDate(date, { onlyPk: b.handsos_pk });
+    // 빠른 모드: 지점 총합만 크롤(디자이너 생략) → Vercel 타임아웃 회피. 디자이너 세부는 야간 cron이 채움.
+    const result = await crawlDate(date, { onlyPk: b.handsos_pk, skipDesigners: true });
     const branch = result.branches[0];
     if (!branch?.ok) {
       return NextResponse.json({ error: `수집 실패: ${branch?.reason || '알 수 없음'}` }, { status: 502 });

@@ -16,8 +16,9 @@ export interface MemberContext {
   branchId: string | null;
   branchName: string | null;
   region: string | null;
-  naverBlogUrl: string | null;
-  imwebUrl: string | null;
+  naverBlogUrl: string | null; // 지점 공용 네이버(레거시/폴백)
+  imwebUrl: string | null; // 지점 공용 아임웹 (발행 '아임웹 열기' 대상)
+  myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별 발행 대상)
 }
 
 /** 현재 세션의 멤버 + 지점 정보를 한 번에. 미인증/멤버아님이면 null. */
@@ -44,6 +45,14 @@ export async function getMember(): Promise<MemberContext | null> {
   if (member.is_active === false) return null;
   const branch = (member.branches as any) || null;
 
+  // 본인 개인 네이버 블로그 링크 (별도 best-effort 조회 — 컬럼 마이그레이션 전이어도 앱이 안 깨지게)
+  const { data: blogRow } = await admin
+    .from('branch_users')
+    .select('naver_blog_url')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const myNaverUrl = (blogRow as { naver_blog_url?: string | null } | null)?.naver_blog_url ?? null;
+
   return {
     userId: user.id,
     memberId: member.id,
@@ -56,6 +65,7 @@ export async function getMember(): Promise<MemberContext | null> {
     region: branch?.region ?? null,
     naverBlogUrl: branch?.naver_blog_url ?? null,
     imwebUrl: branch?.imweb_url ?? null,
+    myNaverUrl,
   };
 }
 

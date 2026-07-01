@@ -127,7 +127,7 @@ export default function BranchForm({
       <p className="rounded-xl border border-line bg-canvas px-3 py-2 text-xs text-ink-soft">
         디자이너가 글쓰기 후 <b>아임웹 열기</b>를 누르면 이 주소가 새 탭으로 열려요(지점 공용). 한 번 로그인해두면 계속 유지돼요.
         <br />
-        <b>네이버</b>는 디자이너 각자 글쓰기 화면에서 본인 개인 블로그 주소를 등록합니다.
+        <b>네이버</b>는 디자이너 각자 글쓰기 화면에서 본인 <b>네이버 아이디</b>만 등록합니다.
       </p>
 
       {/* 출근체크 GPS — 지점 좌표·반경 */}

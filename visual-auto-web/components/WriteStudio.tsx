@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, RotateCw, PenLine, Pencil, Mic, Square } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
+import MyNaverBlogField from './MyNaverBlogField';
 
 const CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
 
@@ -28,14 +29,17 @@ type BranchOpt = { id: string; name: string; naverBlogUrl: string | null; imwebU
 export default function WriteStudio({
   branches,
   needsBranchPick,
+  myNaverUrl,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
+  myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
 }) {
   const router = useRouter();
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
   const selectedBranch = branches.find((b) => b.id === branchId) ?? null;
-  const naverBlogUrl = selectedBranch?.naverBlogUrl ?? null;
+  // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
+  const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
   const [chips, setChips] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
@@ -179,7 +183,7 @@ export default function WriteStudio({
       body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
     });
     // 4) 발행처 열기 + 조회수 입력 화면으로
-    const url = target === 'naver' ? naverBlogUrl : imwebUrl;
+    const url = target === 'naver' ? naverUrl : imwebUrl;
     if (url) window.open(url, '_blank');
     router.push(`/track/${post.id}`);
   }
@@ -315,15 +319,17 @@ export default function WriteStudio({
       {post && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start">
             {imwebUrl && (
               <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
                 아임웹 열기
               </button>
             )}
-            <button className="btn-primary md:w-auto md:px-6" onClick={() => publish('naver')}>
-              네이버 블로그 열기
-            </button>
+            <MyNaverBlogField
+              initialUrl={naverUrl}
+              onChange={setNaverUrl}
+              onOpen={() => publish('naver')}
+            />
           </div>
         </div>
       )}

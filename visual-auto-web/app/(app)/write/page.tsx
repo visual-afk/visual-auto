@@ -27,5 +27,5 @@ export default async function WritePage() {
       : [];
   }
 
-  return <WriteStudio branches={branches} needsBranchPick={isHq} />;
+  return <WriteStudio branches={branches} needsBranchPick={isHq} myNaverUrl={member.myNaverUrl} />;
 }

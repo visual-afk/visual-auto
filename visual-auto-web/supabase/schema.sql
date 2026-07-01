@@ -30,6 +30,7 @@ create table if not exists branch_users (
   login_id text unique,                 -- 로그인 아이디 (synthetic email로 매핑)
   role text not null default 'designer' check (role in ('hq_admin','branch_owner','designer','intern')),
   is_active boolean not null default true,
+  naver_blog_url text,                  -- 본인 개인 네이버 블로그 글쓰기 링크 (사람별 발행 대상)
   created_at timestamptz not null default now(),
   unique (user_id)
 );
