@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       ].join('\n'),
       temperature: 0.6,
       maxTokens: 800,
+      json: true,
     });
     const parsed = parseJsonResponse<{ topics: { title: string; reason: string }[] }>(result.text);
     if (!parsed.topics?.length) return NextResponse.json({ topics: fallback() });

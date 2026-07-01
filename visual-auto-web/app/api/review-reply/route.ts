@@ -67,6 +67,7 @@ export async function POST(request: Request) {
       ].join('\n'),
       temperature: 0.8,
       maxTokens: 900,
+      json: true,
     });
     const parsed = parseJsonResponse<{ replies: Reply[] }>(result.text);
     const replies = (parsed.replies || []).filter((r) => r.text?.trim()).slice(0, 3);

@@ -90,6 +90,8 @@ export async function POST(request: Request) {
         '사진이 들어가면 좋은 위치에는 [IMAGE] 블록(종류/구도/포인트/alt)을 넣으세요.',
       ].join('\n'),
       temperature: 0.7,
+      json: true,
+      maxTokens: 16000, // 본문 7,000~9,000자가 JSON 문자열로 들어가므로 기본 8000 토큰으론 잘림
     });
     const draft = parseJsonResponse<GeneratedPost>(draftRes.text);
 
@@ -104,6 +106,8 @@ export async function POST(request: Request) {
         'SEO 관점에서 최적화하세요. [IMAGE] 블록은 그대로 유지하세요.',
       ].join('\n'),
       temperature: 0.3,
+      json: true,
+      maxTokens: 16000, // 최적화 본문도 draft 만큼 길어질 수 있음
     });
     const optimized = parseJsonResponse<SeoOptimizedPost>(seoRes.text);
 
