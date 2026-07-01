@@ -78,14 +78,12 @@ export default async function MembersPage() {
 
   // 본사면 지점별 그룹, 원장이면 단일 그룹
   const groups = isHq
-    ? branches
-        .map((b) => ({
-          key: b.id,
-          name: b.name,
-          members: members.filter((m) => m.branch_id === b.id),
-          pending: pending.filter((p) => p.branch_id === b.id),
-        }))
-        .filter((g) => g.members.length || g.pending.length)
+    ? branches.map((b) => ({
+        key: b.id,
+        name: b.name,
+        members: members.filter((m) => m.branch_id === b.id),
+        pending: pending.filter((p) => p.branch_id === b.id),
+      })) // 빈 지점도 표시 (멤버 없으면 "아직 멤버 없음" 안내 + 초대 유도)
     : [{ key: 'mine', name: member.branchName ?? '우리 지점', members, pending }];
 
   return (
