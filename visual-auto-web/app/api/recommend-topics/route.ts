@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { callAI, loadFileSafe, loadBranchKnowledge, parseJsonResponse } from '@/lib/generation/ai-client';
+import { callAI, loadFileSafeFor, loadBranchKnowledgeFor, loadPromptFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { loadKeywordContext } from '@/lib/generation/keywords';
 
 export const maxDuration = 60;
@@ -31,9 +31,10 @@ export async function POST(request: Request) {
     }
   }
 
-  const rules = loadFileSafe('knowledge/seo/topic-rules.md');
-  const branchKnowledge = loadBranchKnowledge(branchName);
+  const rules = await loadFileSafeFor('knowledge/seo/topic-rules.md', branchId);
+  const branchKnowledge = await loadBranchKnowledgeFor(branchName, branchId);
   const keywordContext = await loadKeywordContext(branchId);
+  const instruction = await loadPromptFor('recommend-topics', branchId);
 
   // AI 없거나 실패 시 폴백: 규칙 파일에서 캠페인/지점 강조 주제 뽑기
   const fallback = () => fallbackTopics(rules, branchName);
@@ -45,10 +46,7 @@ export async function POST(request: Request) {
   try {
     const result = await callAI({
       system: [
-        '너는 미용실 블로그 주제 추천 에디터다. 아래 "추천 규칙"을 가장 우선해서 따른다.',
-        '디자이너가 오늘 한 시술/기록과 어우러지는 주제를 2~3개 제안한다.',
-        '각 주제는 짧은 제목과, 왜 좋은지 한 줄 이유(검색량/타겟 관점)를 단다.',
-        'JSON으로만 답한다: {"topics":[{"title":"...","reason":"..."}]}',
+        instruction,
         '',
         '--- 추천 규칙 (topic-rules.md) ---',
         rules || '(규칙 파일 비어있음 — 기본 미용 주제로)',

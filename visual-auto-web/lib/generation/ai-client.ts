@@ -1,13 +1,48 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
+import { getAdminSupabase } from '@/lib/supabase/admin';
 
 /**
  * visual-auto의 lib/ai-client.ts / claude-client.ts 이식 (웹앱용).
  * knowledge/ · prompts/ · templates/ 는 앱 루트(process.cwd())에 동봉되어 런타임 fs로 읽는다.
  * AI는 Anthropic(Claude) 우선, 없으면 Gemini 폴백.
+ *
+ * 오버라이드: 본사가 '프롬프트 관리' 탭에서 저장한 내용은 content_overrides 테이블에 쌓인다.
+ * *For(...) 계열 async 로더가 "지점 오버라이드 → 전사 공통 → 파일" 순으로 내용을 고른다.
  */
 
 const ROOT = process.cwd();
+
+type OverrideKind = 'prompt' | 'knowledge';
+
+/**
+ * (전사 공통 + 해당 지점) 오버라이드를 한 번에 읽어 slug→content 맵으로.
+ * 지점 오버라이드가 전사 공통보다 우선한다. DB/설정 문제 시 빈 맵(=파일 폴백).
+ */
+async function fetchOverrides(kind: OverrideKind, branchId: string | null): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return map;
+  try {
+    const admin = getAdminSupabase();
+    const filter = branchId ? `branch_id.is.null,branch_id.eq.${branchId}` : 'branch_id.is.null';
+    const { data } = await admin
+      .from('content_overrides')
+      .select('slug, branch_id, content')
+      .eq('kind', kind)
+      .or(filter);
+    // 전사 공통 먼저 채우고, 지점 오버라이드로 덮어써 지점 우선을 보장
+    for (const row of data ?? []) if (!row.branch_id) map.set(row.slug, row.content);
+    for (const row of data ?? []) if (row.branch_id) map.set(row.slug, row.content);
+  } catch {
+    /* DB 문제 시 파일 폴백 */
+  }
+  return map;
+}
+
+/** knowledge 파일 절대경로 → 오버라이드 slug (예: brand/brand-voice.md) */
+function knowledgeSlug(fullPath: string): string {
+  return fullPath.replace(join(ROOT, 'knowledge') + '/', '');
+}
 
 function collectMdFiles(dir: string): string[] {
   const out: string[] = [];
@@ -68,6 +103,59 @@ export function loadFileSafe(relPath: string): string {
   } catch {
     return '';
   }
+}
+
+// ── 오버라이드 인지 로더 (생성 파이프라인에서 사용) ────────────────────────
+// 각 라우트는 이미 branchId를 확정해 둔 뒤 아래 *For 로더를 호출한다.
+
+/** loadPrompt + 오버라이드. slug(=프롬프트명)에 오버라이드가 있으면 그 내용, 없으면 파일. */
+export async function loadPromptFor(name: string, branchId: string | null): Promise<string> {
+  const map = await fetchOverrides('prompt', branchId);
+  const override = map.get(name);
+  return override != null ? override.trim() : loadPrompt(name);
+}
+
+/** loadKnowledge + 오버라이드. 각 파일 내용을 slug 오버라이드가 있으면 치환한다. */
+export async function loadKnowledgeFor(branchId: string | null): Promise<string> {
+  const map = await fetchOverrides('knowledge', branchId);
+  return collectMdFiles(join(ROOT, 'knowledge'))
+    .map((f) => {
+      const rel = f.replace(ROOT + '/', '');
+      const override = map.get(knowledgeSlug(f));
+      const content = (override != null ? override : readFileSync(f, 'utf-8')).trim();
+      if (isPlaceholder(content) || !content) return '';
+      return `--- ${rel} ---\n${content}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** loadBranchKnowledge + 오버라이드. 지점 특화 파일에만 slug 오버라이드 적용. */
+export async function loadBranchKnowledgeFor(branch: string | null, branchId: string | null): Promise<string> {
+  if (!branch) return '';
+  const map = await fetchOverrides('knowledge', branchId);
+  return collectMdFiles(join(ROOT, 'knowledge'))
+    .filter((f) => f.includes(`branch-${branch}`) || f.includes(`keywords-${branch}`))
+    .map((f) => {
+      const override = map.get(knowledgeSlug(f));
+      const content = (override != null ? override : readFileSync(f, 'utf-8')).trim();
+      return isPlaceholder(content) ? '' : content;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** loadFileSafe + 오버라이드. relPath는 'knowledge/...' 형태 (topic-rules 등). */
+export async function loadFileSafeFor(relPath: string, branchId: string | null): Promise<string> {
+  if (relPath.startsWith('knowledge/')) {
+    const map = await fetchOverrides('knowledge', branchId);
+    const override = map.get(relPath.replace('knowledge/', ''));
+    if (override != null) {
+      const trimmed = override.trim();
+      return isPlaceholder(trimmed) ? '' : trimmed;
+    }
+  }
+  return loadFileSafe(relPath);
 }
 
 export interface AICallOptions {
