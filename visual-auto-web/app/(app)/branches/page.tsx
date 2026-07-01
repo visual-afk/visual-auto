@@ -48,7 +48,7 @@ export default async function BranchesPage() {
       </section>
 
       {/* 지점 목록 */}
-      <div className="mt-8 overflow-hidden rounded-xl2 border border-line bg-surface">
+      <div className="mt-8 rounded-xl2 border border-line bg-surface">
         <div className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-xs font-semibold text-ink-faint">
           <span className="flex-1">지점</span>
           <span>멤버</span>
