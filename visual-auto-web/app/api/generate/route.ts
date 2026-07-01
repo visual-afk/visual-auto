@@ -4,9 +4,9 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import {
   callAI,
-  loadKnowledge,
-  loadBranchKnowledge,
-  loadPrompt,
+  loadKnowledgeFor,
+  loadBranchKnowledgeFor,
+  loadPromptFor,
   loadTemplate,
   parseJsonResponse,
 } from '@/lib/generation/ai-client';
@@ -56,12 +56,12 @@ export async function POST(request: Request) {
   if (!topic) return NextResponse.json({ error: '주제를 골라주세요' }, { status: 400 });
 
   try {
-    const knowledge = loadKnowledge();
-    const branchKnowledge = loadBranchKnowledge(branchName);
+    const knowledge = await loadKnowledgeFor(branchId);
+    const branchKnowledge = await loadBranchKnowledgeFor(branchName, branchId);
     const keywordContext = await loadKeywordContext(branchId);
     const template = loadTemplate(TEMPLATE_BY_TYPE[postType] || 'info-post');
-    const writerPrompt = loadPrompt('blog-writer');
-    const seoPrompt = loadPrompt('seo-optimizer');
+    const writerPrompt = await loadPromptFor('blog-writer', branchId);
+    const seoPrompt = await loadPromptFor('seo-optimizer', branchId);
 
     // 1) 초안 — 디자이너 기록을 1인칭 경험으로 녹임 (EEAT)
     const draftRes = await callAI({

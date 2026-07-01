@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { callAI, loadPrompt, loadBranchKnowledge, parseJsonResponse } from '@/lib/generation/ai-client';
+import { callAI, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { getContentProfile, compileProfileContext } from '@/lib/reels';
 
 export const maxDuration = 120;
@@ -38,9 +38,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '릴스 기획 설정에 문제가 있어요. 관리자에게 알려주세요.' }, { status: 503 });
   }
 
-  const prompt = loadPrompt('reels-structure');
+  const prompt = await loadPromptFor('reels-structure', branchId);
   const profile = compileProfileContext(await getContentProfile(member.userId, branchId));
-  const branchKnowledge = loadBranchKnowledge(branchName);
+  const branchKnowledge = await loadBranchKnowledgeFor(branchName, branchId);
 
   try {
     const result = await callAI({

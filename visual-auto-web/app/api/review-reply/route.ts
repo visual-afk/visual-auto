@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { callAI, loadPrompt, loadBranchKnowledge, parseJsonResponse } from '@/lib/generation/ai-client';
+import { callAI, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { loadKeywordContext } from '@/lib/generation/keywords';
 
 export const maxDuration = 60;
@@ -45,9 +45,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '답글 기능 설정에 문제가 있어요. 관리자에게 알려주세요.' }, { status: 503 });
   }
 
-  const prompt = loadPrompt('review-reply');
+  const prompt = await loadPromptFor('review-reply', branchId);
   const keywordContext = await loadKeywordContext(branchId);
-  const branchKnowledge = loadBranchKnowledge(branchName);
+  const branchKnowledge = await loadBranchKnowledgeFor(branchName, branchId);
 
   try {
     const result = await callAI({

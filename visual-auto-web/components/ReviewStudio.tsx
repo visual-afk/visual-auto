@@ -1,14 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2 } from 'lucide-react';
+import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download } from 'lucide-react';
 
-export type BranchOption = { id: string; name: string };
+export type BranchOption = {
+  id: string;
+  name: string;
+  naverPlaceId?: string | null;
+  naverShortUrl?: string | null;
+};
 
 type Reply = { text: string; keywords_used: string[] };
+type CrawledReview = { author: string; date: string; rating: number | null; text: string };
 
 const TREATMENTS = ['결마지', '펌', '염색', '클리닉', '컷'];
 const SMARTPLACE_URL = 'https://new.smartplace.naver.com/';
+
+/** 지점의 네이버 공개 리뷰 페이지 딥링크 (placeId > 단축링크 > 스마트플레이스 홈) */
+function reviewLinkFor(b?: BranchOption): string {
+  if (b?.naverPlaceId) return `https://pcmap.place.naver.com/hairshop/${b.naverPlaceId}/review/visitor`;
+  if (b?.naverShortUrl) return b.naverShortUrl;
+  return SMARTPLACE_URL;
+}
 
 export default function ReviewStudio({
   branches,
@@ -25,8 +38,55 @@ export default function ReviewStudio({
   const [replies, setReplies] = useState<Reply[] | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
 
+  // 리뷰 불러오기(크롤) 상태
+  const [crawlLoading, setCrawlLoading] = useState(false);
+  const [crawlError, setCrawlError] = useState('');
+  const [crawled, setCrawled] = useState<CrawledReview[] | null>(null);
+
+  const selected = branches.find((b) => b.id === branchId);
+  const hasReviewLink = !!(selected?.naverPlaceId || selected?.naverShortUrl);
+
   function toggleChip(c: string) {
     setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
+  function openReviewPage() {
+    window.open(reviewLinkFor(selected), '_blank', 'noopener');
+  }
+
+  async function loadReviews() {
+    setCrawlError('');
+    setCrawled(null);
+    if (needsBranchPick && !branchId) {
+      setCrawlError('어느 지점 리뷰인지 골라주세요');
+      return;
+    }
+    setCrawlLoading(true);
+    try {
+      const res = await fetch('/api/review-crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch_id: branchId || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCrawlError(data.error || '리뷰를 불러오지 못했어요');
+      } else if (!data.reviews?.length) {
+        setCrawlError('불러올 리뷰가 없어요. "리뷰 보러가기"로 확인해주세요.');
+      } else {
+        setCrawled(data.reviews);
+      }
+    } catch {
+      setCrawlError('리뷰를 불러오는 중 문제가 생겼어요');
+    } finally {
+      setCrawlLoading(false);
+    }
+  }
+
+  function useReview(text: string) {
+    setReview(text);
+    setReplies(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function generate() {
@@ -87,6 +147,45 @@ export default function ReviewStudio({
               ))}
             </select>
           </label>
+        )}
+
+        {/* 지점 공개 리뷰 딥링크 + 불러오기 */}
+        {hasReviewLink && (
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-ghost" onClick={openReviewPage}>
+              <span className="inline-flex items-center gap-1.5">
+                <ExternalLink size={16} />
+                이 지점 리뷰 보러가기
+              </span>
+            </button>
+            <button className="btn-ghost" onClick={loadReviews} disabled={crawlLoading}>
+              <span className="inline-flex items-center gap-1.5">
+                {crawlLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                {crawlLoading ? '불러오는 중…' : '리뷰 불러오기'}
+              </span>
+            </button>
+          </div>
+        )}
+
+        {crawlError && <p className="text-sm text-warn">{crawlError}</p>}
+
+        {/* 불러온 리뷰 목록 */}
+        {crawled && crawled.length > 0 && (
+          <div className="space-y-2">
+            <span className="label">불러온 리뷰 · 눌러서 답글쓰기</span>
+            {crawled.map((r, i) => (
+              <button
+                key={i}
+                onClick={() => useReview(r.text)}
+                className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-card transition hover:border-brand"
+              >
+                <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
+                <p className="mt-1.5 text-xs text-ink-soft">
+                  {[r.author, r.rating ? `★${r.rating}` : '', r.date].filter(Boolean).join(' · ')}
+                </p>
+              </button>
+            ))}
+          </div>
         )}
 
         <label className="block">

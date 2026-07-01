@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, Search, MessageSquare, MapPin, PieChart, GraduationCap, Film, type LucideIcon } from 'lucide-react';
+import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, Search, MessageSquare, MapPin, PieChart, GraduationCap, Film, FileCog, type LucideIcon } from 'lucide-react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { roleLabel, type Role } from '@/lib/roles';
 
@@ -16,6 +16,7 @@ function navFor(role: Role): NavItem[] {
       { href: '/performance', label: '성과 대시보드', icon: PieChart },
       { href: '/branches', label: '지점 관리', icon: Building2 },
       { href: '/keyword-research', label: '키워드 조사', icon: Search },
+      { href: '/prompts', label: '프롬프트 관리', icon: FileCog },
       { href: '/write', label: '글쓰기', icon: PenLine },
       { href: '/reels', label: '릴스', icon: Film },
       { href: '/review', label: '리뷰 답글', icon: MessageSquare },

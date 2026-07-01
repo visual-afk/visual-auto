@@ -24,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!name) return NextResponse.json({ error: '지점 이름을 입력해주세요' }, { status: 400 });
     update.name = name;
   }
-  for (const key of ['region', 'knowledge_slug', 'naver_blog_url', 'imweb_url'] as const) {
+  for (const key of ['region', 'knowledge_slug', 'naver_blog_url', 'imweb_url', 'address'] as const) {
     if (typeof body[key] === 'string') update[key] = body[key].trim() || null;
   }
   // GPS 좌표·반경 (숫자 또는 null)
