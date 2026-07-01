@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // 비로그인도 접근 가능한 경로 (공개가입은 없고, 초대 수락만 공개)
-const PUBLIC_PREFIXES = ['/login', '/invite', '/api/auth', '/api/invites/accept', '/api/health'];
+// /api/cron/* 은 Vercel Cron이 호출하며 각 라우트가 CRON_SECRET 헤더로 자체 검증한다.
+const PUBLIC_PREFIXES = ['/login', '/invite', '/api/auth', '/api/invites/accept', '/api/health', '/api/cron'];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
