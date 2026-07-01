@@ -163,6 +163,8 @@ export interface AICallOptions {
   userMessage: string;
   maxTokens?: number;
   temperature?: number;
+  /** JSON 응답을 API 레벨에서 강제한다(프롬프트 지시만으론 모델이 산문을 뱉는 경우 방지). */
+  json?: boolean;
 }
 
 export interface AIResult {
@@ -199,16 +201,24 @@ async function callAnthropic(opts: AICallOptions): Promise<AIResult> {
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+  // json 모드: assistant 턴을 '{' 로 prefill 해서 모델이 반드시 JSON 객체로 시작하게 강제
+  const messages: { role: 'user' | 'assistant'; content: string }[] = [
+    { role: 'user', content: opts.userMessage },
+  ];
+  if (opts.json) messages.push({ role: 'assistant', content: '{' });
   const resp = await client.messages.create({
     model,
     max_tokens: opts.maxTokens || 8000,
     temperature: opts.temperature ?? 0.7,
     system: opts.system,
-    messages: [{ role: 'user', content: opts.userMessage }],
+    messages,
   });
   const block = resp.content.find((b) => b.type === 'text');
+  const raw = block && block.type === 'text' ? block.text : '';
+  // prefill 한 '{' 는 응답에 포함되지 않으므로 되붙인다
+  const text = opts.json ? `{${raw}` : raw;
   return {
-    text: block && block.type === 'text' ? block.text : '',
+    text,
     inputTokens: resp.usage.input_tokens,
     outputTokens: resp.usage.output_tokens,
     provider: 'anthropic',
@@ -219,9 +229,14 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash', // 2.0-flash 무료등급 0으로 막힘(2026) → 2.5-flash
     systemInstruction: opts.system,
-    generationConfig: { maxOutputTokens: opts.maxTokens || 8000, temperature: opts.temperature ?? 0.7 },
+    generationConfig: {
+      maxOutputTokens: opts.maxTokens || 8000,
+      temperature: opts.temperature ?? 0.7,
+      // json 모드: 네이티브 JSON 출력 강제(산문 반환 방지)
+      ...(opts.json ? { responseMimeType: 'application/json' as const } : {}),
+    },
   });
   const result = await model.generateContent(opts.userMessage);
   const usage = result.response.usageMetadata;
@@ -244,7 +259,7 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash', // 2.0-flash 무료등급 0으로 막힘 → 2.5-flash(오디오 지원)
     generationConfig: { temperature: 0 },
   });
   try {
@@ -289,13 +304,45 @@ export async function analyzeVideo(base64Video: string, mimeType: string, instru
   }
 }
 
-/** ```json ...``` 또는 본문에서 JSON 추출 */
+/** ```json ...``` 코드펜스, 없으면 본문에서 첫 균형 잡힌 {…} 객체를 추출 */
 export function parseJsonResponse<T>(text: string): T {
-  const match = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  const jsonStr = (match ? match[1] : text).trim();
+  const fence = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  const candidate = (fence ? fence[1] : text).trim();
   try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    throw new Error(`JSON 파싱 실패: ${(e as Error).message}\n원문: ${text.slice(0, 400)}`);
+    return JSON.parse(candidate);
+  } catch {
+    // 모델이 JSON 앞뒤에 산문을 붙인 경우: 첫 '{' ~ 짝 맞는 '}' 만 잘라 재시도
+    const sliced = extractFirstJsonObject(candidate);
+    if (sliced) {
+      try {
+        return JSON.parse(sliced);
+      } catch (e2) {
+        throw new Error(`JSON 파싱 실패: ${(e2 as Error).message}\n원문: ${text.slice(0, 400)}`);
+      }
+    }
+    throw new Error(`JSON 파싱 실패: 응답에 JSON이 없어요\n원문: ${text.slice(0, 400)}`);
   }
+}
+
+/** 문자열 내 첫 '{'부터 문자열 리터럴을 존중하며 짝 맞는 '}'까지 추출 */
+function extractFirstJsonObject(s: string): string | null {
+  const start = s.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
 }

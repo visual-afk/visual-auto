@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       ].join('\n'),
       temperature: 0.8,
       maxTokens: 1500,
+      json: true,
     });
     const structure = parseJsonResponse<Structure>(result.text);
     if (!structure.cuts?.length) {
