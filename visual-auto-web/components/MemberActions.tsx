@@ -83,7 +83,7 @@ export default function MemberActions({
                 다시 활성화
               </button>
             )}
-            {isHq && (
+            {(isHq || myRole === 'branch_owner') && (
               <button
                 onClick={() => {
                   if (confirm('완전삭제하면 이 멤버의 계정과 작성한 글이 모두 사라져요. 되돌릴 수 없어요.\n\n글을 남기려면 대신 "내보내기"를 쓰세요. 정말 삭제할까요?')) {
