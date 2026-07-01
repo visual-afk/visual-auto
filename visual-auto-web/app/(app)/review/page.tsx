@@ -7,13 +7,38 @@ export const dynamic = 'force-dynamic';
 export default async function ReviewPage() {
   const member = (await getMember())!;
   const isHq = member.role === 'hq_admin';
+  const admin = getAdminSupabase();
 
   let branches: BranchOption[];
   if (isHq) {
-    const { data } = await getAdminSupabase().from('branches').select('id, name').order('name');
-    branches = (data ?? []).map((b) => ({ id: b.id, name: b.name }));
+    const { data } = await admin
+      .from('branches')
+      .select('id, name, naver_place_id, naver_short_url')
+      .order('name');
+    branches = (data ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      naverPlaceId: b.naver_place_id ?? null,
+      naverShortUrl: b.naver_short_url ?? null,
+    }));
+  } else if (member.branchId) {
+    const { data: b } = await admin
+      .from('branches')
+      .select('id, name, naver_place_id, naver_short_url')
+      .eq('id', member.branchId)
+      .maybeSingle();
+    branches = b
+      ? [
+          {
+            id: b.id,
+            name: b.name,
+            naverPlaceId: b.naver_place_id ?? null,
+            naverShortUrl: b.naver_short_url ?? null,
+          },
+        ]
+      : [];
   } else {
-    branches = member.branchId ? [{ id: member.branchId, name: member.branchName ?? '' }] : [];
+    branches = [];
   }
 
   return (
