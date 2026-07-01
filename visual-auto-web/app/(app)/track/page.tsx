@@ -12,22 +12,32 @@ function fmtDate(s: string | null) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
+function isThisMonth(s: string, now: Date) {
+  const d = new Date(s);
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
+
 export default async function TrackPage() {
   const member = (await getMember())!;
   const admin = getAdminSupabase();
-  const { data: posts } = await admin
-    .from('posts')
-    .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
-    .eq('author_id', member.userId)
-    .order('created_at', { ascending: false });
+  const [{ data: posts }, { data: reels }] = await Promise.all([
+    admin
+      .from('posts')
+      .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
+      .eq('author_id', member.userId)
+      .order('created_at', { ascending: false }),
+    admin
+      .from('reels')
+      .select('id, views, created_at')
+      .eq('author_id', member.userId),
+  ]);
 
   const list = posts || [];
+  const reelList = reels || [];
   const now = new Date();
-  const monthCount = list.filter((p) => {
-    const d = new Date(p.created_at);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
-  const withViews = list.filter((p) => p.views != null);
+  const monthCount = list.filter((p) => isThisMonth(p.created_at, now)).length;
+  const monthReels = reelList.filter((r) => isThisMonth(r.created_at, now)).length;
+  const withViews = [...list, ...reelList].filter((p) => p.views != null);
   const totalViews = withViews.reduce((s, p) => s + (p.views || 0), 0);
   const avgViews = withViews.length ? Math.round(totalViews / withViews.length) : 0;
   const today = now.toISOString().slice(0, 10);
@@ -42,8 +52,9 @@ export default async function TrackPage() {
       </div>
 
       {/* 통계 */}
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="이번 달 글" value={`${monthCount}개`} />
+        <Stat label="이번 달 릴스" value={`${monthReels}개`} />
         <Stat label="총 조회수" value={totalViews.toLocaleString()} accent />
         <Stat label="평균 조회수" value={avgViews.toLocaleString()} />
       </div>
