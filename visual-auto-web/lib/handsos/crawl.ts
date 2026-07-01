@@ -25,20 +25,43 @@ async function loadBranchMap(): Promise<Map<string, string>> {
   return new Map((data || []).map((b) => [b.handsos_pk as string, b.id]));
 }
 
+/** 파싱 결과가 완전 공백(매출·접객·시술 전부 0)인지 — 로그인 실패/차단 페이지의 신호. */
+function isEmptyRow(row: ReturnType<typeof parseStaffSale>): boolean {
+  return (
+    row.new_sales === 0 &&
+    row.repeat_sales === 0 &&
+    row.guest_count === 0 &&
+    row.avg_price === 0 &&
+    row.cut === 0 &&
+    row.perm === 0 &&
+    row.recovery === 0 &&
+    row.clinic === 0 &&
+    row.dye === 0 &&
+    row.etc === 0
+  );
+}
+
+/**
+ * metrics_daily 에 upsert. 반환값 = 실제 저장 여부.
+ * 완전 공백 행은 저장하지 않는다 — HandSOS가 클라우드/차단 IP에 status 200으로
+ * 빈 페이지를 줄 때 기존 정상 데이터를 0으로 덮어쓰는 것을 방지한다.
+ */
 async function upsertRow(
   branchId: string,
   date: string,
   scope: 'branch' | 'designer',
   designerName: string,
   html: string,
-) {
+): Promise<boolean> {
   const row = parseStaffSale(html);
+  if (isEmptyRow(row)) return false;
   await getAdminSupabase()
     .from('metrics_daily')
     .upsert(
       { branch_id: branchId, date, scope, designer_name: designerName, ...row },
       { onConflict: 'branch_id,date,scope,designer_name' },
     );
+  return true;
 }
 
 /** 하루치 크롤. onlyPk 주면 해당 지점만(대시보드 새로고침용). */

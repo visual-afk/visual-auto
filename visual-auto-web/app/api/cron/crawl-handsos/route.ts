@@ -22,6 +22,24 @@ export async function GET(request: Request) {
   // KST 기준 어제 (Vercel은 UTC로 도므로 +9h 보정 후 -1일)
   const date = new Date(Date.now() + 9 * 3600e3 - 24 * 3600e3).toISOString().slice(0, 10);
 
+  // 진단 모드: ?diag=1 이면 이 함수의 아웃바운드 IP/국가 + HandSOS 도달 여부만 확인
+  if (new URL(request.url).searchParams.get('diag') === '1') {
+    const diag: Record<string, unknown> = {};
+    try {
+      const ip = await fetch('https://ipinfo.io/json', { cache: 'no-store' }).then((r) => r.json());
+      diag.egress = { ip: ip.ip, country: ip.country, region: ip.region, org: ip.org };
+    } catch (e) {
+      diag.egress = { error: (e as Error).message };
+    }
+    try {
+      const r = await fetch('https://www.handsos.com/login/login.asp', { cache: 'no-store' });
+      diag.handsos = { reachable: true, status: r.status };
+    } catch (e) {
+      diag.handsos = { reachable: false, error: (e as Error).message, cause: String((e as { cause?: unknown }).cause ?? '') };
+    }
+    return NextResponse.json(diag);
+  }
+
   try {
     // 전 지점 + 디자이너별. crawlDate는 지점총합을 먼저 upsert하므로
     // 타임아웃으로 중간에 끊겨도 지점 총합은 이미 저장된다.
@@ -31,6 +49,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, date, branches: result.branches });
   } catch (e) {
     console.error('[cron crawl-handsos]', (e as Error).message);
-    return NextResponse.json({ error: (e as Error).message, date }, { status: 502 });
+    return NextResponse.json(
+      { error: (e as Error).message, cause: String((e as { cause?: unknown }).cause ?? ''), date },
+      { status: 502 },
+    );
   }
 }
