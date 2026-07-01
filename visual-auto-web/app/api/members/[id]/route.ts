@@ -74,21 +74,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ error: '알 수 없는 요청이에요' }, { status: 400 });
 }
 
-/** 완전삭제 (본사 전용) — auth 계정 삭제 → branch_users·posts 는 cascade 로 함께 삭제 */
+/**
+ * 완전삭제 — auth 계정 삭제 → branch_users·posts 는 cascade 로 함께 삭제.
+ * 권한: 본사는 누구나(본인 제외), 원장은 자기 지점 디자이너·인턴만 (assertCanActOn).
+ */
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const res = await requireMember();
   if ('error' in res) return res.error;
   const { member } = res;
-  if (member.role !== 'hq_admin') {
-    return NextResponse.json({ error: '완전삭제는 본사만 할 수 있어요' }, { status: 403 });
-  }
+  if (!canManage(member.role)) return NextResponse.json({ error: '권한이 없어요' }, { status: 403 });
 
   const { id } = await params;
   const target = await loadTarget(id);
   if (!target) return NextResponse.json({ error: '멤버를 찾을 수 없어요' }, { status: 404 });
-  if (target.id === member.memberId) {
-    return NextResponse.json({ error: '본인은 삭제할 수 없어요' }, { status: 403 });
-  }
+
+  const guard = assertCanActOn(member, target);
+  if (guard) return NextResponse.json({ error: guard }, { status: 403 });
 
   const admin = getAdminSupabase();
   const { error } = await admin.auth.admin.deleteUser(target.user_id);

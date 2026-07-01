@@ -127,7 +127,7 @@ export default async function MembersPage() {
               </div>
             )}
 
-            <div className="overflow-hidden rounded-xl2 border border-line bg-surface">
+            <div className="rounded-xl2 border border-line bg-surface">
               <div className="grid grid-cols-[1fr_5.5rem_5rem_2rem] gap-2 border-b border-line px-4 py-2.5 text-xs font-semibold text-ink-faint">
                 <span>이름</span>
                 <span>역할</span>
