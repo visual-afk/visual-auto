@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download } from 'lucide-react';
+import ReviewImportHelp from './ReviewImportHelp';
 
 export type BranchOption = {
   id: string;
@@ -38,13 +39,36 @@ export default function ReviewStudio({
   const [replies, setReplies] = useState<Reply[] | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
 
-  // 리뷰 불러오기(크롤) 상태
-  const [crawlLoading, setCrawlLoading] = useState(false);
-  const [crawlError, setCrawlError] = useState('');
+  // 북마클릿으로 가져온 리뷰 + 도움말 모달
   const [crawled, setCrawled] = useState<CrawledReview[] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const selected = branches.find((b) => b.id === branchId);
   const hasReviewLink = !!(selected?.naverPlaceId || selected?.naverShortUrl);
+
+  // 북마클릿이 넘긴 리뷰(#import=...)를 받아 목록에 세팅
+  useEffect(() => {
+    const m = window.location.hash.match(/import=([^&]+)/);
+    if (!m) return;
+    try {
+      const arr = JSON.parse(decodeURIComponent(m[1]));
+      if (Array.isArray(arr) && arr.length) {
+        setCrawled(
+          arr
+            .filter((r) => r && typeof r.text === 'string' && r.text.trim())
+            .map((r) => ({
+              text: String(r.text).trim(),
+              author: String(r.author ?? ''),
+              date: String(r.date ?? ''),
+              rating: typeof r.rating === 'number' ? r.rating : null,
+            })),
+        );
+      }
+    } catch {
+      /* 잘못된 해시는 무시 */
+    }
+    history.replaceState(null, '', window.location.pathname);
+  }, []);
 
   function toggleChip(c: string) {
     setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
@@ -52,35 +76,6 @@ export default function ReviewStudio({
 
   function openReviewPage() {
     window.open(reviewLinkFor(selected), '_blank', 'noopener');
-  }
-
-  async function loadReviews() {
-    setCrawlError('');
-    setCrawled(null);
-    if (needsBranchPick && !branchId) {
-      setCrawlError('어느 지점 리뷰인지 골라주세요');
-      return;
-    }
-    setCrawlLoading(true);
-    try {
-      const res = await fetch('/api/review-crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch_id: branchId || undefined }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setCrawlError(data.error || '리뷰를 불러오지 못했어요');
-      } else if (!data.reviews?.length) {
-        setCrawlError('불러올 리뷰가 없어요. "리뷰 보러가기"로 확인해주세요.');
-      } else {
-        setCrawled(data.reviews);
-      }
-    } catch {
-      setCrawlError('리뷰를 불러오는 중 문제가 생겼어요');
-    } finally {
-      setCrawlLoading(false);
-    }
   }
 
   function useReview(text: string) {
@@ -149,7 +144,7 @@ export default function ReviewStudio({
           </label>
         )}
 
-        {/* 지점 공개 리뷰 딥링크 + 불러오기 */}
+        {/* 지점 공개 리뷰 딥링크 + 자동 가져오기(북마클릿) */}
         {hasReviewLink && (
           <div className="flex flex-wrap gap-2">
             <button className="btn-ghost" onClick={openReviewPage}>
@@ -158,21 +153,19 @@ export default function ReviewStudio({
                 이 지점 리뷰 보러가기
               </span>
             </button>
-            <button className="btn-ghost" onClick={loadReviews} disabled={crawlLoading}>
+            <button className="btn-ghost" onClick={() => setImportOpen(true)}>
               <span className="inline-flex items-center gap-1.5">
-                {crawlLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                {crawlLoading ? '불러오는 중…' : '리뷰 불러오기'}
+                <Download size={16} />
+                리뷰 자동 가져오기
               </span>
             </button>
           </div>
         )}
 
-        {crawlError && <p className="text-sm text-warn">{crawlError}</p>}
-
-        {/* 불러온 리뷰 목록 */}
+        {/* 북마클릿으로 가져온 리뷰 목록 */}
         {crawled && crawled.length > 0 && (
           <div className="space-y-2">
-            <span className="label">불러온 리뷰 · 눌러서 답글쓰기</span>
+            <span className="label">가져온 리뷰 · 눌러서 답글쓰기</span>
             {crawled.map((r, i) => (
               <button
                 key={i}
@@ -250,6 +243,8 @@ export default function ReviewStudio({
           </button>
         </section>
       )}
+
+      {importOpen && <ReviewImportHelp onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
