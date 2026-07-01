@@ -4,7 +4,7 @@ import { getMember, canManage, roleLabel, type Role } from '@/lib/auth';
 import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import InviteForm from '@/components/InviteForm';
-import MemberActions from '@/components/MemberActions';
+import MemberRow from '@/components/MemberRow';
 import PendingInvite from '@/components/PendingInvite';
 
 export const dynamic = 'force-dynamic';
@@ -142,40 +142,18 @@ export default async function MembersPage() {
                   const isMe = m.user_id === member.userId;
                   const canAct = !isMe && (isHq || m.role === 'designer' || m.role === 'intern');
                   return (
-                    <li
+                    <MemberRow
                       key={m.id}
-                      className={`grid grid-cols-[1fr_5.5rem_5rem_2rem] items-center gap-2 px-4 py-3.5 ${
-                        m.is_active ? '' : 'opacity-50'
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-wash text-sm font-bold text-brand">
-                          {m.display_name.slice(0, 1)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold">
-                            {m.display_name}
-                            {isMe && <span className="ml-1 text-xs font-normal text-ink-faint">(나)</span>}
-                          </span>
-                          {m.phone && <span className="block truncate text-xs text-ink-faint">{m.phone}</span>}
-                        </span>
-                      </span>
-                      <span>
-                        <RoleBadge role={m.role} />
-                        {!m.is_active && <span className="ml-1 text-xs text-warn">(나감)</span>}
-                      </span>
-                      <span className="text-sm text-ink-soft">글 {postCount.get(m.user_id) || 0}</span>
-                      <span className="flex justify-end">
-                        {canAct && (
-                          <MemberActions
-                            memberId={m.id}
-                            memberRole={m.role}
-                            isActive={m.is_active}
-                            myRole={member.role}
-                          />
-                        )}
-                      </span>
-                    </li>
+                      memberId={m.id}
+                      displayName={m.display_name}
+                      phone={m.phone}
+                      initialRole={m.role}
+                      initialActive={m.is_active}
+                      isMe={isMe}
+                      canAct={canAct}
+                      myRole={member.role}
+                      postCount={postCount.get(m.user_id) || 0}
+                    />
                   );
                 })}
               </ul>
@@ -185,14 +163,4 @@ export default async function MembersPage() {
       </div>
     </div>
   );
-}
-
-function RoleBadge({ role }: { role: Role }) {
-  const styles: Record<Role, string> = {
-    hq_admin: 'bg-ink/10 text-ink',
-    branch_owner: 'bg-brand-wash text-brand',
-    designer: 'bg-canvas text-ink-soft border border-line',
-    intern: 'bg-warn/15 text-warn',
-  };
-  return <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-bold ${styles[role]}`}>{roleLabel[role]}</span>;
 }
