@@ -11,11 +11,18 @@ export default function MemberActions({
   memberRole,
   isActive,
   myRole,
+  onRoleChange,
+  onActiveChange,
+  onDelete,
 }: {
   memberId: string;
   memberRole: Role;
   isActive: boolean;
   myRole: Role;
+  /** 성공 즉시 화면에 반영하기 위한 낙관적 업데이트 콜백 */
+  onRoleChange?: (role: Role) => void;
+  onActiveChange?: (isActive: boolean) => void;
+  onDelete?: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -26,7 +33,7 @@ export default function MemberActions({
   const roleChoices: Role[] = (isHq ? (['designer', 'intern', 'branch_owner'] as Role[]) : (['designer', 'intern'] as Role[]))
     .filter((r) => r !== memberRole);
 
-  async function call(method: 'PATCH' | 'DELETE', body?: object) {
+  async function call(method: 'PATCH' | 'DELETE', body?: object, onSuccess?: () => void) {
     setBusy(true);
     const res = await fetch(`/api/members/${memberId}`, {
       method,
@@ -40,7 +47,8 @@ export default function MemberActions({
       alert(data.error || '처리에 실패했어요');
       return;
     }
-    router.refresh();
+    onSuccess?.();       // 즉시 화면 반영
+    router.refresh();    // 헤더 인원 요약 등 서버 값 동기화
   }
 
   return (
@@ -62,7 +70,7 @@ export default function MemberActions({
             {roleChoices.map((r) => (
               <button
                 key={r}
-                onClick={() => call('PATCH', { action: 'set_role', role: r })}
+                onClick={() => call('PATCH', { action: 'set_role', role: r }, () => onRoleChange?.(r))}
                 className="block w-full px-4 py-2.5 text-left text-sm hover:bg-canvas"
               >
                 {roleLabel[r]}으로 변경
@@ -70,14 +78,14 @@ export default function MemberActions({
             ))}
             {isActive ? (
               <button
-                onClick={() => call('PATCH', { action: 'set_active', is_active: false })}
+                onClick={() => call('PATCH', { action: 'set_active', is_active: false }, () => onActiveChange?.(false))}
                 className="block w-full px-4 py-2.5 text-left text-sm text-warn hover:bg-canvas"
               >
                 내보내기
               </button>
             ) : (
               <button
-                onClick={() => call('PATCH', { action: 'set_active', is_active: true })}
+                onClick={() => call('PATCH', { action: 'set_active', is_active: true }, () => onActiveChange?.(true))}
                 className="block w-full px-4 py-2.5 text-left text-sm text-brand hover:bg-canvas"
               >
                 다시 활성화
@@ -87,7 +95,7 @@ export default function MemberActions({
               <button
                 onClick={() => {
                   if (confirm('완전삭제하면 이 멤버의 계정과 작성한 글이 모두 사라져요. 되돌릴 수 없어요.\n\n글을 남기려면 대신 "내보내기"를 쓰세요. 정말 삭제할까요?')) {
-                    call('DELETE');
+                    call('DELETE', undefined, () => onDelete?.());
                   }
                 }}
                 className="block w-full border-t border-line px-4 py-2.5 text-left text-sm text-red-600 hover:bg-canvas"

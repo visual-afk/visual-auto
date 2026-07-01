@@ -85,9 +85,26 @@ export interface AIResult {
 }
 
 export async function callAI(opts: AICallOptions): Promise<AIResult> {
-  if (process.env.ANTHROPIC_API_KEY) return callAnthropic(opts);
-  if (process.env.GEMINI_API_KEY) return callGemini(opts);
-  throw new Error('ANTHROPIC_API_KEY 또는 GEMINI_API_KEY 가 필요해요');
+  try {
+    if (process.env.ANTHROPIC_API_KEY) return await callAnthropic(opts);
+    if (process.env.GEMINI_API_KEY) return await callGemini(opts);
+    throw new Error('ANTHROPIC_API_KEY 또는 GEMINI_API_KEY 가 필요해요');
+  } catch (e) {
+    throw toFriendlyAIError(e);
+  }
+}
+
+/** 공급사(구글/앤트로픽) 원문 에러를 디자이너용 한국어 메시지로 바꾼다. */
+function toFriendlyAIError(e: unknown): Error {
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error('[AI] provider error:', msg); // 원문은 서버 로그로만
+  if (/429|too many requests|quota|rate limit|RESOURCE_EXHAUSTED|exceeded/i.test(msg)) {
+    return new Error('지금 AI 사용량이 한도에 걸렸어요. 잠시 뒤 다시 눌러 주세요. (계속되면 예진매니저에게 문의)');
+  }
+  if (/api[_ ]?key|permission|PERMISSION_DENIED|unauthorized|401|403/i.test(msg)) {
+    return new Error('AI 설정에 문제가 있어요. 예진매니저에게 문의해 주세요.');
+  }
+  return e instanceof Error ? e : new Error(msg);
 }
 
 async function callAnthropic(opts: AICallOptions): Promise<AIResult> {
@@ -114,7 +131,7 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
     systemInstruction: opts.system,
     generationConfig: { maxOutputTokens: opts.maxTokens || 8000, temperature: opts.temperature ?? 0.7 },
   });
@@ -142,17 +159,21 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
     model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0 },
   });
-  const result = await model.generateContent([
-    {
-      text: [
-        '다음은 미용실 디자이너가 오늘 시술을 마치고 말로 남긴 메모 녹음이다.',
-        '한국어로 받아쓰되, "음", "어" 같은 군말과 반복은 빼고 자연스러운 문장으로 정리해라.',
-        '내용을 요약·각색하지 말고 말한 그대로의 정보를 살려라. 받아쓴 텍스트만 출력하고 다른 설명은 붙이지 마라.',
-      ].join(' '),
-    },
-    { inlineData: { mimeType, data: base64Audio } },
-  ]);
-  return result.response.text().trim();
+  try {
+    const result = await model.generateContent([
+      {
+        text: [
+          '다음은 미용실 디자이너가 오늘 시술을 마치고 말로 남긴 메모 녹음이다.',
+          '한국어로 받아쓰되, "음", "어" 같은 군말과 반복은 빼고 자연스러운 문장으로 정리해라.',
+          '내용을 요약·각색하지 말고 말한 그대로의 정보를 살려라. 받아쓴 텍스트만 출력하고 다른 설명은 붙이지 마라.',
+        ].join(' '),
+      },
+      { inlineData: { mimeType, data: base64Audio } },
+    ]);
+    return result.response.text().trim();
+  } catch (e) {
+    throw toFriendlyAIError(e);
+  }
 }
 
 /**
@@ -169,11 +190,15 @@ export async function analyzeVideo(base64Video: string, mimeType: string, instru
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     generationConfig: { temperature: 0.4, maxOutputTokens: 2000 },
   });
-  const result = await model.generateContent([
-    { text: instruction },
-    { inlineData: { mimeType, data: base64Video } },
-  ]);
-  return result.response.text().trim();
+  try {
+    const result = await model.generateContent([
+      { text: instruction },
+      { inlineData: { mimeType, data: base64Video } },
+    ]);
+    return result.response.text().trim();
+  } catch (e) {
+    throw toFriendlyAIError(e);
+  }
 }
 
 /** ```json ...``` 또는 본문에서 JSON 추출 */
