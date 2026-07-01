@@ -13,7 +13,7 @@ export default async function BranchesPage() {
 
   const admin = getAdminSupabase();
   const [{ data: branchesData }, { data: members }, { data: posts }] = await Promise.all([
-    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, lat, lng, geofence_radius_m').order('name'),
+    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, address, lat, lng, geofence_radius_m').order('name'),
     admin.from('branch_users').select('branch_id'),
     admin.from('posts').select('branch_id'),
   ]);

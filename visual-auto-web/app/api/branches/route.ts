@@ -26,7 +26,7 @@ export async function GET() {
 
   const admin = getAdminSupabase();
   const [{ data: branches }, { data: members }, { data: posts }] = await Promise.all([
-    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, lat, lng, geofence_radius_m').order('name'),
+    admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, address, lat, lng, geofence_radius_m').order('name'),
     admin.from('branch_users').select('branch_id'),
     admin.from('posts').select('branch_id'),
   ]);
@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       knowledge_slug: (body.knowledge_slug || '').trim() || null,
       naver_blog_url: (body.naver_blog_url || '').trim() || null,
       imweb_url: (body.imweb_url || '').trim() || null,
+      address: (body.address || '').trim() || null,
       lat: numOrNull(body.lat),
       lng: numOrNull(body.lng),
       geofence_radius_m: numOrNull(body.geofence_radius_m) ?? 200,

@@ -13,6 +13,7 @@ export type BranchData = {
   lat?: number | null;
   lng?: number | null;
   geofence_radius_m?: number | null;
+  address?: string | null;
 };
 
 /** 지점 생성/수정 겸용 폼. initial이 있으면 수정 모드. */
@@ -33,9 +34,42 @@ export default function BranchForm({
   const [lat, setLat] = useState(initial?.lat != null ? String(initial.lat) : '');
   const [lng, setLng] = useState(initial?.lng != null ? String(initial.lng) : '');
   const [radius, setRadius] = useState(initial?.geofence_radius_m != null ? String(initial.geofence_radius_m) : '200');
+  const [address, setAddress] = useState(initial?.address ?? '');
+  const [geocoding, setGeocoding] = useState(false);
+  const [geoOk, setGeoOk] = useState(false);
   const [locating, setLocating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  async function geocodeAddress() {
+    setError('');
+    setGeoOk(false);
+    if (!address.trim()) {
+      setError('주소를 입력해주세요');
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const res = await fetch('/api/branches/geocode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: address.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || '주소를 찾지 못했어요');
+        return;
+      }
+      setLat(Number(data.lat).toFixed(7));
+      setLng(Number(data.lng).toFixed(7));
+      if (data.address) setAddress(data.address);
+      setGeoOk(true);
+    } catch {
+      setError('주소를 찾지 못했어요');
+    } finally {
+      setGeocoding(false);
+    }
+  }
 
   function useCurrentLocation() {
     setError('');
@@ -74,6 +108,7 @@ export default function BranchForm({
         region,
         knowledge_slug: slug,
         imweb_url: imweb,
+        address,
         lat: lat.trim() === '' ? null : Number(lat),
         lng: lng.trim() === '' ? null : Number(lng),
         geofence_radius_m: radius.trim() === '' ? null : Number(radius),
@@ -93,6 +128,8 @@ export default function BranchForm({
       setLat('');
       setLng('');
       setRadius('200');
+      setAddress('');
+      setGeoOk(false);
     }
     onDone?.();
     router.refresh();
@@ -143,6 +180,38 @@ export default function BranchForm({
             {locating ? '확인 중…' : '📍 현재 위치로 설정'}
           </button>
         </div>
+
+        {/* 주소로 좌표 자동찾기 */}
+        <div className="mb-3">
+          <span className="label">지점 주소</span>
+          <div className="flex gap-2">
+            <input
+              className="field flex-1"
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setGeoOk(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  geocodeAddress();
+                }
+              }}
+              placeholder="예: 서울 송파구 올림픽로 300 (또는 상호명)"
+            />
+            <button
+              type="button"
+              onClick={geocodeAddress}
+              disabled={geocoding}
+              className="shrink-0 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-brand disabled:opacity-50"
+            >
+              {geocoding ? '찾는 중…' : '주소로 좌표 찾기'}
+            </button>
+          </div>
+          {geoOk && <p className="mt-1 text-xs text-brand">✓ 좌표를 찾았어요. 아래 위도·경도가 자동 입력됐어요.</p>}
+        </div>
+
         <div className="grid gap-3 md:grid-cols-3">
           <label className="block">
             <span className="label">위도(lat)</span>
@@ -158,7 +227,7 @@ export default function BranchForm({
           </label>
         </div>
         <p className="mt-2 text-xs text-ink-faint">
-          지점 매장에서 <b>현재 위치로 설정</b>을 누르면 좌표가 자동 입력돼요. 디자이너는 이 반경 안에서만 출근할 수 있어요.
+          <b>주소</b>를 넣고 <b>주소로 좌표 찾기</b>를 누르면 좌표가 자동 입력돼요. 매장에 계시면 <b>현재 위치로 설정</b>도 됩니다. 디자이너는 이 반경 안에서만 출근할 수 있어요.
         </p>
       </div>
 
