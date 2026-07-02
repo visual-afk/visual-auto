@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PenLine, TrendingUp, Users, LayoutGrid, MessageSquare, MapPin, PieChart, Film, FileCog, type LucideIcon } from 'lucide-react';
+import { PenLine, TrendingUp, Users, LayoutGrid, MessageSquare, MapPin, PieChart, Film, type LucideIcon } from 'lucide-react';
 import type { Role } from '@/lib/roles';
 
 type Tab = { href: string; label: string; icon: LucideIcon };
@@ -10,10 +10,10 @@ type Tab = { href: string; label: string; icon: LucideIcon };
 function tabsFor(role: Role): Tab[] {
   if (role === 'hq_admin') {
     return [
-      { href: '/overview', label: '현황', icon: LayoutGrid },
+      { href: '/performance', label: '현황', icon: LayoutGrid },
       { href: '/write', label: '글쓰기', icon: PenLine },
       { href: '/reels', label: '릴스', icon: Film },
-      { href: '/prompts', label: '프롬프트', icon: FileCog },
+      { href: '/review', label: '리뷰', icon: MessageSquare },
       { href: '/members', label: '사람', icon: Users },
     ];
   }
