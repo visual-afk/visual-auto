@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import DraftDeleteButton from '@/components/DraftDeleteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,10 @@ export default async function TrackPage() {
   const list = posts || [];
   const reelList = reels || [];
   const now = new Date();
-  const monthCount = list.filter((p) => isThisMonth(p.created_at, now)).length;
+  // 발행한 글만 센다 — 생성만 하고 발행 안 한 초안이 "이번 달 글"로 잡히면 혼란
+  const monthCount = list.filter(
+    (p) => p.status === 'published' && isThisMonth(p.published_at || p.created_at, now)
+  ).length;
   const monthReels = reelList.filter((r) => isThisMonth(r.created_at, now)).length;
   const withViews = [...list, ...reelList].filter((p) => p.views != null);
   const totalViews = withViews.reduce((s, p) => s + (p.views || 0), 0);
@@ -78,14 +82,23 @@ export default async function TrackPage() {
                 key={p.id}
                 className="grid grid-cols-[1fr_auto] items-center gap-2 px-5 py-4 md:grid-cols-[1fr_5rem_6rem_4rem]"
               >
-                <Link href={`/track/${p.id}`} className="truncate font-semibold">
-                  {p.title || '제목 없음'}
-                </Link>
+                <span className="flex min-w-0 items-center gap-2">
+                  {p.status !== 'published' && (
+                    <span className="shrink-0 rounded-full bg-ink-faint/15 px-2 py-0.5 text-[11px] font-semibold text-ink-soft">
+                      초안
+                    </span>
+                  )}
+                  <Link href={p.status === 'published' ? `/track/${p.id}` : '/write'} className="truncate font-semibold">
+                    {p.title || '제목 없음'}
+                  </Link>
+                </span>
                 <span className="hidden text-sm text-ink-soft md:block">
                   {p.publish_target ? TARGET_LABEL[p.publish_target] : '-'}
                 </span>
                 <span className="text-right text-sm md:col-auto">
-                  {p.views != null ? (
+                  {p.status !== 'published' ? (
+                    <DraftDeleteButton id={p.id} />
+                  ) : p.views != null ? (
                     <span className="font-bold text-brand">{p.views.toLocaleString()}</span>
                   ) : (
                     <Link

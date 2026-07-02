@@ -3,13 +3,12 @@ import { requireMember, resolveWriteBranch } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import {
-  callAI,
+  callAIJson,
   friendlyAIError,
   loadKnowledgeFor,
   loadBranchKnowledgeFor,
   loadPromptFor,
   loadTemplate,
-  parseJsonResponse,
 } from '@/lib/generation/ai-client';
 import { parsePhotoGuide } from '@/lib/generation/photo-guide';
 import { loadKeywordContext } from '@/lib/generation/keywords';
@@ -50,7 +49,7 @@ export async function POST(request: Request) {
     const seoPrompt = await loadPromptFor('seo-optimizer', branchId);
 
     // 1) 초안 — 디자이너 기록을 1인칭 경험으로 녹임 (EEAT)
-    const draftRes = await callAI({
+    const draft = await callAIJson<GeneratedPost>({
       system: [
         writerPrompt,
         '\n\n--- 비주얼살롱 지식베이스 ---\n',
@@ -79,10 +78,9 @@ export async function POST(request: Request) {
       json: true,
       maxTokens: 16000, // 본문 7,000~9,000자가 JSON 문자열로 들어가므로 기본 8000 토큰으론 잘림
     });
-    const draft = parseJsonResponse<GeneratedPost>(draftRes.text);
 
     // 2) SEO 최적화
-    const seoRes = await callAI({
+    const optimized = await callAIJson<SeoOptimizedPost>({
       system: seoPrompt,
       userMessage: [
         '원본 블로그 글:',
@@ -95,7 +93,6 @@ export async function POST(request: Request) {
       json: true,
       maxTokens: 16000, // 최적화 본문도 draft 만큼 길어질 수 있음
     });
-    const optimized = parseJsonResponse<SeoOptimizedPost>(seoRes.text);
 
     // 3) 사진 가이드 파싱 + 본문 마커 치환
     const fromFinal = parsePhotoGuide(optimized.optimized_content || draft.content);
@@ -103,24 +100,39 @@ export async function POST(request: Request) {
     const guide = fromFinal.guide.length ? fromFinal.guide : fromDraft.guide;
     const finalBody = fromFinal.body;
 
-    // 4) posts 저장 (RLS: 본인 글 insert)
+    // 4) posts 저장 (RLS: 본인 글) — 고쳐쓰기(post_id)는 기존 초안을 덮어써 유령 초안 누적을 막는다
     const supabase = await getServerSupabase();
+    const fields = {
+      branch_id: branchId,
+      treatment_chips: chips,
+      user_notes: notes || null,
+      recommended_topic: topic,
+      title: optimized.optimized_title || draft.title,
+      meta_description: optimized.optimized_meta_description || draft.meta_description,
+      tags: optimized.optimized_tags || draft.tags || [],
+      content: finalBody,
+      photo_guide: guide,
+      seo_score: optimized.seo_score ?? null,
+    };
+
+    const postId: string = (body.post_id || '').trim();
+    if (postId) {
+      const { data: post, error } = await supabase
+        .from('posts')
+        .update(fields)
+        .eq('id', postId)
+        .eq('author_id', member.userId)
+        .eq('status', 'draft')
+        .select('*')
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!post) return NextResponse.json({ error: '덮어쓸 초안을 찾지 못했어요' }, { status: 400 });
+      return NextResponse.json({ post });
+    }
+
     const { data: post, error } = await supabase
       .from('posts')
-      .insert({
-        branch_id: branchId,
-        author_id: member.userId,
-        treatment_chips: chips,
-        user_notes: notes || null,
-        recommended_topic: topic,
-        status: 'draft',
-        title: optimized.optimized_title || draft.title,
-        meta_description: optimized.optimized_meta_description || draft.meta_description,
-        tags: optimized.optimized_tags || draft.tags || [],
-        content: finalBody,
-        photo_guide: guide,
-        seo_score: optimized.seo_score ?? null,
-      })
+      .insert({ ...fields, author_id: member.userId, status: 'draft' })
       .select('*')
       .single();
 

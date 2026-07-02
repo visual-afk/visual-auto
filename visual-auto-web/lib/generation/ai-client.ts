@@ -186,6 +186,26 @@ export async function callAI(opts: AICallOptions): Promise<AIResult> {
   }
 }
 
+/** 잘림·파싱 오류는 일시적인 경우가 많아 재시도 1회로 살릴 수 있다. */
+function isRetryableJsonError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /파싱|parse|JSON|잘렸|too long|길어/i.test(msg);
+}
+
+/**
+ * callAI + parseJsonResponse 를 묶고, 응답 잘림/JSON 파싱 실패일 때만 1회 자동 재시도.
+ * 재시도까지 실패하면 마지막 에러를 그대로 던져 friendlyAIError 매핑을 탄다.
+ */
+export async function callAIJson<T>(opts: AICallOptions): Promise<T> {
+  try {
+    return parseJsonResponse<T>((await callAI(opts)).text);
+  } catch (e) {
+    if (!isRetryableJsonError(e)) throw e;
+    console.warn('[AI] JSON 불완전 → 1회 재시도:', (e as Error).message.slice(0, 200));
+    return parseJsonResponse<T>((await callAI(opts)).text);
+  }
+}
+
 /** 공급사(구글 Gemini) 원문 에러를 디자이너용 한국어 메시지로 바꾼다. */
 function toFriendlyAIError(e: unknown): Error {
   const msg = e instanceof Error ? e.message : String(e);

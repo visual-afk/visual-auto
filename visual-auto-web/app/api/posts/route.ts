@@ -62,3 +62,24 @@ export async function PATCH(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ post: data });
 }
+
+/** 초안 삭제 — 발행 글은 통계 보호를 위해 지울 수 없다 (RLS: 본인/원장/본사) */
+export async function DELETE(request: Request) {
+  const res = await requireMember();
+  if ('error' in res) return res.error;
+
+  const body = await request.json().catch(() => ({}));
+  const id: string = body.id;
+  if (!id) return NextResponse.json({ error: 'id가 필요해요' }, { status: 400 });
+
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', id)
+    .eq('status', 'draft')
+    .select('id');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: '발행된 글은 지울 수 없어요' }, { status: 403 });
+  return NextResponse.json({ ok: true });
+}
