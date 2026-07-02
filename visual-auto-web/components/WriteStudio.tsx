@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, RotateCw, PenLine, Pencil, Mic, Square } from 'lucide-react';
+import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2 } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
 import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
@@ -31,10 +31,12 @@ export default function WriteStudio({
   branches,
   needsBranchPick,
   myNaverUrl,
+  initialPost,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
   myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
+  initialPost: Post | null; // 발행 안 한 최신 초안 — 새로고침해도 이어쓰기
 }) {
   const router = useRouter();
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
@@ -50,7 +52,7 @@ export default function WriteStudio({
   const [topic, setTopic, clearTopic] = usePersistentState<string>('va:write:topic', '');
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [post, setPost] = useState<Post | null>(null);
+  const [post, setPost] = useState<Post | null>(initialPost);
   const [error, setError] = useState('');
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -148,15 +150,42 @@ export default function WriteStudio({
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recommended_topic: topic, treatment_chips: chips, user_notes: notes, branch_id: branchId }),
+        body: JSON.stringify({
+          recommended_topic: topic,
+          treatment_chips: chips,
+          user_notes: notes,
+          branch_id: branchId,
+          post_id: post?.id, // 초안이 있으면 덮어쓰기 — 유령 초안이 쌓이지 않게
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '생성 실패');
+      if (!res.ok) {
+        // 덮어쓸 초안이 이미 지워진 경우: 다음 시도는 새 글로
+        if (res.status === 400 && post) setPost(null);
+        throw new Error(data.error || '생성 실패');
+      }
       setPost(data.post);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function discard() {
+    if (!post) return;
+    if (!window.confirm('이 초안을 버릴까요? 되돌릴 수 없어요.')) return;
+    const res = await fetch('/api/posts', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: post.id }),
+    });
+    if (res.ok) {
+      setPost(null);
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || '초안을 못 지웠어요');
     }
   }
 
@@ -317,7 +346,7 @@ export default function WriteStudio({
                   <br />AI 초안이 여기 나타나요</p>
               </div>
             ) : (
-              <DraftView post={post} onRewrite={generate} rewriting={generating} />
+              <DraftView post={post} onRewrite={generate} onDiscard={discard} rewriting={generating} />
             )}
           </div>
         </section>
@@ -345,7 +374,17 @@ export default function WriteStudio({
   );
 }
 
-function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () => void; rewriting: boolean }) {
+function DraftView({
+  post,
+  onRewrite,
+  onDiscard,
+  rewriting,
+}: {
+  post: Post;
+  onRewrite: () => void;
+  onDiscard: () => void;
+  rewriting: boolean;
+}) {
   const guideByPos = new Map<number, PhotoGuideItem>();
   (post.photo_guide || []).forEach((g) => guideByPos.set(g.position, g));
 
@@ -353,9 +392,14 @@ function DraftView({ post, onRewrite, rewriting }: { post: Post; onRewrite: () =
     <div>
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">AI 초안</span>
-        <button onClick={onRewrite} className="flex items-center gap-1 text-sm font-medium text-brand" disabled={rewriting}>
-          {rewriting ? '고쳐쓰는 중…' : <><Pencil size={14} /> 고쳐쓰기</>}
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={onDiscard} className="flex items-center gap-1 text-sm font-medium text-warn" disabled={rewriting}>
+            <Trash2 size={14} /> 버리기
+          </button>
+          <button onClick={onRewrite} className="flex items-center gap-1 text-sm font-medium text-brand" disabled={rewriting}>
+            {rewriting ? '고쳐쓰는 중…' : <><Pencil size={14} /> 고쳐쓰기</>}
+          </button>
+        </div>
       </div>
       <h2 className="text-lg font-bold leading-snug">{post.title}</h2>
       <div className="mt-3 space-y-2 text-[15px] leading-relaxed text-ink">
