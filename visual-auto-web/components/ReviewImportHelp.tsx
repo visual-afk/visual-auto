@@ -70,7 +70,6 @@ export default function ReviewImportHelp({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mt-3 text-xs text-ink-soft">
-          기능이 바뀌면 위 <b>&quot;리뷰 가져오기&quot;</b>를 북마크바에 <b>다시 끌어다</b> 놓아주세요(예전 버튼은 지우고).
           안 되면 알려주세요. (네이버가 페이지 구조를 바꾸면 버튼을 새로 받아야 할 수 있어요.)
         </p>
         {origin && (
