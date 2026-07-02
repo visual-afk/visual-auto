@@ -21,14 +21,17 @@ export default function PendingInvite({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  function resend() {
-    if (navigator.share) {
-      navigator.share({ title: '비주얼 블로그 초대', text: '초대 링크', url: link });
-    } else {
-      navigator.clipboard.writeText(link);
-      alert('초대 링크를 복사했어요. 카톡·문자로 붙여넣어 보내주세요.');
+  // 데스크탑 공유시트는 카톡/문자로 전송이 안 돼서, 항상 링크를 복사해 준다.
+  async function resend() {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      /* 클립보드 실패해도 아래 안내는 그대로 */
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   }
 
   async function cancel() {
@@ -57,7 +60,7 @@ export default function PendingInvite({
         </span>
       </span>
       <button onClick={resend} className="shrink-0 text-sm font-semibold text-brand">
-        다시 보내기
+        {copied ? '복사됐어요 ✓' : '링크 복사'}
       </button>
       <button onClick={cancel} disabled={busy} className="shrink-0 text-sm font-medium text-ink-faint hover:text-warn">
         취소

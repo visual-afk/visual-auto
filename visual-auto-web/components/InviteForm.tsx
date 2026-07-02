@@ -65,18 +65,15 @@ export default function InviteForm({
     router.refresh();
   }
 
+  // 데스크탑 공유시트는 카톡/문자 전송이 안 돼서, 항상 링크를 복사해 준다.
   async function copy() {
-    await navigator.clipboard.writeText(link);
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      /* 클립보드 실패해도 링크는 화면에 보임 */
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }
-
-  function share() {
-    if (navigator.share) {
-      navigator.share({ title: '비주얼 블로그 초대', text: '초대 링크', url: link });
-    } else {
-      copy();
-    }
   }
 
   return (
@@ -132,17 +129,12 @@ export default function InviteForm({
           <div className="break-all rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink-soft">
             {link}
           </div>
-          <div className="flex gap-2">
-            <button className="flex-1 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink" onClick={share}>
-              초대 링크 보내기
-            </button>
-            <button
-              className="flex-1 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold"
-              onClick={copy}
-            >
-              {copied ? '복사됐어요 ✓' : '링크 복사'}
-            </button>
-          </div>
+          <button
+            className="w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink"
+            onClick={copy}
+          >
+            {copied ? '복사됐어요 ✓ — 카톡·문자에 붙여넣어 보내세요' : '초대 링크 복사'}
+          </button>
         </div>
       )}
     </div>
