@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import {
   callAI,
+  friendlyAIError,
   loadKnowledgeFor,
   loadBranchKnowledgeFor,
   loadPromptFor,
@@ -141,6 +142,8 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ post });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    console.error('[generate]', (e as Error).message);
+    const { message, status } = friendlyAIError(e);
+    return NextResponse.json({ error: message }, { status });
   }
 }

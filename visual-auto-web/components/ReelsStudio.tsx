@@ -6,6 +6,7 @@ import {
   Upload, Loader2, Sparkles, Copy, Check, Film, Eye, MapPin, Users, Wand2, Camera,
 } from 'lucide-react';
 import type { ContentProfile } from '@/lib/reels';
+import { usePersistentState } from '@/lib/usePersistentState';
 
 export type BranchOption = { id: string; name: string };
 export type PastReel = { id: string; title: string | null; views: number | null; status: string; created_at: string; published_url: string | null };
@@ -34,10 +35,11 @@ export default function ReelsStudio({
 
   const [branchId, setBranchId] = useState(needsBranchPick ? '' : branches[0]?.id ?? '');
   const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [chips, setChips] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
-  const [angle, setAngle] = useState<'담백' | '욕망'>('욕망');
+  // 새로고침해도 안 날아가게 자동 임시저장 (영상 파일 자체는 제외)
+  const [analysis, setAnalysis, clearAnalysis] = usePersistentState<Analysis | null>('va:reels:analysis', null);
+  const [chips, setChips, clearChips] = usePersistentState<string[]>('va:reels:chips', []);
+  const [notes, setNotes, clearNotes] = usePersistentState<string>('va:reels:notes', '');
+  const [angle, setAngle, clearAngle] = usePersistentState<'담백' | '욕망'>('va:reels:angle', '욕망');
   const [generating, setGenerating] = useState(false);
   const [structure, setStructure] = useState<Structure | null>(null);
   const [reelId, setReelId] = useState<string | null>(null);
@@ -150,6 +152,11 @@ export default function ReelsStudio({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'record_views', published_url: publishedUrl, next_check: true }),
     });
+    // 등록 완료 → 임시저장 초안 비우기
+    clearAnalysis();
+    clearChips();
+    clearNotes();
+    clearAngle();
     setMsg('등록 완료! 조회수는 며칠 뒤 다시 넣으면 돼요.');
     router.refresh();
   }
@@ -231,6 +238,7 @@ export default function ReelsStudio({
             {generating ? '구성 만드는 중…' : '릴스 구성 만들기'}
           </span>
         </button>
+        <p className="text-xs text-ink-faint">시술·메모·앵글은 자동 저장돼요. 새로고침해도 그대로 있어요. (영상은 다시 올려주세요)</p>
       </section>
 
       {/* 3) 구성 결과 */}

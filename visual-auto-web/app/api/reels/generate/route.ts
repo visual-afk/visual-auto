@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { callAI, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
+import { callAI, friendlyAIError, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { getContentProfile, compileProfileContext } from '@/lib/reels';
 
 export const maxDuration = 120;
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   }
   if (!branchId) return NextResponse.json({ error: '지점이 없는 계정이에요' }, { status: 400 });
 
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: '릴스 기획 설정에 문제가 있어요. 관리자에게 알려주세요.' }, { status: 503 });
   }
 
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ structure, reel });
   } catch (e) {
     console.error('[reels generate]', (e as Error).message);
-    return NextResponse.json({ error: '릴스 기획 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }, { status: 500 });
+    const { message, status } = friendlyAIError(e);
+    return NextResponse.json({ error: message }, { status });
   }
 }

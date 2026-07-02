@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download } from 'lucide-react';
+import ReviewImportHelp from './ReviewImportHelp';
+import { usePersistentState } from '@/lib/usePersistentState';
 
 export type BranchOption = {
   id: string;
@@ -11,7 +13,14 @@ export type BranchOption = {
 };
 
 type Reply = { text: string; keywords_used: string[] };
-type CrawledReview = { author: string; date: string; rating: number | null; text: string };
+type CrawledReview = {
+  author: string;
+  date: string;
+  rating: number | null;
+  text: string;
+  designer?: string;
+  hasReply?: boolean;
+};
 
 const TREATMENTS = ['결마지', '펌', '염색', '클리닉', '컷'];
 const SMARTPLACE_URL = 'https://new.smartplace.naver.com/';
@@ -30,21 +39,48 @@ export default function ReviewStudio({
   branches: BranchOption[];
   needsBranchPick: boolean;
 }) {
-  const [review, setReview] = useState('');
-  const [chips, setChips] = useState<string[]>([]);
+  // 새로고침해도 안 날아가게 자동 임시저장
+  const [review, setReview] = usePersistentState<string>('va:review:text', '');
+  const [chips, setChips] = usePersistentState<string[]>('va:review:chips', []);
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [replies, setReplies] = useState<Reply[] | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
 
-  // 리뷰 불러오기(크롤) 상태
-  const [crawlLoading, setCrawlLoading] = useState(false);
-  const [crawlError, setCrawlError] = useState('');
+  // 북마클릿으로 가져온 리뷰 + 도움말 모달
   const [crawled, setCrawled] = useState<CrawledReview[] | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [showReplied, setShowReplied] = useState(false);
 
   const selected = branches.find((b) => b.id === branchId);
   const hasReviewLink = !!(selected?.naverPlaceId || selected?.naverShortUrl);
+
+  // 북마클릿이 넘긴 리뷰(#import=...)를 받아 목록에 세팅
+  useEffect(() => {
+    const m = window.location.hash.match(/import=([^&]+)/);
+    if (!m) return;
+    try {
+      const arr = JSON.parse(decodeURIComponent(m[1]));
+      if (Array.isArray(arr) && arr.length) {
+        setCrawled(
+          arr
+            .filter((r) => r && typeof r.text === 'string' && r.text.trim())
+            .map((r) => ({
+              text: String(r.text).trim(),
+              author: String(r.author ?? ''),
+              date: String(r.date ?? ''),
+              rating: typeof r.rating === 'number' ? r.rating : null,
+              designer: String(r.designer ?? ''),
+              hasReply: !!r.hasReply,
+            })),
+        );
+      }
+    } catch {
+      /* 잘못된 해시는 무시 */
+    }
+    history.replaceState(null, '', window.location.pathname);
+  }, []);
 
   function toggleChip(c: string) {
     setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
@@ -52,35 +88,6 @@ export default function ReviewStudio({
 
   function openReviewPage() {
     window.open(reviewLinkFor(selected), '_blank', 'noopener');
-  }
-
-  async function loadReviews() {
-    setCrawlError('');
-    setCrawled(null);
-    if (needsBranchPick && !branchId) {
-      setCrawlError('어느 지점 리뷰인지 골라주세요');
-      return;
-    }
-    setCrawlLoading(true);
-    try {
-      const res = await fetch('/api/review-crawl', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch_id: branchId || undefined }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setCrawlError(data.error || '리뷰를 불러오지 못했어요');
-      } else if (!data.reviews?.length) {
-        setCrawlError('불러올 리뷰가 없어요. "리뷰 보러가기"로 확인해주세요.');
-      } else {
-        setCrawled(data.reviews);
-      }
-    } catch {
-      setCrawlError('리뷰를 불러오는 중 문제가 생겼어요');
-    } finally {
-      setCrawlLoading(false);
-    }
   }
 
   function useReview(text: string) {
@@ -149,7 +156,7 @@ export default function ReviewStudio({
           </label>
         )}
 
-        {/* 지점 공개 리뷰 딥링크 + 불러오기 */}
+        {/* 지점 공개 리뷰 딥링크 + 자동 가져오기(북마클릿) */}
         {hasReviewLink && (
           <div className="flex flex-wrap gap-2">
             <button className="btn-ghost" onClick={openReviewPage}>
@@ -158,35 +165,76 @@ export default function ReviewStudio({
                 이 지점 리뷰 보러가기
               </span>
             </button>
-            <button className="btn-ghost" onClick={loadReviews} disabled={crawlLoading}>
+            <button className="btn-ghost" onClick={() => setImportOpen(true)}>
               <span className="inline-flex items-center gap-1.5">
-                {crawlLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                {crawlLoading ? '불러오는 중…' : '리뷰 불러오기'}
+                <Download size={16} />
+                리뷰 자동 가져오기
               </span>
             </button>
           </div>
         )}
 
-        {crawlError && <p className="text-sm text-warn">{crawlError}</p>}
+        {/* 북마클릿으로 가져온 리뷰 목록 */}
+        {crawled &&
+          crawled.length > 0 &&
+          (() => {
+            const needsReply = crawled.filter((r) => !r.hasReply);
+            const replied = crawled.filter((r) => r.hasReply);
 
-        {/* 불러온 리뷰 목록 */}
-        {crawled && crawled.length > 0 && (
-          <div className="space-y-2">
-            <span className="label">불러온 리뷰 · 눌러서 답글쓰기</span>
-            {crawled.map((r, i) => (
-              <button
-                key={i}
-                onClick={() => useReview(r.text)}
-                className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-card transition hover:border-brand"
-              >
-                <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
-                <p className="mt-1.5 text-xs text-ink-soft">
-                  {[r.author, r.rating ? `★${r.rating}` : '', r.date].filter(Boolean).join(' · ')}
-                </p>
-              </button>
-            ))}
-          </div>
-        )}
+            const meta = (r: CrawledReview) =>
+              [r.author, r.designer ? `담당 ${r.designer}` : '', r.rating ? `★${r.rating}` : '', r.date]
+                .filter(Boolean)
+                .join(' · ');
+
+            return (
+              <div className="space-y-2">
+                <span className="label">
+                  가져온 리뷰 · 눌러서 답글쓰기
+                  {needsReply.length > 0 && ` (답글 필요 ${needsReply.length}개)`}
+                </span>
+
+                {needsReply.map((r, i) => (
+                  <button
+                    key={`n${i}`}
+                    onClick={() => useReview(r.text)}
+                    className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-card transition hover:border-brand"
+                  >
+                    <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
+                    <p className="mt-1.5 text-xs text-ink-soft">{meta(r)}</p>
+                  </button>
+                ))}
+
+                {needsReply.length === 0 && (
+                  <p className="text-sm text-ink-soft">답글이 필요한 리뷰가 없어요. (모두 답글 완료)</p>
+                )}
+
+                {replied.length > 0 && (
+                  <>
+                    <button
+                      className="text-xs font-semibold text-ink-soft underline"
+                      onClick={() => setShowReplied((v) => !v)}
+                    >
+                      {showReplied ? '이미 답글 단 리뷰 접기' : `이미 답글 단 리뷰 ${replied.length}개 보기`}
+                    </button>
+                    {showReplied &&
+                      replied.map((r, i) => (
+                        <button
+                          key={`r${i}`}
+                          onClick={() => useReview(r.text)}
+                          className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left opacity-60 transition hover:opacity-100"
+                        >
+                          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-semibold text-ok">
+                            <Check size={12} /> 이미 답글 완료
+                          </span>
+                          <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
+                          <p className="mt-1.5 text-xs text-ink-soft">{meta(r)}</p>
+                        </button>
+                      ))}
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
         <label className="block">
           <span className="label">고객 리뷰 붙여넣기</span>
@@ -250,6 +298,8 @@ export default function ReviewStudio({
           </button>
         </section>
       )}
+
+      {importOpen && <ReviewImportHelp onClose={() => setImportOpen(false)} />}
     </div>
   );
 }

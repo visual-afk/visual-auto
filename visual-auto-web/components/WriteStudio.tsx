@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, RotateCw, PenLine, Pencil, Mic, Square } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
+import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
 
 const CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
@@ -41,11 +42,12 @@ export default function WriteStudio({
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
-  const [chips, setChips] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
+  // 새로고침해도 안 날아가게 자동 임시저장 (사진은 파일이라 제외)
+  const [chips, setChips, clearChips] = usePersistentState<string[]>('va:write:chips', []);
+  const [notes, setNotes, clearNotes] = usePersistentState<string>('va:write:notes', '');
   const [photos, setPhotos] = useState<File[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [topic, setTopic] = useState('');
+  const [topics, setTopics, clearTopics] = usePersistentState<Topic[]>('va:write:topics', []);
+  const [topic, setTopic, clearTopic] = usePersistentState<string>('va:write:topic', '');
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [post, setPost] = useState<Post | null>(null);
@@ -182,7 +184,12 @@ export default function WriteStudio({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
     });
-    // 4) 발행처 열기 + 조회수 입력 화면으로
+    // 4) 발행 완료 → 임시저장 초안 비우기
+    clearChips();
+    clearNotes();
+    clearTopics();
+    clearTopic();
+    // 5) 발행처 열기 + 조회수 입력 화면으로
     const url = target === 'naver' ? naverUrl : imwebUrl;
     if (url) window.open(url, '_blank');
     router.push(`/track/${post.id}`);
@@ -296,6 +303,7 @@ export default function WriteStudio({
           <button className="btn-primary" onClick={generate} disabled={generating || !topic}>
             {generating ? 'AI가 글 쓰는 중…' : '이 주제로 글쓰기'}
           </button>
+          <p className="text-xs text-ink-faint">작성 중인 내용은 자동 저장돼요. 새로고침해도 그대로 있어요.</p>
           {error && <p className="text-sm text-warn">{error}</p>}
         </section>
 
