@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember, canManage } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { sendInviteAlimtalk } from '@/lib/notifications/invites';
 
 /** 요청이 들어온 실제 도메인에서 초대 링크 베이스를 뽑는다 (로컬·Vercel 프리뷰·프로덕션 자동 대응). */
 function getOrigin(request: Request): string {
@@ -68,5 +69,19 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const link = `${getOrigin(request)}/invite/${data.token}`;
-  return NextResponse.json({ token: data.token, link });
+
+  // 연락처가 있으면 카카오 초대장 자동 발송(실패해도 초대는 유효 → 링크 복사로 안내)
+  let sent = false;
+  if (inviteeContact) {
+    const { data: b } = await admin.from('branches').select('name').eq('id', branchId).maybeSingle();
+    const r = await sendInviteAlimtalk({
+      toPhone: inviteeContact,
+      inviteeName,
+      branchName: b?.name || '',
+      token: data.token,
+    });
+    sent = r.sent;
+  }
+
+  return NextResponse.json({ token: data.token, link, sent });
 }
