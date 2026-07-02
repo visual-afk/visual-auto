@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* 모바일: 하단 탭 */}
       <div className="md:hidden">
-        <BottomTabs role={member.role} />
+        <BottomTabs role={member.role} displayName={member.displayName} branchName={member.branchName} />
       </div>
 
       {/* 캡처 억제 + 유출 추적 (인증 화면 전체에 적용) */}

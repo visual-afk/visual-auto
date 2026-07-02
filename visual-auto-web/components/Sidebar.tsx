@@ -1,44 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { PenLine, BarChart3, Users, LayoutGrid, SquarePen, Building2, Search, MessageSquare, MapPin, PieChart, GraduationCap, Film, FileCog, type LucideIcon } from 'lucide-react';
+import { SquarePen, ChevronDown, ChevronRight } from 'lucide-react';
 import { getBrowserSupabase } from '@/lib/supabase/client';
 import { roleLabel, type Role } from '@/lib/roles';
-
-type NavItem = { href: string; label: string; icon: LucideIcon };
-
-/** 역할별 메뉴 — 본사는 전사 대시보드, 그 외엔 글쓰기/성과, 관리자는 멤버관리 추가 */
-function navFor(role: Role): NavItem[] {
-  if (role === 'hq_admin') {
-    return [
-      { href: '/overview', label: '전체 현황', icon: LayoutGrid },
-      { href: '/performance', label: '성과 대시보드', icon: PieChart },
-      { href: '/branches', label: '지점 관리', icon: Building2 },
-      { href: '/keyword-research', label: '키워드 조사', icon: Search },
-      { href: '/prompts', label: '프롬프트 관리', icon: FileCog },
-      { href: '/write', label: '글쓰기', icon: PenLine },
-      { href: '/reels', label: '릴스', icon: Film },
-      { href: '/review', label: '리뷰 답글', icon: MessageSquare },
-      { href: '/track', label: '내 글·조회수', icon: BarChart3 },
-      { href: '/academy', label: '아카데미', icon: GraduationCap },
-      { href: '/attendance', label: '출근 현황', icon: MapPin },
-      { href: '/members', label: '지점·사람', icon: Users },
-    ];
-  }
-  const base: NavItem[] = [
-    { href: '/write', label: '글쓰기', icon: PenLine },
-    { href: '/reels', label: '릴스', icon: Film },
-    { href: '/review', label: '리뷰 답글', icon: MessageSquare },
-    { href: '/track', label: '내 글·조회수', icon: BarChart3 },
-    { href: '/attendance', label: '출근', icon: MapPin },
-  ];
-  if (role === 'branch_owner') {
-    base.unshift({ href: '/performance', label: '성과 대시보드', icon: PieChart });
-    base.push({ href: '/members', label: '우리 지점 사람', icon: Users });
-  }
-  return base;
-}
+import { foldersFor, DEFAULT_OPEN } from '@/lib/nav';
 
 export default function Sidebar({
   displayName,
@@ -51,7 +19,24 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const nav = navFor(role);
+  const folders = foldersFor(role);
+
+  // 초기 펼침: 역할 기본 폴더 + 현재 경로가 속한 폴더
+  const [open, setOpen] = useState<Set<string>>(() => {
+    const init = new Set<string>([DEFAULT_OPEN[role]]);
+    const active = folders.find((f) => f.items.some((i) => pathname.startsWith(i.href)));
+    if (active) init.add(active.key);
+    return init;
+  });
+
+  function toggle(key: string) {
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   async function logout() {
     await getBrowserSupabase().auth.signOut();
@@ -73,21 +58,39 @@ export default function Sidebar({
         </span>
       </Link>
 
-      <nav className="flex-1 px-3">
-        {nav.map((n) => {
-          const active = pathname.startsWith(n.href);
-          const Icon = n.icon;
+      <nav className="flex-1 overflow-y-auto px-3">
+        {folders.map((folder) => {
+          const isOpen = open.has(folder.key);
           return (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                active ? 'bg-brand-wash text-brand' : 'text-ink-soft hover:bg-canvas'
-              }`}
-            >
-              <Icon size={18} />
-              {n.label}
-            </Link>
+            <div key={folder.key} className="mb-1">
+              <button
+                onClick={() => toggle(folder.key)}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide text-ink-faint transition hover:text-ink-soft"
+              >
+                {folder.label}
+                {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {isOpen && (
+                <div className="mt-0.5">
+                  {folder.items.map((n) => {
+                    const active = pathname.startsWith(n.href);
+                    const Icon = n.icon;
+                    return (
+                      <Link
+                        key={n.href}
+                        href={n.href}
+                        className={`mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                          active ? 'bg-brand-wash text-brand' : 'text-ink-soft hover:bg-canvas'
+                        }`}
+                      >
+                        <Icon size={18} />
+                        {n.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
