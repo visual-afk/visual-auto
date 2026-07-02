@@ -132,6 +132,12 @@ export default function ReviewStudio({
     } catch {
       /* 클립보드 실패해도 스마트플레이스는 연다 */
     }
+    // 실제 사용(복사)을 코칭 카운트에 반영 — 실패해도 무시
+    fetch('/api/review-reply/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch_id: branchId || undefined }),
+    }).catch(() => {});
     window.open(SMARTPLACE_URL, '_blank', 'noopener');
   }
 

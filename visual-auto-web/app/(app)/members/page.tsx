@@ -3,9 +3,13 @@ import { headers } from 'next/headers';
 import { getMember, canManage, roleLabel, type Role } from '@/lib/auth';
 import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { aggregateTeamCoaching, type CoachingInputMember, type MemberCoaching } from '@/lib/coaching';
+import type { PeriodType } from '@/lib/metrics';
 import InviteForm from '@/components/InviteForm';
-import MemberRow from '@/components/MemberRow';
 import PendingInvite from '@/components/PendingInvite';
+import MemberCoachingCard from '@/components/MemberCoachingCard';
+import CoachingSummary from '@/components/CoachingSummary';
+import PeriodToggle from '@/components/PeriodToggle';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +35,29 @@ function roleSummary(members: MemberRow[]): string {
     .join(' · ');
 }
 
-export default async function MembersPage() {
+/** 코칭 카드 정렬: 주의(warn) 먼저 → 이름순. 비활성은 뒤로. */
+function sortForCoaching(members: MemberRow[], coaching: Map<string, MemberCoaching>): MemberRow[] {
+  return [...members].sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    const aw = coaching.get(a.user_id)?.status === 'warn' ? 0 : 1;
+    const bw = coaching.get(b.user_id)?.status === 'warn' ? 0 : 1;
+    if (aw !== bw) return aw - bw;
+    return a.display_name.localeCompare(b.display_name, 'ko');
+  });
+}
+
+export default async function MembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const member = (await getMember())!;
   if (!canManage(member.role)) redirect('/');
   const isHq = member.role === 'hq_admin';
+
+  const sp = await searchParams;
+  const period: PeriodType = sp.period === 'month' ? 'month' : 'week';
+  const periodWord = period === 'week' ? '이번 주' : '이번 달';
 
   // 멤버 이름·휴대폰을 보는 화면 → 접근 로그
   await logAccess(member, '/members', 'view_members');
@@ -65,12 +88,20 @@ export default async function MembersPage() {
   const branches = branchesData ?? [];
   const branchName = new Map(branches.map((b) => [b.id, b.name]));
 
-  // 이번 달 글 수 (author_id 별)
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const { data: monthPosts } = await admin.from('posts').select('author_id').gte('created_at', monthStart);
-  const postCount = new Map<string, number>();
-  for (const p of monthPosts ?? []) postCount.set(p.author_id, (postCount.get(p.author_id) || 0) + 1);
+  // 코칭 지표 (사람별 릴스·블로그·리뷰 + 조회수 + 저장률 → 규칙 기반 코칭)
+  const inputMembers: CoachingInputMember[] = members.map((m) => ({
+    userId: m.user_id,
+    displayName: m.display_name,
+    role: m.role,
+  }));
+  const coaching = await aggregateTeamCoaching(inputMembers, isHq ? null : member.branchId, period);
+
+  // 요약 배너: 활성 디자이너·인턴 중 주의 대상만
+  const flagged = members
+    .filter((m) => m.is_active && (m.role === 'designer' || m.role === 'intern'))
+    .map((m) => ({ m, c: coaching.get(m.user_id) }))
+    .filter((x) => x.c?.status === 'warn')
+    .map((x) => ({ name: x.m.display_name, reason: x.c!.primaryFlagLabel ?? '주의' }));
 
   // 초대 링크 베이스
   const h = await headers();
@@ -83,15 +114,23 @@ export default async function MembersPage() {
         name: b.name,
         members: members.filter((m) => m.branch_id === b.id),
         pending: pending.filter((p) => p.branch_id === b.id),
-      })) // 빈 지점도 표시 (멤버 없으면 "아직 멤버 없음" 안내 + 초대 유도)
+      }))
     : [{ key: 'mine', name: member.branchName ?? '우리 지점', members, pending }];
 
   return (
     <div className="py-6 md:py-0">
-      <h1 className="text-2xl font-bold">{isHq ? '지점·사람' : '우리 지점 사람'}</h1>
-      <p className="mt-1 text-sm text-ink-soft">
-        {isHq ? `전체 ${members.length}명` : `${member.branchName} · ${roleSummary(members) || '아직 멤버 없음'}`}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{isHq ? '지점·사람' : '우리 지점 팀'}</h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            {isHq ? `전체 ${members.length}명` : `${member.branchName} · ${roleSummary(members) || '아직 멤버 없음'}`}
+          </p>
+        </div>
+        <PeriodToggle value={period} />
+      </div>
+
+      {/* 이번 주(달) 챙길 사람 요약 */}
+      {members.length > 0 && <CoachingSummary flagged={flagged} periodWord={periodWord} />}
 
       {/* 새로 초대하기 */}
       <section className="mt-6 rounded-xl2 border border-line bg-surface p-4 shadow-card">
@@ -99,7 +138,7 @@ export default async function MembersPage() {
         <InviteForm myRole={member.role} branches={isHq ? branches : undefined} />
       </section>
 
-      {/* 지점별(본사) / 단일(원장) 멤버 목록 */}
+      {/* 지점별(본사) / 단일(원장) 코칭 카드 */}
       <div className="mt-8 space-y-8">
         {groups.map((g) => (
           <section key={g.key}>
@@ -125,37 +164,31 @@ export default async function MembersPage() {
               </div>
             )}
 
-            <div className="rounded-xl2 border border-line bg-surface">
-              <div className="grid grid-cols-[1fr_5.5rem_5rem_2rem] gap-2 border-b border-line px-4 py-2.5 text-xs font-semibold text-ink-faint">
-                <span>이름</span>
-                <span>역할</span>
-                <span>이번 달</span>
-                <span />
-              </div>
-              {g.members.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-ink-faint">아직 멤버가 없어요. 위에서 초대해보세요.</p>
-              )}
-              <ul className="divide-y divide-line">
-                {g.members.map((m) => {
+            {g.members.length === 0 ? (
+              <p className="rounded-xl2 border border-line bg-surface px-4 py-8 text-center text-sm text-ink-faint">
+                아직 멤버가 없어요. 위에서 초대해보세요.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {sortForCoaching(g.members, coaching).map((m) => {
                   const isMe = m.user_id === member.userId;
                   const canAct = !isMe && (isHq || m.role === 'designer' || m.role === 'intern');
                   return (
-                    <MemberRow
+                    <MemberCoachingCard
                       key={m.id}
                       memberId={m.id}
                       displayName={m.display_name}
-                      phone={m.phone}
                       initialRole={m.role}
                       initialActive={m.is_active}
                       isMe={isMe}
                       canAct={canAct}
                       myRole={member.role}
-                      postCount={postCount.get(m.user_id) || 0}
+                      coaching={coaching.get(m.user_id)!}
                     />
                   );
                 })}
-              </ul>
-            </div>
+              </div>
+            )}
           </section>
         ))}
       </div>

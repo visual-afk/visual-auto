@@ -12,7 +12,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
   const admin = getAdminSupabase();
   const { data: post } = await admin
     .from('posts')
-    .select('id, title, status, published_url, views, next_check_at, branch_id')
+    .select('id, title, status, published_url, views, saves, next_check_at, branch_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -32,6 +32,7 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
           id={post.id}
           initialUrl={post.published_url}
           initialViews={post.views}
+          initialSaves={post.saves}
           initialRemind={!!post.next_check_at}
         />
       </div>

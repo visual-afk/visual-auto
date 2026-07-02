@@ -45,6 +45,7 @@ export async function PATCH(request: Request) {
   if (body.action === 'record_views') {
     if (body.published_url !== undefined) patch.published_url = String(body.published_url).trim();
     if (body.views !== undefined) patch.views = Number(body.views) || 0;
+    if (body.saves !== undefined) patch.saves = body.saves === '' || body.saves == null ? null : Number(body.saves) || 0;
     patch.views_updated_at = new Date().toISOString();
     if (patch.status == null) patch.status = 'published';
     if (body.remind) {

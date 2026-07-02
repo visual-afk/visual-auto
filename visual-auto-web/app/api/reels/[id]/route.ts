@@ -30,6 +30,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .update({
         published_url: body.published_url ?? undefined,
         views: typeof body.views === 'number' ? body.views : undefined,
+        saves: typeof body.saves === 'number' ? body.saves : undefined,
         views_updated_at: new Date().toISOString(),
         next_check_at: next,
       })

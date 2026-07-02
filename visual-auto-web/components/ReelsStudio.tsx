@@ -45,6 +45,8 @@ export default function ReelsStudio({
   const [reelId, setReelId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState('');
+  const [viewsInput, setViewsInput] = useState('');
+  const [savesInput, setSavesInput] = useState('');
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -150,7 +152,13 @@ export default function ReelsStudio({
     await fetch(`/api/reels/${reelId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'record_views', published_url: publishedUrl, next_check: true }),
+      body: JSON.stringify({
+        action: 'record_views',
+        published_url: publishedUrl,
+        ...(viewsInput ? { views: Number(viewsInput) } : {}),
+        ...(savesInput ? { saves: Number(savesInput) } : {}),
+        next_check: true,
+      }),
     });
     // 등록 완료 → 임시저장 초안 비우기
     clearAnalysis();
@@ -268,6 +276,23 @@ export default function ReelsStudio({
               <span className="inline-flex items-center gap-1.5"><Camera size={18} /> 인스타 열어서 올리기 (대본 복사됨)</span>
             </button>
             <input className="field mt-3" value={publishedUrl} onChange={(e) => setPublishedUrl(e.target.value)} placeholder="올린 릴스 주소 붙여넣기" />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input
+                className="field"
+                inputMode="numeric"
+                value={viewsInput}
+                onChange={(e) => setViewsInput(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="조회수 (선택)"
+              />
+              <input
+                className="field"
+                inputMode="numeric"
+                value={savesInput}
+                onChange={(e) => setSavesInput(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="저장 수 (선택)"
+              />
+            </div>
+            <p className="mt-1 text-xs text-ink-faint">저장 수까지 넣으면 &quot;저장률&quot;이 잡혀요. 며칠 뒤 조회수만 다시 넣어도 돼요.</p>
             <button className="btn-ghost mt-2" onClick={registerLink} disabled={!reelId}>링크 등록하고 추적 시작</button>
             {msg && <p className="mt-2 text-sm text-ok">{msg}</p>}
           </div>
