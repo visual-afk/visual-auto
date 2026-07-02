@@ -9,7 +9,7 @@ import { X, MousePointerClick, ExternalLink } from 'lucide-react';
  * fetch 가 아니라 페이지 이동이라 네이버 CSP/CORS 에 안 걸린다.
  * __APP_ORIGIN__ 은 렌더 시점의 window.location.origin 으로 치환.
  */
-const BOOKMARKLET_SRC = `javascript:(function(){var L=document.querySelectorAll('#_review_list > li');document.querySelectorAll('#_review_list a[class*="pui__jhpEyP"]').forEach(function(b){try{b.click()}catch(e){}});setTimeout(function(){var o=[];L.forEach(function(li){var t=li.querySelector('[class*="pui__vn15t2"]');if(!t)return;var a=li.querySelector('[class*="pui__uslU0d"] [class*="pui__NMi-Dp"]');var d=li.querySelector('[class*="pui__QKE5Pr"] .place_blind');o.push({text:(t.innerText||'').trim(),author:a?a.innerText.trim():'',date:d?d.innerText.trim():'',rating:null})});if(!o.length){alert('리뷰를 못 찾았어요. 리뷰 탭에서 리뷰가 보이게 스크롤한 뒤 다시 눌러주세요.');return}window.open('__APP_ORIGIN__/review#import='+encodeURIComponent(JSON.stringify(o.slice(0,30))),'_blank')},400)})();`;
+const BOOKMARKLET_SRC = `javascript:(function(){var L=document.querySelectorAll('#_review_list > li');document.querySelectorAll('#_review_list a[class*="pui__jhpEyP"]').forEach(function(b){try{b.click()}catch(e){}});setTimeout(function(){var o=[];L.forEach(function(li){var t=li.querySelector('[class*="pui__vn15t2"]');if(!t)return;var a=li.querySelector('[class*="pui__uslU0d"] [class*="pui__NMi-Dp"]');var d=li.querySelector('[class*="pui__QKE5Pr"] .place_blind');var g=li.querySelector('[class*="pui__ETqMYH"]');var rep=li.querySelector('[class*="pui__GbW8H7"]');o.push({text:(t.innerText||'').trim(),author:a?a.innerText.trim():'',date:d?d.innerText.trim():'',rating:null,designer:g?g.innerText.trim():'',hasReply:!!rep})});if(!o.length){alert('리뷰를 못 찾았어요. 리뷰 탭에서 리뷰가 보이게 스크롤한 뒤 다시 눌러주세요.');return}window.open('__APP_ORIGIN__/review#import='+encodeURIComponent(JSON.stringify(o.slice(0,30))),'_blank')},400)})();`;
 
 export default function ReviewImportHelp({ onClose }: { onClose: () => void }) {
   const linkRef = useRef<HTMLAnchorElement>(null);
@@ -70,6 +70,7 @@ export default function ReviewImportHelp({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mt-3 text-xs text-ink-soft">
+          기능이 바뀌면 위 <b>&quot;리뷰 가져오기&quot;</b>를 북마크바에 <b>다시 끌어다</b> 놓아주세요(예전 버튼은 지우고).
           안 되면 알려주세요. (네이버가 페이지 구조를 바꾸면 버튼을 새로 받아야 할 수 있어요.)
         </p>
         {origin && (

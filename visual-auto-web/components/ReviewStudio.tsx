@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download } from 'lucide-react';
 import ReviewImportHelp from './ReviewImportHelp';
+import { usePersistentState } from '@/lib/usePersistentState';
 
 export type BranchOption = {
   id: string;
@@ -12,7 +13,14 @@ export type BranchOption = {
 };
 
 type Reply = { text: string; keywords_used: string[] };
-type CrawledReview = { author: string; date: string; rating: number | null; text: string };
+type CrawledReview = {
+  author: string;
+  date: string;
+  rating: number | null;
+  text: string;
+  designer?: string;
+  hasReply?: boolean;
+};
 
 const TREATMENTS = ['결마지', '펌', '염색', '클리닉', '컷'];
 const SMARTPLACE_URL = 'https://new.smartplace.naver.com/';
@@ -31,8 +39,9 @@ export default function ReviewStudio({
   branches: BranchOption[];
   needsBranchPick: boolean;
 }) {
-  const [review, setReview] = useState('');
-  const [chips, setChips] = useState<string[]>([]);
+  // 새로고침해도 안 날아가게 자동 임시저장
+  const [review, setReview] = usePersistentState<string>('va:review:text', '');
+  const [chips, setChips] = usePersistentState<string[]>('va:review:chips', []);
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +51,7 @@ export default function ReviewStudio({
   // 북마클릿으로 가져온 리뷰 + 도움말 모달
   const [crawled, setCrawled] = useState<CrawledReview[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [showReplied, setShowReplied] = useState(false);
 
   const selected = branches.find((b) => b.id === branchId);
   const hasReviewLink = !!(selected?.naverPlaceId || selected?.naverShortUrl);
@@ -61,6 +71,8 @@ export default function ReviewStudio({
               author: String(r.author ?? ''),
               date: String(r.date ?? ''),
               rating: typeof r.rating === 'number' ? r.rating : null,
+              designer: String(r.designer ?? ''),
+              hasReply: !!r.hasReply,
             })),
         );
       }
@@ -163,23 +175,66 @@ export default function ReviewStudio({
         )}
 
         {/* 북마클릿으로 가져온 리뷰 목록 */}
-        {crawled && crawled.length > 0 && (
-          <div className="space-y-2">
-            <span className="label">가져온 리뷰 · 눌러서 답글쓰기</span>
-            {crawled.map((r, i) => (
-              <button
-                key={i}
-                onClick={() => useReview(r.text)}
-                className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-card transition hover:border-brand"
-              >
-                <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
-                <p className="mt-1.5 text-xs text-ink-soft">
-                  {[r.author, r.rating ? `★${r.rating}` : '', r.date].filter(Boolean).join(' · ')}
-                </p>
-              </button>
-            ))}
-          </div>
-        )}
+        {crawled &&
+          crawled.length > 0 &&
+          (() => {
+            const needsReply = crawled.filter((r) => !r.hasReply);
+            const replied = crawled.filter((r) => r.hasReply);
+
+            const meta = (r: CrawledReview) =>
+              [r.author, r.designer ? `담당 ${r.designer}` : '', r.rating ? `★${r.rating}` : '', r.date]
+                .filter(Boolean)
+                .join(' · ');
+
+            return (
+              <div className="space-y-2">
+                <span className="label">
+                  가져온 리뷰 · 눌러서 답글쓰기
+                  {needsReply.length > 0 && ` (답글 필요 ${needsReply.length}개)`}
+                </span>
+
+                {needsReply.map((r, i) => (
+                  <button
+                    key={`n${i}`}
+                    onClick={() => useReview(r.text)}
+                    className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left shadow-card transition hover:border-brand"
+                  >
+                    <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
+                    <p className="mt-1.5 text-xs text-ink-soft">{meta(r)}</p>
+                  </button>
+                ))}
+
+                {needsReply.length === 0 && (
+                  <p className="text-sm text-ink-soft">답글이 필요한 리뷰가 없어요. (모두 답글 완료)</p>
+                )}
+
+                {replied.length > 0 && (
+                  <>
+                    <button
+                      className="text-xs font-semibold text-ink-soft underline"
+                      onClick={() => setShowReplied((v) => !v)}
+                    >
+                      {showReplied ? '이미 답글 단 리뷰 접기' : `이미 답글 단 리뷰 ${replied.length}개 보기`}
+                    </button>
+                    {showReplied &&
+                      replied.map((r, i) => (
+                        <button
+                          key={`r${i}`}
+                          onClick={() => useReview(r.text)}
+                          className="block w-full rounded-xl2 border border-line bg-surface p-3 text-left opacity-60 transition hover:opacity-100"
+                        >
+                          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-semibold text-ok">
+                            <Check size={12} /> 이미 답글 완료
+                          </span>
+                          <p className="line-clamp-3 whitespace-pre-wrap text-sm">{r.text}</p>
+                          <p className="mt-1.5 text-xs text-ink-soft">{meta(r)}</p>
+                        </button>
+                      ))}
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
         <label className="block">
           <span className="label">고객 리뷰 붙여넣기</span>
