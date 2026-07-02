@@ -18,6 +18,7 @@
 | 강남신사점 | https://naver.me/G8hvr7IB |
 | 부산 서면전포점 | https://naver.me/x1uuPQij |
 | 부천신중동점 | https://naver.me/x8tpU9lu |
+| 서초방배점 | https://naver.me/5hoToKaa |
 
 ## SNS
 
