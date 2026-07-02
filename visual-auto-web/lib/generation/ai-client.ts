@@ -165,6 +165,8 @@ export interface AICallOptions {
   temperature?: number;
   /** JSON 응답을 API 레벨에서 강제한다(프롬프트 지시만으론 모델이 산문을 뱉는 경우 방지). */
   json?: boolean;
+  /** 이미지 입력(스크린샷 OCR 등). base64 는 순수 데이터(data: 접두어 없이). */
+  image?: { base64: string; mimeType: string };
 }
 
 export interface AIResult {
@@ -258,7 +260,10 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
       json: opts.json,
     }),
   });
-  const result = await model.generateContent(opts.userMessage);
+  const content = opts.image
+    ? [{ text: opts.userMessage }, { inlineData: { mimeType: opts.image.mimeType, data: opts.image.base64 } }]
+    : opts.userMessage;
+  const result = await model.generateContent(content);
   const usage = result.response.usageMetadata;
   assertNotTruncated(result.response.candidates?.[0]?.finishReason);
   return {
