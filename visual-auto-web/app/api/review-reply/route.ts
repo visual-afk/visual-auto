@@ -66,7 +66,7 @@ export async function POST(request: Request) {
         '위 리뷰에 다는 답글 후보 2~3개를 JSON으로.',
       ].join('\n'),
       temperature: 0.8,
-      maxTokens: 900,
+      maxTokens: 2048,
       json: true,
     });
     const parsed = parseJsonResponse<{ replies: Reply[] }>(result.text);
