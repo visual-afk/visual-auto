@@ -29,7 +29,8 @@ export default function PerformanceDashboard({
   branchName,
   branchOpts,
   isHq,
-  lastSyncedAt,
+  canPickBranch,
+  syncedLabel,
 }: {
   data: BranchDashboard;
   period: PeriodType;
@@ -37,8 +38,11 @@ export default function PerformanceDashboard({
   branchName: string | null;
   branchOpts: BranchOpt[];
   isHq: boolean;
-  lastSyncedAt: string | null;
+  /** 지점 선택 드롭다운 노출 (본사 or 여러 지점 소속). 기본값 = isHq */
+  canPickBranch?: boolean;
+  syncedLabel: string;
 }) {
+  const showPicker = canPickBranch ?? isHq;
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [msg, setMsg] = useState('');
@@ -72,9 +76,7 @@ export default function PerformanceDashboard({
     }
   }
 
-  const synced = lastSyncedAt
-    ? new Date(lastSyncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '동기화 없음';
+  const synced = syncedLabel;
 
   const f = data.funnel;
   const toneCls: Record<string, string> = {
@@ -101,9 +103,9 @@ export default function PerformanceDashboard({
         </button>
       </div>
 
-      {/* 컨트롤: 지점(본사) + 기간 */}
+      {/* 컨트롤: 지점(본사·멀티지점) + 기간 */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {isHq && (
+        {showPicker && (
           <select className="field w-auto py-2" value={branchId} onChange={(e) => go({ branch: e.target.value })}>
             {branchOpts.map((b) => (
               <option key={b.id} value={b.id}>

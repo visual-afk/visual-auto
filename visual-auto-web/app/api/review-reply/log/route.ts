@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireMember, canActOnBranch } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 
 /**
@@ -13,7 +13,8 @@ export async function POST(request: Request) {
   const { member } = res;
 
   const body = await request.json().catch(() => ({}));
-  const branchId = member.role === 'hq_admin' ? body.branch_id || member.branchId : member.branchId;
+  const branchId =
+    body.branch_id && canActOnBranch(member, body.branch_id) ? body.branch_id : member.branchId;
 
   const supabase = await getServerSupabase();
   const { error } = await supabase

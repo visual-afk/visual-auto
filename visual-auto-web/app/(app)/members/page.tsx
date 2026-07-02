@@ -54,6 +54,8 @@ export default async function MembersPage({
   const member = (await getMember())!;
   if (!canManage(member.role)) redirect('/');
   const isHq = member.role === 'hq_admin';
+  // 본사(전 지점) 또는 여러 지점 소속이면 지점별로 그룹핑해서 보여준다.
+  const showGroups = isHq || member.branchIds.length > 1;
 
   const sp = await searchParams;
   const period: PeriodType = sp.period === 'month' ? 'month' : 'week';
@@ -69,7 +71,7 @@ export default async function MembersPage({
     .from('branch_users')
     .select('id, user_id, display_name, phone, role, is_active, branch_id')
     .order('created_at');
-  if (!isHq) mq = mq.eq('branch_id', member.branchId!);
+  if (!isHq) mq = mq.in('branch_id', member.branchIds);
   const { data: membersData } = await mq;
   const members = (membersData ?? []) as MemberRow[];
 
@@ -79,7 +81,7 @@ export default async function MembersPage({
     .select('id, token, invitee_name, role, branch_id')
     .eq('status', 'sent')
     .order('created_at', { ascending: false });
-  if (!isHq) iq = iq.eq('branch_id', member.branchId!);
+  if (!isHq) iq = iq.in('branch_id', member.branchIds);
   const { data: pendingData } = await iq;
   const pending = (pendingData ?? []) as PendingRow[];
 
@@ -88,13 +90,33 @@ export default async function MembersPage({
   const branches = branchesData ?? [];
   const branchName = new Map(branches.map((b) => [b.id, b.name]));
 
+  // 내가 배정(지점 추가/제거)할 수 있는 지점 (본사=전체 / 원장=소속 지점)
+  const assignableBranches = isHq ? branches : branches.filter((b) => member.branchIds.includes(b.id));
+
+  // 각 멤버가 현재 소속된 지점 집합 (지점 배정 UI 초기값) — user_id → branch_id[]
+  const memberBranchMap = new Map<string, string[]>();
+  if (members.length > 0) {
+    const { data: mbRows } = await admin
+      .from('member_branches')
+      .select('user_id, branch_id')
+      .in(
+        'user_id',
+        members.map((m) => m.user_id),
+      );
+    for (const r of (mbRows ?? []) as { user_id: string; branch_id: string }[]) {
+      const arr = memberBranchMap.get(r.user_id) ?? [];
+      arr.push(r.branch_id);
+      memberBranchMap.set(r.user_id, arr);
+    }
+  }
+
   // 코칭 지표 (사람별 릴스·블로그·리뷰 + 조회수 + 저장률 → 규칙 기반 코칭)
   const inputMembers: CoachingInputMember[] = members.map((m) => ({
     userId: m.user_id,
     displayName: m.display_name,
     role: m.role,
   }));
-  const coaching = await aggregateTeamCoaching(inputMembers, isHq ? null : member.branchId, period);
+  const coaching = await aggregateTeamCoaching(inputMembers, isHq ? null : member.branchIds, period);
 
   // 요약 배너: 활성 디자이너·인턴 중 주의 대상만
   const flagged = members
@@ -107,9 +129,12 @@ export default async function MembersPage({
   const h = await headers();
   const origin = `${h.get('x-forwarded-proto') || 'http'}://${h.get('host')}`;
 
-  // 본사면 지점별 그룹, 원장이면 단일 그룹
-  const groups = isHq
-    ? branches.map((b) => ({
+  // 본사=전 지점 / 멀티지점 원장=소속 지점별 그룹 / 단일지점 원장=단일 그룹
+  const groupBranches = isHq
+    ? branches
+    : branches.filter((b) => member.branchIds.includes(b.id));
+  const groups = showGroups
+    ? groupBranches.map((b) => ({
         key: b.id,
         name: b.name,
         members: members.filter((m) => m.branch_id === b.id),
@@ -135,14 +160,14 @@ export default async function MembersPage({
       {/* 새로 초대하기 */}
       <section className="mt-6 rounded-xl2 border border-line bg-surface p-4 shadow-card">
         <h2 className="mb-3 text-base font-bold">새로 초대하기</h2>
-        <InviteForm myRole={member.role} branches={isHq ? branches : undefined} />
+        <InviteForm myRole={member.role} branches={showGroups ? assignableBranches : undefined} />
       </section>
 
       {/* 지점별(본사) / 단일(원장) 코칭 카드 */}
       <div className="mt-8 space-y-8">
         {groups.map((g) => (
           <section key={g.key}>
-            {isHq && (
+            {showGroups && (
               <h2 className="mb-2 text-lg font-bold">
                 {g.name}
                 <span className="ml-2 text-sm font-normal text-ink-soft">{roleSummary(g.members)}</span>
@@ -158,7 +183,7 @@ export default async function MembersPage({
                     inviteeName={p.invitee_name}
                     role={p.role}
                     link={`${origin}/invite/${p.token}`}
-                    branchName={isHq ? branchName.get(p.branch_id ?? '') : null}
+                    branchName={showGroups ? branchName.get(p.branch_id ?? '') : null}
                   />
                 ))}
               </div>
@@ -184,6 +209,9 @@ export default async function MembersPage({
                       canAct={canAct}
                       myRole={member.role}
                       coaching={coaching.get(m.user_id)!}
+                      assignableBranches={showGroups ? assignableBranches : []}
+                      currentBranchIds={memberBranchMap.get(m.user_id) ?? (m.branch_id ? [m.branch_id] : [])}
+                      homeBranchId={m.branch_id}
                     />
                   );
                 })}

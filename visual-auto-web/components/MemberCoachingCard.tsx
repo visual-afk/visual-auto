@@ -26,6 +26,9 @@ export default function MemberCoachingCard({
   canAct,
   myRole,
   coaching,
+  assignableBranches = [],
+  currentBranchIds = [],
+  homeBranchId = null,
 }: {
   memberId: string;
   displayName: string;
@@ -35,6 +38,9 @@ export default function MemberCoachingCard({
   canAct: boolean;
   myRole: Role;
   coaching: MemberCoaching;
+  assignableBranches?: { id: string; name: string }[];
+  currentBranchIds?: string[];
+  homeBranchId?: string | null;
 }) {
   const [role, setRole] = useState<Role>(initialRole);
   const [isActive, setIsActive] = useState(initialActive);
@@ -100,6 +106,9 @@ export default function MemberCoachingCard({
               onRoleChange={setRole}
               onActiveChange={setIsActive}
               onDelete={() => setDeleted(true)}
+              assignableBranches={assignableBranches}
+              currentBranchIds={currentBranchIds}
+              homeBranchId={homeBranchId}
             />
           )}
         </span>

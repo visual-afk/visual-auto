@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember, canManage } from '@/lib/auth';
+import { requireMember, canManage, canActOnBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { sendInviteAlimtalk } from '@/lib/notifications/invites';
 
@@ -18,7 +18,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .eq('id', id)
     .maybeSingle();
   if (!invite) return NextResponse.json({ error: '초대를 찾을 수 없어요' }, { status: 404 });
-  if (member.role === 'branch_owner' && invite.branch_id !== member.branchId) {
+  if (!canActOnBranch(member, invite.branch_id)) {
     return NextResponse.json({ error: '다른 지점 초대는 보낼 수 없어요' }, { status: 403 });
   }
   if (!invite.invitee_contact) {
@@ -50,7 +50,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .eq('id', id)
     .maybeSingle();
   if (!invite) return NextResponse.json({ error: '초대를 찾을 수 없어요' }, { status: 404 });
-  if (member.role === 'branch_owner' && invite.branch_id !== member.branchId) {
+  if (!canActOnBranch(member, invite.branch_id)) {
     return NextResponse.json({ error: '다른 지점 초대는 취소할 수 없어요' }, { status: 403 });
   }
 

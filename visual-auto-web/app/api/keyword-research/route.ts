@@ -105,10 +105,10 @@ export async function GET(request: Request) {
     .order('period', { ascending: false })
     .order('branch_label', { ascending: true });
 
-  // 본사 외엔 자기 지점만
+  // 본사 외엔 자기 지점(들)만
   if (member.role !== 'hq_admin') {
-    if (!member.branchId) return NextResponse.json({ sets: [] });
-    query = query.eq('branch_id', member.branchId);
+    if (member.branchIds.length === 0) return NextResponse.json({ sets: [] });
+    query = query.in('branch_id', member.branchIds);
   } else if (branchId) {
     query = query.eq('branch_id', branchId);
   }

@@ -13,8 +13,9 @@ export interface MemberContext {
   phone: string | null; // 휴대폰(=로그인 아이디). 워터마크 식별자에 뒷4자리 사용
   role: Role;
   isActive: boolean;
-  branchId: string | null;
+  branchId: string | null; // 홈/기본 지점 (신원 표시·기본 선택값)
   branchName: string | null;
+  branchIds: string[]; // 활동 가능한 전체 지점 (홈 ∪ member_branches). 본사는 [] (전 지점)
   region: string | null;
   naverBlogUrl: string | null; // 지점 공용 네이버(레거시/폴백)
   imwebUrl: string | null; // 지점 공용 아임웹 (발행 '아임웹 열기' 대상)
@@ -53,6 +54,18 @@ export async function getMember(): Promise<MemberContext | null> {
     .maybeSingle();
   const myNaverUrl = (blogRow as { naver_blog_url?: string | null } | null)?.naver_blog_url ?? null;
 
+  // 활동 가능한 전체 지점 (홈 ∪ member_branches). best-effort: 테이블 없기 전에도 안 깨지게.
+  let branchIds: string[] = member.branch_id ? [member.branch_id] : [];
+  const { data: mbRows } = await admin
+    .from('member_branches')
+    .select('branch_id')
+    .eq('user_id', user.id);
+  if (mbRows && mbRows.length > 0) {
+    const set = new Set<string>(branchIds);
+    for (const r of mbRows as { branch_id: string }[]) if (r.branch_id) set.add(r.branch_id);
+    branchIds = [...set];
+  }
+
   return {
     userId: user.id,
     memberId: member.id,
@@ -62,6 +75,7 @@ export async function getMember(): Promise<MemberContext | null> {
     isActive: member.is_active,
     branchId: member.branch_id,
     branchName: branch?.name ?? null,
+    branchIds,
     region: branch?.region ?? null,
     naverBlogUrl: branch?.naver_blog_url ?? null,
     imwebUrl: branch?.imweb_url ?? null,
@@ -78,4 +92,46 @@ export async function requireMember(): Promise<
     return { error: NextResponse.json({ error: '로그인이 필요해요' }, { status: 401 }) };
   }
   return { member };
+}
+
+/** 이 멤버가 해당 지점에서 행동할 수 있나? (본사 = 전 지점 / 그 외 = 소속 지점 집합) */
+export function canActOnBranch(member: MemberContext, branchId: string | null | undefined): boolean {
+  if (!branchId) return false;
+  if (member.role === 'hq_admin') return true;
+  return member.branchIds.includes(branchId);
+}
+
+/** 여러 지점 소속인가? (본사 or 활동 지점 2개 이상 → 글쓰기 등에서 지점 선택 필요) */
+export function isMultiBranch(member: MemberContext): boolean {
+  return member.role === 'hq_admin' || member.branchIds.length > 1;
+}
+
+/**
+ * 글쓰기/생성 계열에서 "어느 지점으로 쓸지" 결정.
+ * - 본사 or 멀티 지점: body.branch_id 필수 + 소속(본사는 전체) 검증
+ * - 단일 지점: 홈 지점 기본값
+ */
+export async function resolveWriteBranch(
+  member: MemberContext,
+  bodyBranchId: string | null | undefined,
+): Promise<{ branchId: string; branchName: string | null } | { error: NextResponse }> {
+  if (isMultiBranch(member)) {
+    if (!bodyBranchId) {
+      return { error: NextResponse.json({ error: '어느 지점으로 할지 골라주세요' }, { status: 400 }) };
+    }
+    if (!canActOnBranch(member, bodyBranchId)) {
+      return { error: NextResponse.json({ error: '소속되지 않은 지점이에요' }, { status: 403 }) };
+    }
+    const { data: b } = await getAdminSupabase()
+      .from('branches')
+      .select('id, name')
+      .eq('id', bodyBranchId)
+      .maybeSingle();
+    if (!b) return { error: NextResponse.json({ error: '지점을 찾을 수 없어요' }, { status: 400 }) };
+    return { branchId: b.id, branchName: b.name };
+  }
+  if (!member.branchId) {
+    return { error: NextResponse.json({ error: '지점이 없는 계정이에요' }, { status: 400 }) };
+  }
+  return { branchId: member.branchId, branchName: member.branchName };
 }

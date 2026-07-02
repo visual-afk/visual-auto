@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getMember } from '@/lib/auth';
+import { getMember, canActOnBranch } from '@/lib/auth';
 import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import ViewsForm from '@/components/ViewsForm';
@@ -16,8 +16,8 @@ export default async function TrackDetailPage({ params }: { params: Promise<{ id
     .eq('id', id)
     .maybeSingle();
 
-  // 같은 지점만 접근 (본사는 전체)
-  if (!post || (member.role !== 'hq_admin' && post.branch_id !== member.branchId)) notFound();
+  // 같은 지점(들)만 접근 (본사는 전체)
+  if (!post || !canActOnBranch(member, post.branch_id)) notFound();
 
   // 글 상세 조회 → 접근 로그
   await logAccess(member, `/track/${id}`, 'view_post');

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireMember, canActOnBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { callAI, loadFileSafeFor, loadBranchKnowledgeFor, loadPromptFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { loadKeywordContext } from '@/lib/generation/keywords';
@@ -16,10 +16,10 @@ export async function POST(request: Request) {
   const chips: string[] = body.treatment_chips || [];
   const notes: string = body.user_notes || '';
 
-  // 본사는 고른 지점 기준, 그 외엔 본인 지점
+  // 본사·멀티지점은 고른 지점(소속 검증), 그 외엔 본인 지점
   let branchName = member.branchName;
   let branchId = member.branchId;
-  if (member.role === 'hq_admin' && body.branch_id) {
+  if (body.branch_id && canActOnBranch(member, body.branch_id)) {
     const { data: b } = await getAdminSupabase()
       .from('branches')
       .select('id, name')

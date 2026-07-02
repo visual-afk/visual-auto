@@ -36,33 +36,42 @@ export async function POST(request: Request) {
 
   const admin = getAdminSupabase();
 
-  // 지점 좌표 조회 → 지오펜스 판정
-  let branchLat: number | null = null;
-  let branchLng: number | null = null;
-  let radiusM = 200;
+  // 소속 지점(들) 중 현재 위치가 속한 지점을 고른다. (방지성처럼 여러 지점 근무 대응)
+  // within=true 인 지점 우선, 없으면 가장 가까운 지점(에러 메시지·거리용).
+  const branchIds = member.branchIds.length > 0 ? member.branchIds : member.branchId ? [member.branchId] : [];
+  let resolvedBranchId: string | null = member.branchId;
   let branchName: string | null = member.branchName;
-  if (member.branchId) {
-    const { data: branch } = await admin
+  let distanceM: number | null = null;
+  let within: boolean | null = null;
+  if (branchIds.length > 0) {
+    const { data: brs } = await admin
       .from('branches')
-      .select('name, lat, lng, geofence_radius_m')
-      .eq('id', member.branchId)
-      .maybeSingle();
-    if (branch) {
-      branchLat = branch.lat != null ? Number(branch.lat) : null;
-      branchLng = branch.lng != null ? Number(branch.lng) : null;
-      radiusM = branch.geofence_radius_m ?? 200;
-      branchName = branch.name ?? branchName;
+      .select('id, name, lat, lng, geofence_radius_m')
+      .in('id', branchIds);
+    let best: { id: string; name: string | null; distanceM: number | null; within: boolean | null } | null = null;
+    for (const b of brs ?? []) {
+      const ev = evaluateGeofence({
+        branchLat: b.lat != null ? Number(b.lat) : null,
+        branchLng: b.lng != null ? Number(b.lng) : null,
+        radiusM: b.geofence_radius_m ?? 200,
+        lat,
+        lng,
+        accuracyM: accuracy,
+      });
+      const cand = { id: b.id, name: b.name ?? null, distanceM: ev.distanceM, within: ev.within };
+      if (ev.within === true) { best = cand; break; } // 범위 안이면 확정
+      // 그 외엔 가장 가까운 후보 유지 (거리 미상은 최후순위)
+      if (!best || (cand.distanceM != null && (best.distanceM == null || cand.distanceM < best.distanceM))) {
+        best = cand;
+      }
+    }
+    if (best) {
+      resolvedBranchId = best.id;
+      branchName = best.name ?? member.branchName;
+      distanceM = best.distanceM;
+      within = best.within;
     }
   }
-
-  const { distanceM, within } = evaluateGeofence({
-    branchLat,
-    branchLng,
-    radiusM,
-    lat,
-    lng,
-    accuracyM: accuracy,
-  });
 
   // 지점 좌표가 설정돼 있는데 범위 밖이면 기록하지 않고 막는다(강제)
   if (within === false) {
@@ -101,7 +110,7 @@ export async function POST(request: Request) {
     }
     // 사진 업로드 (비공개 버킷, 서버 admin)
     const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-    const key = `${member.branchId || 'nobranch'}/${member.memberId}/${Date.now()}.${ext}`;
+    const key = `${resolvedBranchId || 'nobranch'}/${member.memberId}/${Date.now()}.${ext}`;
     const buf = Buffer.from(await photo.arrayBuffer());
     const { error: upErr } = await admin.storage
       .from(BUCKET)
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
     .insert({
       member_id: member.memberId,
       user_id: member.userId,
-      branch_id: member.branchId,
+      branch_id: resolvedBranchId,
       display_name: member.displayName,
       event_type: eventType,
       lat,
@@ -141,7 +150,7 @@ export async function POST(request: Request) {
   // 출근 시 점장/본사에 카카오 알림 (best-effort)
   if (eventType === 'check_in') {
     void sendCheckInAlimtalk({
-      branchId: member.branchId,
+      branchId: resolvedBranchId,
       branchName,
       displayName: member.displayName,
       time: kstTimeHHmm(event.created_at),
@@ -185,8 +194,8 @@ export async function GET(request: Request) {
   // scope별 가시 범위 — 권한 밖 요청은 자기 것으로 강등
   if (scope === 'all' && member.role === 'hq_admin') {
     // 전체 (필터 없음)
-  } else if (scope === 'team' && (member.role === 'branch_owner' || member.role === 'hq_admin') && member.branchId) {
-    query = query.eq('branch_id', member.branchId);
+  } else if (scope === 'team' && (member.role === 'branch_owner' || member.role === 'hq_admin') && member.branchIds.length > 0) {
+    query = query.in('branch_id', member.branchIds);
   } else {
     query = query.eq('member_id', member.memberId);
   }

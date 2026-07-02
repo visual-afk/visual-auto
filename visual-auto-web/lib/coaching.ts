@@ -60,7 +60,7 @@ export interface CoachingInputMember {
  */
 export async function aggregateTeamCoaching(
   members: CoachingInputMember[],
-  branchId: string | null,
+  branchId: string | string[] | null,
   period: PeriodType,
   ref?: string,
 ): Promise<Map<string, MemberCoaching>> {
@@ -86,10 +86,11 @@ export async function aggregateTeamCoaching(
     .select('author_id')
     .gte('created_at', startTs)
     .lte('created_at', endTs);
-  if (branchId) {
-    reelsQ = reelsQ.eq('branch_id', branchId);
-    postsQ = postsQ.eq('branch_id', branchId);
-    logsQ = logsQ.eq('branch_id', branchId);
+  const branchIds = Array.isArray(branchId) ? branchId : branchId ? [branchId] : [];
+  if (branchIds.length > 0) {
+    reelsQ = reelsQ.in('branch_id', branchIds);
+    postsQ = postsQ.in('branch_id', branchIds);
+    logsQ = logsQ.in('branch_id', branchIds);
   }
 
   const [reelsRes, postsRes, logsRes] = await Promise.all([reelsQ, postsQ, logsQ]);

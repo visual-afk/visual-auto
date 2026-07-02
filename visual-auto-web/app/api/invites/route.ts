@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember, canManage } from '@/lib/auth';
+import { requireMember, canManage, canActOnBranch, isMultiBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { sendInviteAlimtalk } from '@/lib/notifications/invites';
 
@@ -23,7 +23,7 @@ export async function GET() {
 
   const admin = getAdminSupabase();
   let q = admin.from('invites').select('*').order('created_at', { ascending: false });
-  if (member.role === 'branch_owner') q = q.eq('branch_id', member.branchId!);
+  if (member.role !== 'hq_admin') q = q.in('branch_id', member.branchIds);
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ invites: data });
@@ -47,14 +47,67 @@ export async function POST(request: Request) {
     member.role === 'hq_admin' ? ['branch_owner', 'designer', 'intern'] : ['designer', 'intern'];
   const role: string = allowedRoles.includes(body.role) ? body.role : 'designer';
 
-  // 원장은 자기 지점에만, 본사는 body.branch_id 지정 필수
-  const branchId =
-    member.role === 'hq_admin' && body.branch_id ? body.branch_id : member.branchId;
+  // 지점 결정: 본사/멀티지점은 body.branch_id 지정(소속 검증), 단일지점 원장은 자기 지점
+  let branchId: string | null;
+  if (isMultiBranch(member)) {
+    branchId = body.branch_id || null;
+    if (!branchId) return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+    if (!canActOnBranch(member, branchId)) {
+      return NextResponse.json({ error: '소속되지 않은 지점이에요' }, { status: 403 });
+    }
+  } else {
+    branchId = member.branchId;
+  }
   if (!branchId) {
     return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
   }
 
   const admin = getAdminSupabase();
+
+  // 휴대폰 번호 정규화 (중복 방지·기존 계정 조회 키)
+  const phone = inviteeContact.replace(/[^0-9]/g, '');
+
+  // ── "각 지점당 한 번만" 가드 ──────────────────────────────────────
+  if (phone) {
+    // 1) 이미 이 사람이 계정을 가지고 있으면 → 새 초대·새 계정 대신 해당 지점에 바로 추가
+    const { data: existing } = await admin
+      .from('branch_users')
+      .select('user_id, display_name, branch_id')
+      .eq('phone', phone)
+      .maybeSingle();
+    if (existing) {
+      if (existing.branch_id === branchId) {
+        return NextResponse.json({ error: '이미 이 지점 멤버예요' }, { status: 409 });
+      }
+      const { error: mbErr } = await admin
+        .from('member_branches')
+        .upsert({ user_id: existing.user_id, branch_id: branchId }, { onConflict: 'user_id,branch_id' });
+      if (mbErr) {
+        return NextResponse.json(
+          { error: '기존 회원을 이 지점에 추가하지 못했어요 (' + mbErr.message + ')' },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({
+        ok: true,
+        added_existing: true,
+        message: `${existing.display_name}님을 이 지점에도 추가했어요 (초대 없이 바로 반영).`,
+      });
+    }
+
+    // 2) 같은 지점에 이미 대기 중인 초대가 있으면 중복 방지
+    const { data: dupInvite } = await admin
+      .from('invites')
+      .select('id')
+      .eq('branch_id', branchId)
+      .eq('invitee_contact', inviteeContact)
+      .eq('status', 'sent')
+      .maybeSingle();
+    if (dupInvite) {
+      return NextResponse.json({ error: '이미 이 지점으로 보낸 초대가 있어요 (수락 대기 중)' }, { status: 409 });
+    }
+  }
+
   const { data, error } = await admin
     .from('invites')
     .insert({

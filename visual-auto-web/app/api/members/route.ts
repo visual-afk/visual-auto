@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember, canManage } from '@/lib/auth';
+import { requireMember, canManage, canActOnBranch, isMultiBranch } from '@/lib/auth';
 import { getAdminSupabase, loginIdToEmail } from '@/lib/supabase/admin';
 
 /**
@@ -32,12 +32,19 @@ export async function POST(request: Request) {
   const allowedRoles = isHq ? ['hq_admin', 'branch_owner', 'designer', 'intern'] : ['designer', 'intern'];
   const role: string = allowedRoles.includes(body.role) ? body.role : 'designer';
 
-  // 지점 결정: 본사는 hq_admin이면 null, 그 외엔 body.branch_id 필수. 원장은 자기 지점.
+  // 지점 결정: 본사는 hq_admin이면 null, 그 외엔 body.branch_id 필수.
+  // 원장은 단일지점이면 자기 지점, 멀티지점이면 소속 지점 중 선택.
   let branchId: string | null;
   if (isHq) {
     branchId = role === 'hq_admin' ? null : body.branch_id || null;
     if (role !== 'hq_admin' && !branchId) {
       return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+    }
+  } else if (isMultiBranch(member)) {
+    branchId = body.branch_id || null;
+    if (!branchId) return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+    if (!canActOnBranch(member, branchId)) {
+      return NextResponse.json({ error: '소속되지 않은 지점이에요' }, { status: 403 });
     }
   } else {
     branchId = member.branchId;

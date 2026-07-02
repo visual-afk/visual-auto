@@ -14,6 +14,9 @@ export default function MemberActions({
   onRoleChange,
   onActiveChange,
   onDelete,
+  assignableBranches = [],
+  currentBranchIds = [],
+  homeBranchId = null,
 }: {
   memberId: string;
   memberRole: Role;
@@ -23,10 +26,20 @@ export default function MemberActions({
   onRoleChange?: (role: Role) => void;
   onActiveChange?: (isActive: boolean) => void;
   onDelete?: () => void;
+  /** 이 멤버를 배정할 수 있는 지점 (본사=전체 / 원장=소속 지점) */
+  assignableBranches?: { id: string; name: string }[];
+  /** 멤버가 현재 소속된 지점 id 집합 */
+  currentBranchIds?: string[];
+  /** 홈 지점 (해제 불가) */
+  homeBranchId?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [branchPanel, setBranchPanel] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set(currentBranchIds));
+
+  const canAssignBranches = assignableBranches.length > 1;
 
   const isHq = myRole === 'hq_admin';
   // 바꿀 수 있는 역할 후보 (현재 역할 제외)
@@ -51,6 +64,23 @@ export default function MemberActions({
     router.refresh();    // 헤더 인원 요약 등 서버 값 동기화
   }
 
+  async function saveBranches() {
+    // 홈 지점은 항상 포함 (해제 불가)
+    const ids = new Set(sel);
+    if (homeBranchId) ids.add(homeBranchId);
+    await call('PATCH', { action: 'set_branches', branch_ids: [...ids] }, () => setBranchPanel(false));
+  }
+
+  function toggleBranch(id: string) {
+    if (id === homeBranchId) return; // 홈 지점은 항상 유지
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <div className="relative">
       <button
@@ -65,7 +95,49 @@ export default function MemberActions({
       {open && (
         <>
           {/* 바깥 클릭 닫기 */}
-          <button className="fixed inset-0 z-10 cursor-default" aria-hidden onClick={() => setOpen(false)} />
+          <button className="fixed inset-0 z-10 cursor-default" aria-hidden onClick={() => { setOpen(false); setBranchPanel(false); }} />
+          {branchPanel ? (
+            <div className="absolute right-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-card">
+              <p className="px-4 py-2 text-xs font-semibold text-ink-faint">소속 지점 (여러 곳 가능)</p>
+              {assignableBranches.map((b) => {
+                const checked = sel.has(b.id) || b.id === homeBranchId;
+                const isHome = b.id === homeBranchId;
+                return (
+                  <label
+                    key={b.id}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm hover:bg-canvas ${isHome ? 'opacity-60' : 'cursor-pointer'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={isHome || busy}
+                      onChange={() => toggleBranch(b.id)}
+                    />
+                    <span>
+                      {b.name}
+                      {isHome && <span className="ml-1 text-[11px] text-ink-faint">(홈)</span>}
+                    </span>
+                  </label>
+                );
+              })}
+              <div className="mt-1 flex gap-1 border-t border-line px-2 py-2">
+                <button
+                  onClick={() => { setBranchPanel(false); setSel(new Set(currentBranchIds)); }}
+                  disabled={busy}
+                  className="flex-1 rounded-lg px-2 py-1.5 text-xs text-ink-soft hover:bg-canvas"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={saveBranches}
+                  disabled={busy}
+                  className="flex-1 rounded-lg bg-brand px-2 py-1.5 text-xs font-semibold text-brand-ink"
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          ) : (
           <div className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-card">
             {roleChoices.map((r) => (
               <button
@@ -91,6 +163,14 @@ export default function MemberActions({
                 다시 활성화
               </button>
             )}
+            {canAssignBranches && (
+              <button
+                onClick={() => { setSel(new Set(currentBranchIds)); setBranchPanel(true); }}
+                className="block w-full border-t border-line px-4 py-2.5 text-left text-sm hover:bg-canvas"
+              >
+                지점 배정
+              </button>
+            )}
             {(isHq || myRole === 'branch_owner') && (
               <button
                 onClick={() => {
@@ -104,6 +184,7 @@ export default function MemberActions({
               </button>
             )}
           </div>
+          )}
         </>
       )}
     </div>

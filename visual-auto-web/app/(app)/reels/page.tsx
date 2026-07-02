@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function ReelsPage() {
   const me = (await getMember())!;
   const isHq = me.role === 'hq_admin';
+  const needsBranchPick = isHq || me.branchIds.length > 1;
   const admin = getAdminSupabase();
 
   const profile = await getContentProfile(me.userId, me.branchId);
@@ -19,13 +20,10 @@ export default async function ReelsPage() {
     .order('created_at', { ascending: false })
     .limit(20);
 
-  let branches: BranchOption[] = [];
-  if (isHq) {
-    const { data } = await admin.from('branches').select('id, name').order('name');
-    branches = (data ?? []).map((b) => ({ id: b.id, name: b.name }));
-  } else if (me.branchId) {
-    branches = [{ id: me.branchId, name: me.branchName ?? '' }];
-  }
+  let bq = admin.from('branches').select('id, name').order('name');
+  if (!isHq) bq = bq.in('id', me.branchIds);
+  const { data: branchesData } = await bq;
+  const branches: BranchOption[] = (branchesData ?? []).map((b) => ({ id: b.id, name: b.name }));
 
   return (
     <div className="py-6 md:py-0">
@@ -34,7 +32,7 @@ export default async function ReelsPage() {
         canEditBranch={me.role === 'hq_admin' || me.role === 'branch_owner'}
         pastReels={(reels ?? []) as PastReel[]}
         branches={branches}
-        needsBranchPick={isHq}
+        needsBranchPick={needsBranchPick}
       />
     </div>
   );
