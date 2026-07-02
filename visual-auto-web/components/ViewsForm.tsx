@@ -8,16 +8,19 @@ export default function ViewsForm({
   id,
   initialUrl,
   initialViews,
+  initialSaves,
   initialRemind,
 }: {
   id: string;
   initialUrl: string | null;
   initialViews: number | null;
+  initialSaves: number | null;
   initialRemind: boolean;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState(initialUrl ?? '');
   const [views, setViews] = useState(initialViews != null ? String(initialViews) : '');
+  const [savesInput, setSavesInput] = useState(initialSaves != null ? String(initialSaves) : '');
   const [remind, setRemind] = useState(initialRemind);
   const [saving, setSaving] = useState(false);
 
@@ -26,7 +29,7 @@ export default function ViewsForm({
     await fetch('/api/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action: 'record_views', published_url: url, views, remind }),
+      body: JSON.stringify({ id, action: 'record_views', published_url: url, views, saves: savesInput, remind }),
     });
     setSaving(false);
     router.push('/track');
@@ -51,6 +54,20 @@ export default function ViewsForm({
           />
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ink-faint">회</span>
         </div>
+      </div>
+      <div>
+        <label className="label">저장 수 (선택)</label>
+        <div className="relative">
+          <input
+            className="field pr-10"
+            inputMode="numeric"
+            placeholder="인스타·네이버에서 '저장'된 수"
+            value={savesInput}
+            onChange={(e) => setSavesInput(e.target.value.replace(/[^0-9]/g, ''))}
+          />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-ink-faint">회</span>
+        </div>
+        <p className="mt-1 text-xs text-ink-faint">저장 수를 넣으면 &quot;저장률&quot;이 계산돼요 (조회 대비 저장 비율).</p>
       </div>
 
       <button

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember, canManage, type Role } from '@/lib/auth';
+import { requireMember, canManage, canActOnBranch, type MemberContext, type Role } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 type TargetMember = { id: string; user_id: string; role: Role; branch_id: string | null; is_active: boolean };
@@ -7,16 +7,13 @@ type TargetMember = { id: string; user_id: string; role: Role; branch_id: string
 /**
  * 권한 가드: 현재 멤버가 대상 멤버를 관리(역할변경/퇴출)할 수 있는지.
  *  - 본사: 자기 자신 제외 누구나
- *  - 원장: 자기 지점의 디자이너/인턴만 (다른 원장·본사·자기자신 불가)
+ *  - 원장: 자기 지점(집합)의 디자이너/인턴만 (다른 원장·본사·자기자신 불가)
  */
-function assertCanActOn(
-  actor: { role: Role; branchId: string | null; memberId: string },
-  target: TargetMember,
-): string | null {
+function assertCanActOn(actor: MemberContext, target: TargetMember): string | null {
   if (target.id === actor.memberId) return '본인은 변경할 수 없어요';
   if (actor.role === 'hq_admin') return null;
   // branch_owner
-  if (target.branch_id !== actor.branchId) return '다른 지점 멤버는 관리할 수 없어요';
+  if (!canActOnBranch(actor, target.branch_id)) return '다른 지점 멤버는 관리할 수 없어요';
   if (target.role !== 'designer' && target.role !== 'intern') return '디자이너·인턴만 관리할 수 있어요';
   return null;
 }
@@ -68,6 +65,49 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     const { error } = await admin.from('branch_users').update({ role: newRole }).eq('id', id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // 멤버가 활동 가능한 지점 집합(member_branches) 설정. 홈 지점(branch_users.branch_id)은
+  // 항상 유지되므로 여기서 다루는 건 '추가 지점'. 원장은 본인 지점집합 범위 내에서만 변경 가능.
+  if (body.action === 'set_branches') {
+    const raw: unknown[] = Array.isArray(body.branch_ids) ? body.branch_ids : [];
+    const requested: string[] = [...new Set(raw.filter((x): x is string => typeof x === 'string'))];
+    // 요청 지점이 실제 존재하는지 검증
+    if (requested.length > 0) {
+      const { data: valid } = await admin.from('branches').select('id').in('id', requested);
+      const validIds = new Set((valid ?? []).map((b) => b.id));
+      for (const bid of requested) {
+        if (!validIds.has(bid)) return NextResponse.json({ error: '없는 지점이에요' }, { status: 400 });
+      }
+    }
+
+    if (member.role === 'hq_admin') {
+      // 전체 교체 (홈 지점은 my_branch_ids 에서 union 되므로 지워져도 접근 유지)
+      const { error: delErr } = await admin.from('member_branches').delete().eq('user_id', target.user_id);
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+      if (requested.length > 0) {
+        const rows = requested.map((bid) => ({ user_id: target.user_id, branch_id: bid }));
+        const { error: insErr } = await admin.from('member_branches').upsert(rows, { onConflict: 'user_id,branch_id' });
+        if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // 원장: 본인 지점집합 내 지점만 추가/제거. 그 밖의 배정은 건드리지 않는다.
+    const scope = member.branchIds;
+    const withinScope = requested.filter((bid) => scope.includes(bid));
+    const { error: delErr } = await admin
+      .from('member_branches')
+      .delete()
+      .eq('user_id', target.user_id)
+      .in('branch_id', scope);
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+    if (withinScope.length > 0) {
+      const rows = withinScope.map((bid) => ({ user_id: target.user_id, branch_id: bid }));
+      const { error: insErr } = await admin.from('member_branches').upsert(rows, { onConflict: 'user_id,branch_id' });
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   }
 

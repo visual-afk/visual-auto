@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireMember, resolveWriteBranch } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import {
@@ -30,25 +30,10 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
 
-  // 작업 지점 결정: 본사는 글쓰기 시 지점을 골라야 함, 그 외엔 본인 지점
-  let branchId = member.branchId;
-  let branchName = member.branchName;
-  if (member.role === 'hq_admin') {
-    if (!body.branch_id) {
-      return NextResponse.json({ error: '어느 지점으로 쓸지 골라주세요' }, { status: 400 });
-    }
-    const { data: b } = await getAdminSupabase()
-      .from('branches')
-      .select('id, name')
-      .eq('id', body.branch_id)
-      .maybeSingle();
-    if (!b) return NextResponse.json({ error: '지점을 찾을 수 없어요' }, { status: 400 });
-    branchId = b.id;
-    branchName = b.name;
-  }
-  if (!branchId) {
-    return NextResponse.json({ error: '지점이 없는 계정이에요' }, { status: 400 });
-  }
+  // 작업 지점 결정: 본사·멀티지점은 지점을 골라야 함, 단일지점은 본인 지점
+  const resolved = await resolveWriteBranch(member, body.branch_id);
+  if ('error' in resolved) return resolved.error;
+  const { branchId, branchName } = resolved;
 
   const topic: string = (body.recommended_topic || body.topic || '').trim();
   const chips: string[] = body.treatment_chips || [];

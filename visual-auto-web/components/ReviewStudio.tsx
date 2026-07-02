@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Sparkles, Copy, Check, RefreshCw, TrendingUp, Loader2, ExternalLink, Download, ImagePlus } from 'lucide-react';
 import ReviewImportHelp from './ReviewImportHelp';
 import { usePersistentState } from '@/lib/usePersistentState';
 
@@ -52,6 +52,9 @@ export default function ReviewStudio({
   const [crawled, setCrawled] = useState<CrawledReview[] | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [showReplied, setShowReplied] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const selected = branches.find((b) => b.id === branchId);
   const hasReviewLink = !!(selected?.naverPlaceId || selected?.naverShortUrl);
@@ -88,6 +91,33 @@ export default function ReviewStudio({
 
   function openReviewPage() {
     window.open(reviewLinkFor(selected), '_blank', 'noopener');
+  }
+
+  // 리뷰 스크린샷 업로드 → AI가 읽어 목록으로 (휴대폰용)
+  async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []).slice(0, 5);
+    e.target.value = ''; // 같은 파일 다시 선택 가능하게
+    if (!files.length) return;
+    if (needsBranchPick && !branchId) {
+      setOcrError('어느 지점 리뷰인지 먼저 골라주세요');
+      return;
+    }
+    setOcrError('');
+    setOcrLoading(true);
+    setCrawled(null);
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append('files', f));
+      if (branchId) fd.append('branch_id', branchId);
+      const res = await fetch('/api/review-ocr', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setOcrError(data.error || '사진에서 리뷰를 읽지 못했어요');
+      else setCrawled(data.reviews);
+    } catch {
+      setOcrError('사진을 읽는 중 문제가 생겼어요');
+    } finally {
+      setOcrLoading(false);
+    }
   }
 
   function useReview(text: string) {
@@ -132,6 +162,12 @@ export default function ReviewStudio({
     } catch {
       /* 클립보드 실패해도 스마트플레이스는 연다 */
     }
+    // 실제 사용(복사)을 코칭 카운트에 반영 — 실패해도 무시
+    fetch('/api/review-reply/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch_id: branchId || undefined }),
+    }).catch(() => {});
     window.open(SMARTPLACE_URL, '_blank', 'noopener');
   }
 
@@ -156,23 +192,40 @@ export default function ReviewStudio({
           </label>
         )}
 
-        {/* 지점 공개 리뷰 딥링크 + 자동 가져오기(북마클릿) */}
-        {hasReviewLink && (
-          <div className="flex flex-wrap gap-2">
-            <button className="btn-ghost" onClick={openReviewPage}>
-              <span className="inline-flex items-center gap-1.5">
-                <ExternalLink size={16} />
-                이 지점 리뷰 보러가기
-              </span>
-            </button>
-            <button className="btn-ghost" onClick={() => setImportOpen(true)}>
-              <span className="inline-flex items-center gap-1.5">
-                <Download size={16} />
-                리뷰 자동 가져오기
-              </span>
-            </button>
-          </div>
-        )}
+        {/* 리뷰 가져오기: 사진(휴대폰) 우선 + 딥링크/북마클릿(PC) */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={onPickPhotos}
+        />
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-ghost" onClick={() => fileRef.current?.click()} disabled={ocrLoading}>
+            <span className="inline-flex items-center gap-1.5">
+              {ocrLoading ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+              {ocrLoading ? '사진 읽는 중…' : '리뷰 사진에서 가져오기'}
+            </span>
+          </button>
+          {hasReviewLink && (
+            <>
+              <button className="btn-ghost" onClick={openReviewPage}>
+                <span className="inline-flex items-center gap-1.5">
+                  <ExternalLink size={16} />
+                  이 지점 리뷰 보러가기
+                </span>
+              </button>
+              <button className="btn-ghost" onClick={() => setImportOpen(true)}>
+                <span className="inline-flex items-center gap-1.5">
+                  <Download size={16} />
+                  리뷰 자동 가져오기 (PC)
+                </span>
+              </button>
+            </>
+          )}
+        </div>
+        {ocrError && <p className="text-sm text-warn">{ocrError}</p>}
 
         {/* 북마클릿으로 가져온 리뷰 목록 */}
         {crawled &&

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
-import { getAdminSupabase } from '@/lib/supabase/admin';
+import { requireMember, resolveWriteBranch } from '@/lib/auth';
 import { callAI, friendlyAIError, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { loadKeywordContext } from '@/lib/generation/keywords';
 
@@ -24,22 +23,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '리뷰 내용을 붙여넣어 주세요' }, { status: 400 });
   }
 
-  // 지점 결정: 본사는 골라야 함, 그 외엔 본인 지점
-  let branchName = member.branchName;
-  let branchId = member.branchId;
-  if (member.role === 'hq_admin') {
-    if (!body.branch_id) {
-      return NextResponse.json({ error: '어느 지점 리뷰인지 골라주세요' }, { status: 400 });
-    }
-    const { data: b } = await getAdminSupabase()
-      .from('branches')
-      .select('id, name')
-      .eq('id', body.branch_id)
-      .maybeSingle();
-    if (!b) return NextResponse.json({ error: '지점을 찾을 수 없어요' }, { status: 400 });
-    branchName = b.name;
-    branchId = b.id;
-  }
+  // 지점 결정: 본사·멀티지점은 골라야 함, 단일지점은 본인 지점
+  const resolved = await resolveWriteBranch(member, body.branch_id);
+  if ('error' in resolved) return resolved.error;
+  const { branchId, branchName } = resolved;
 
   if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: '답글 기능 설정에 문제가 있어요. 관리자에게 알려주세요.' }, { status: 503 });

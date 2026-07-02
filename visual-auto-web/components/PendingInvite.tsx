@@ -21,14 +21,36 @@ export default function PendingInvite({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState('');
 
-  function resend() {
-    if (navigator.share) {
-      navigator.share({ title: '비주얼 블로그 초대', text: '초대 링크', url: link });
-    } else {
-      navigator.clipboard.writeText(link);
-      alert('초대 링크를 복사했어요. 카톡·문자로 붙여넣어 보내주세요.');
+  // 저장된 연락처로 카카오 초대장 재발송. 발송이 안 되면 링크를 복사해 준다.
+  async function resend() {
+    setSending(true);
+    setMsg('');
+    try {
+      const res = await fetch(`/api/invites/${inviteId}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (data.sent) {
+        setMsg('보냈어요 ✓');
+      } else {
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch {
+          /* 무시 */
+        }
+        setMsg(data.reason === 'no_recipient' ? '번호 없음·링크복사' : '발송안됨·링크복사');
+      }
+    } catch {
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        /* 무시 */
+      }
+      setMsg('링크복사됨');
     }
+    setSending(false);
+    setTimeout(() => setMsg(''), 2800);
   }
 
   async function cancel() {
@@ -56,8 +78,8 @@ export default function PendingInvite({
           {' · 수락 대기 중'}
         </span>
       </span>
-      <button onClick={resend} className="shrink-0 text-sm font-semibold text-brand">
-        다시 보내기
+      <button onClick={resend} disabled={sending} className="shrink-0 text-sm font-semibold text-brand disabled:opacity-50">
+        {sending ? '보내는 중…' : msg || '다시 보내기'}
       </button>
       <button onClick={cancel} disabled={busy} className="shrink-0 text-sm font-medium text-ink-faint hover:text-warn">
         취소

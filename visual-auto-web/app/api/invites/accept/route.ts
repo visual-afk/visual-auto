@@ -27,10 +27,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '만료된 초대예요' }, { status: 410 });
   }
 
-  // 2) 동명이인/중복 방지 — 같은 휴대폰 번호는 이미 가입됨
-  const { data: dup } = await admin.from('branch_users').select('id').eq('phone', phone).maybeSingle();
+  // 2) 이미 계정이 있는 사람 → 새 계정을 만들지 않고, 이 지점을 기존 계정에 추가한다.
+  //    ("각 지점당 한 번만" — 한 사람은 한 계정으로 여러 지점 소속)
+  const { data: dup } = await admin
+    .from('branch_users')
+    .select('id, user_id, branch_id')
+    .eq('phone', phone)
+    .maybeSingle();
   if (dup) {
-    return NextResponse.json({ error: '이미 가입된 휴대폰 번호예요' }, { status: 409 });
+    if (dup.branch_id !== invite.branch_id) {
+      const { error: mbErr } = await admin
+        .from('member_branches')
+        .upsert({ user_id: dup.user_id, branch_id: invite.branch_id }, { onConflict: 'user_id,branch_id' });
+      if (mbErr) return NextResponse.json({ error: mbErr.message }, { status: 500 });
+    }
+    await admin
+      .from('invites')
+      .update({ status: 'accepted', accepted_by: dup.user_id, accepted_at: new Date().toISOString() })
+      .eq('id', invite.id);
+    return NextResponse.json({
+      ok: true,
+      existing: true,
+      login_id: phone,
+      message: '이미 계정이 있어요. 기존 아이디·비밀번호로 로그인하면 이 지점도 함께 보여요.',
+    });
   }
 
   // 3) auth 유저 생성 (synthetic email = 휴대폰 기반)

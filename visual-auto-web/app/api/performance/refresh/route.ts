@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireMember, canActOnBranch, isMultiBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { crawlDate } from '@/lib/handsos/crawl';
 
@@ -15,14 +15,17 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  let branchId = member.branchId;
-  if (member.role === 'hq_admin') branchId = body.branch_id || branchId;
-  if (!branchId) return NextResponse.json({ error: '지점을 골라주세요' }, { status: 400 });
-
-  // 원장은 자기 지점만
-  if (member.role === 'branch_owner' && body.branch_id && body.branch_id !== member.branchId) {
-    return NextResponse.json({ error: '내 지점만 새로고침할 수 있어요' }, { status: 403 });
+  let branchId: string | null;
+  if (isMultiBranch(member)) {
+    branchId = body.branch_id || member.branchId;
+    if (!branchId) return NextResponse.json({ error: '지점을 골라주세요' }, { status: 400 });
+    if (!canActOnBranch(member, branchId)) {
+      return NextResponse.json({ error: '내 지점만 새로고침할 수 있어요' }, { status: 403 });
+    }
+  } else {
+    branchId = member.branchId;
   }
+  if (!branchId) return NextResponse.json({ error: '지점을 골라주세요' }, { status: 400 });
 
   const { data: b } = await getAdminSupabase()
     .from('branches')
