@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   // AI 없거나 실패 시 폴백: 규칙 파일에서 캠페인/지점 강조 주제 뽑기
   const fallback = () => fallbackTopics(rules, branchName);
 
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ topics: fallback() });
   }
 

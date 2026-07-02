@@ -5,7 +5,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 /**
  * visual-auto의 lib/ai-client.ts / claude-client.ts 이식 (웹앱용).
  * knowledge/ · prompts/ · templates/ 는 앱 루트(process.cwd())에 동봉되어 런타임 fs로 읽는다.
- * AI는 Anthropic(Claude) 우선, 없으면 Gemini 폴백.
+ * AI는 Gemini(유료 결제 연결) 하나로만 돈다.
  *
  * 오버라이드: 본사가 '프롬프트 관리' 탭에서 저장한 내용은 content_overrides 테이블에 쌓인다.
  * *For(...) 계열 async 로더가 "지점 오버라이드 → 전사 공통 → 파일" 순으로 내용을 고른다.
@@ -171,20 +171,20 @@ export interface AIResult {
   text: string;
   inputTokens: number;
   outputTokens: number;
-  provider: 'anthropic' | 'gemini';
+  provider: 'gemini';
 }
 
+/** AI 호출은 Gemini(유료 결제 연결) 하나로만 돈다. */
 export async function callAI(opts: AICallOptions): Promise<AIResult> {
   try {
-    if (process.env.ANTHROPIC_API_KEY) return await callAnthropic(opts);
-    if (process.env.GEMINI_API_KEY) return await callGemini(opts);
-    throw new Error('ANTHROPIC_API_KEY 또는 GEMINI_API_KEY 가 필요해요');
+    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 가 필요해요');
+    return await callGemini(opts);
   } catch (e) {
     throw toFriendlyAIError(e);
   }
 }
 
-/** 공급사(구글/앤트로픽) 원문 에러를 디자이너용 한국어 메시지로 바꾼다. */
+/** 공급사(구글 Gemini) 원문 에러를 디자이너용 한국어 메시지로 바꾼다. */
 function toFriendlyAIError(e: unknown): Error {
   const msg = e instanceof Error ? e.message : String(e);
   console.error('[AI] provider error:', msg); // 원문은 서버 로그로만
@@ -197,32 +197,53 @@ function toFriendlyAIError(e: unknown): Error {
   return e instanceof Error ? e : new Error(msg);
 }
 
-async function callAnthropic(opts: AICallOptions): Promise<AIResult> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
-  // json 모드: assistant 턴을 '{' 로 prefill 해서 모델이 반드시 JSON 객체로 시작하게 강제
-  const messages: { role: 'user' | 'assistant'; content: string }[] = [
-    { role: 'user', content: opts.userMessage },
-  ];
-  if (opts.json) messages.push({ role: 'assistant', content: '{' });
-  const resp = await client.messages.create({
-    model,
-    max_tokens: opts.maxTokens || 8000,
-    temperature: opts.temperature ?? 0.7,
-    system: opts.system,
-    messages,
-  });
-  const block = resp.content.find((b) => b.type === 'text');
-  const raw = block && block.type === 'text' ? block.text : '';
-  // prefill 한 '{' 는 응답에 포함되지 않으므로 되붙인다
-  const text = opts.json ? `{${raw}` : raw;
+/**
+ * 라우트 catch에서 쓰는 디자이너용 에러 매핑.
+ * { message, status } 를 돌려주니 NextResponse.json({error: message}, {status}) 로 그대로 쓴다.
+ * 원문(파싱 실패 원문 덤프 등)은 절대 노출하지 않는다.
+ */
+export function friendlyAIError(e: unknown): { message: string; status: number } {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/한도|사용량|429|too many requests|quota|rate limit|RESOURCE_EXHAUSTED|exceeded/i.test(msg)) {
+    return {
+      message: '지금 AI 사용량이 한도에 걸렸어요. 잠시 뒤 다시 눌러 주세요. (계속되면 예진매니저에게 문의)',
+      status: 429,
+    };
+  }
+  if (/api[_ ]?key|permission|PERMISSION_DENIED|unauthorized|401|403|설정/i.test(msg)) {
+    return { message: 'AI 설정에 문제가 있어요. 예진매니저에게 문의해 주세요.', status: 503 };
+  }
+  if (/파싱|parse|JSON|잘렸|too long|길어/i.test(msg)) {
+    return {
+      message: 'AI 답이 완전하게 오지 않았어요. 「고쳐쓰기」로 다시 시도해 주세요. (계속되면 예진매니저에게 문의)',
+      status: 502,
+    };
+  }
+  return { message: '글을 쓰는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.', status: 500 };
+}
+
+/**
+ * gemini-2.5-flash는 '사고(thinking)' 토큰이 maxOutputTokens를 잠식해서
+ * JSON 본문이 중간에 잘려 나온다(= 디자이너가 보던 "파싱실패"의 진짜 원인).
+ * thinkingBudget: 0 으로 사고를 끄면 토큰이 전부 실제 응답에 쓰인다.
+ * (구버전 SDK 타입엔 thinkingConfig가 없어 런타임 통과용으로 캐스팅한다.)
+ */
+function geminiGenerationConfig(opts: { maxOutputTokens: number; temperature?: number; json?: boolean }) {
   return {
-    text,
-    inputTokens: resp.usage.input_tokens,
-    outputTokens: resp.usage.output_tokens,
-    provider: 'anthropic',
-  };
+    maxOutputTokens: opts.maxOutputTokens,
+    ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
+    thinkingConfig: { thinkingBudget: 0 },
+    // json 모드: 네이티브 JSON 출력 강제(산문 반환 방지)
+    ...(opts.json ? { responseMimeType: 'application/json' } : {}),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+}
+
+/** 응답이 잘렸는지(finishReason=MAX_TOKENS) 판별해 명확한 에러를 던진다. */
+function assertNotTruncated(finishReason: string | undefined) {
+  if (finishReason && /MAX_TOKENS/i.test(finishReason)) {
+    throw new Error('AI 응답이 너무 길어서 중간에 잘렸어요. 잠시 후 다시 시도해 주세요.');
+  }
 }
 
 async function callGemini(opts: AICallOptions): Promise<AIResult> {
@@ -231,15 +252,15 @@ async function callGemini(opts: AICallOptions): Promise<AIResult> {
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash', // 2.0-flash 무료등급 0으로 막힘(2026) → 2.5-flash
     systemInstruction: opts.system,
-    generationConfig: {
+    generationConfig: geminiGenerationConfig({
       maxOutputTokens: opts.maxTokens || 8000,
       temperature: opts.temperature ?? 0.7,
-      // json 모드: 네이티브 JSON 출력 강제(산문 반환 방지)
-      ...(opts.json ? { responseMimeType: 'application/json' as const } : {}),
-    },
+      json: opts.json,
+    }),
   });
   const result = await model.generateContent(opts.userMessage);
   const usage = result.response.usageMetadata;
+  assertNotTruncated(result.response.candidates?.[0]?.finishReason);
   return {
     text: result.response.text(),
     inputTokens: usage?.promptTokenCount || 0,
@@ -260,7 +281,7 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash', // 2.0-flash 무료등급 0으로 막힘 → 2.5-flash(오디오 지원)
-    generationConfig: { temperature: 0 },
+    generationConfig: geminiGenerationConfig({ maxOutputTokens: 4000, temperature: 0 }),
   });
   try {
     const result = await model.generateContent([
@@ -291,7 +312,7 @@ export async function analyzeVideo(base64Video: string, mimeType: string, instru
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    generationConfig: { temperature: 0.4, maxOutputTokens: 2000 },
+    generationConfig: geminiGenerationConfig({ maxOutputTokens: 2000, temperature: 0.4, json: true }),
   });
   try {
     const result = await model.generateContent([

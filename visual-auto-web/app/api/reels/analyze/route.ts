@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
-import { analyzeVideo, loadPromptFor, parseJsonResponse } from '@/lib/generation/ai-client';
+import { analyzeVideo, friendlyAIError, loadPromptFor, parseJsonResponse } from '@/lib/generation/ai-client';
 
 export const maxDuration = 120;
 
@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ analysis });
   } catch (e) {
     console.error('[reels analyze]', (e as Error).message);
-    return NextResponse.json({ error: '영상 분석 중 문제가 생겼어요. 다른 영상으로 다시 시도해주세요.' }, { status: 500 });
+    const { message, status } = friendlyAIError(e);
+    return NextResponse.json({ error: message }, { status });
   }
 }

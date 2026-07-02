@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { callAI, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
+import { callAI, friendlyAIError, loadPromptFor, loadBranchKnowledgeFor, parseJsonResponse } from '@/lib/generation/ai-client';
 import { loadKeywordContext } from '@/lib/generation/keywords';
 
 export const maxDuration = 60;
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     branchId = b.id;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json({ error: '답글 기능 설정에 문제가 있어요. 관리자에게 알려주세요.' }, { status: 503 });
   }
 
@@ -76,11 +76,8 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ replies });
   } catch (e) {
-    const raw = (e as Error).message || '';
-    console.error('[review-reply]', raw);
-    if (/429|quota|rate.?limit/i.test(raw)) {
-      return NextResponse.json({ error: '지금 사용량이 많아요. 잠시 후 다시 시도해주세요.' }, { status: 429 });
-    }
-    return NextResponse.json({ error: '답글을 쓰는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }, { status: 500 });
+    console.error('[review-reply]', (e as Error).message);
+    const { message, status } = friendlyAIError(e);
+    return NextResponse.json({ error: message }, { status });
   }
 }
