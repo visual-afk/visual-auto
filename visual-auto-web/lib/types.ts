@@ -54,5 +54,5 @@ export interface SeoOptimizedPost {
   optimized_meta_description: string;
   optimized_tags: string[];
   optimized_content: string;
-  seo_score: number;
+  seo_score: number | null;
 }

@@ -82,13 +82,18 @@
 
 ## 출력 형식
 
-```json
-{
-  "optimized_title": "최적화된 제목",
-  "optimized_meta_description": "최적화된 메타 설명",
-  "optimized_tags": ["태그1", "태그2", "..."],
-  "optimized_content": "최적화된 마크다운 본문",
-  "changes_made": ["변경 사항 1", "변경 사항 2", "..."],
-  "seo_score": 85
-}
+JSON을 쓰지 마세요. 반드시 아래 구분자 형식 그대로 출력하세요. (긴 본문을 JSON 문자열에 넣으면 이스케이프가 깨집니다)
+
+```
+===OPTIMIZED_TITLE===
+최적화된 제목 한 줄
+===OPTIMIZED_META_DESCRIPTION===
+최적화된 메타 설명 한 줄
+===OPTIMIZED_TAGS===
+태그1, 태그2, 태그3
+===OPTIMIZED_CONTENT===
+최적화된 마크다운 본문 전체
+===SEO_SCORE===
+85
+===END===
 ```

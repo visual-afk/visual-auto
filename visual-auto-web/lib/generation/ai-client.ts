@@ -176,40 +176,126 @@ export interface AIResult {
   provider: 'gemini';
 }
 
-/** AI 호출은 Gemini(유료 결제 연결) 하나로만 돈다. */
-export async function callAI(opts: AICallOptions): Promise<AIResult> {
-  try {
-    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY 가 필요해요');
-    return await callGemini(opts);
-  } catch (e) {
-    throw toFriendlyAIError(e);
-  }
-}
-
-/** 잘림·파싱 오류는 일시적인 경우가 많아 재시도 1회로 살릴 수 있다. */
-function isRetryableJsonError(e: unknown): boolean {
+/** 과부하(503)·순간 한도(429)는 몇 초 뒤 재시도하면 살아나는 경우가 대부분이다. */
+function isTransientProviderError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e);
-  return /파싱|parse|JSON|잘렸|too long|길어/i.test(msg);
+  return /503|UNAVAILABLE|overloaded|429|too many requests|RESOURCE_EXHAUSTED/i.test(msg);
 }
 
 /**
- * callAI + parseJsonResponse 를 묶고, 응답 잘림/JSON 파싱 실패일 때만 1회 자동 재시도.
- * 재시도까지 실패하면 마지막 에러를 그대로 던져 friendlyAIError 매핑을 탄다.
+ * AI 호출은 Gemini(유료 결제 연결) 하나로만 돈다.
+ * 과부하 시간대엔 503이 몇 번 연달아 오기도 해서 백오프를 두고 최대 3회까지 시도한다.
  */
-export async function callAIJson<T>(opts: AICallOptions): Promise<T> {
-  try {
-    return parseJsonResponse<T>((await callAI(opts)).text);
-  } catch (e) {
-    if (!isRetryableJsonError(e)) throw e;
-    console.warn('[AI] JSON 불완전 → 1회 재시도:', (e as Error).message.slice(0, 200));
-    return parseJsonResponse<T>((await callAI(opts)).text);
+export async function callAI(opts: AICallOptions): Promise<AIResult> {
+  if (!process.env.GEMINI_API_KEY) throw toFriendlyAIError(new Error('GEMINI_API_KEY 가 필요해요'));
+  const backoffMs = [2000, 6000];
+  for (let i = 0; ; i++) {
+    try {
+      return await callGemini(opts);
+    } catch (e) {
+      if (!isTransientProviderError(e) || i >= backoffMs.length) throw toFriendlyAIError(e);
+      console.warn(`[AI] 일시 오류 → ${backoffMs[i] / 1000}초 뒤 재시도:`, (e instanceof Error ? e.message : String(e)).slice(0, 200));
+      await new Promise((r) => setTimeout(r, backoffMs[i]));
+    }
   }
+}
+
+// ── 구분자(delimiter) 포맷 호출 ─────────────────────────────────────────────
+// 긴 한국어 마크다운 본문을 JSON 문자열에 넣으면 Gemini가 json 모드에서도
+// 개행·따옴표 이스케이프를 빠뜨려 파싱이 깨진다(글쓰기 "실패"의 진짜 원인).
+// 긴 본문은 JSON 대신 ===SECTION=== 구분자 텍스트로 받아 그 계열 실패를 원천 차단한다.
+
+export interface DelimitedSection {
+  /** 구분자 이름. JSON 폴백 시 소문자로 바꿔 키 매칭하므로 기존 JSON 키의 대문자형을 쓴다. */
+  name: string;
+  /** 모델에게 보여줄 해당 섹션 설명 */
+  description: string;
+  /** 기본 true. 누락 시 1회 재시도 대상 */
+  required?: boolean;
+}
+
+function buildDelimitedInstruction(sections: DelimitedSection[]): string {
+  return [
+    '',
+    '--- 출력 형식 (최우선 지침 — 앞의 다른 출력 형식 지시는 무시하라) ---',
+    'JSON·코드펜스·여는 말·닫는 말을 쓰지 마라. 아래 구분자 형식 그대로만 출력하라.',
+    '각 구분자 줄(===이름===)은 정확히 그대로 쓰고, 그 다음 줄부터 해당 내용만 쓴다.',
+    '',
+    ...sections.map((s) => `===${s.name}===\n(${s.description})`),
+    '===END===',
+  ].join('\n');
+}
+
+function parseDelimitedSections(text: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const marks: { name: string; contentStart: number; markStart: number }[] = [];
+  const re = /^[ \t]*===([A-Z0-9_]+)===[ \t]*$/gm;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    marks.push({ name: m[1], contentStart: m.index + m[0].length, markStart: m.index });
+  }
+  for (let i = 0; i < marks.length; i++) {
+    if (marks[i].name === 'END') continue;
+    const end = i + 1 < marks.length ? marks[i + 1].markStart : text.length;
+    map.set(marks[i].name, text.slice(marks[i].contentStart, end).trim());
+  }
+  return map;
+}
+
+/** 모델이 지시를 어기고 JSON으로 답한 경우: 키를 대문자화해 섹션 맵으로 변환 */
+function jsonFallbackToSections(text: string): Map<string, string> | null {
+  try {
+    const obj = parseJsonResponse<Record<string, unknown>>(text);
+    const map = new Map<string, string>();
+    for (const [k, v] of Object.entries(obj)) {
+      map.set(k.toUpperCase(), Array.isArray(v) ? v.map(String).join('\n') : String(v ?? ''));
+    }
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * callAI 를 구분자 포맷으로 감싼다. 시스템 프롬프트 끝에 출력 형식 지시를 강제로 덧붙이므로
+ * DB 오버라이드된 프롬프트가 여전히 "JSON으로 출력"을 담고 있어도 이 지시가 이긴다.
+ * 필수 섹션이 누락되면 1회 재시도하고, 그래도 없으면 파싱 실패 에러를 던진다.
+ */
+export async function callAIDelimited(
+  opts: AICallOptions,
+  sections: DelimitedSection[],
+): Promise<Record<string, string>> {
+  const callOpts: AICallOptions = {
+    ...opts,
+    json: false,
+    system: opts.system + '\n' + buildDelimitedInstruction(sections),
+  };
+  const required = sections.filter((s) => s.required !== false).map((s) => s.name);
+
+  const attempt = async (): Promise<{ result: Record<string, string>; missing: string[] }> => {
+    const text = (await callAI(callOpts)).text;
+    let map = parseDelimitedSections(text);
+    if (map.size === 0) map = jsonFallbackToSections(text) ?? map;
+    const missing = required.filter((name) => !map.get(name));
+    const result: Record<string, string> = {};
+    for (const [k, v] of map) result[k] = v;
+    return { result, missing };
+  };
+
+  const first = await attempt();
+  if (first.missing.length === 0) return first.result;
+  console.warn('[AI] 구분자 섹션 누락 → 1회 재시도:', first.missing.join(', '));
+  const second = await attempt();
+  if (second.missing.length === 0) return second.result;
+  throw new Error(`AI 응답 파싱 실패: ${second.missing.join(', ')} 섹션이 없어요`);
 }
 
 /** 공급사(구글 Gemini) 원문 에러를 디자이너용 한국어 메시지로 바꾼다. */
 function toFriendlyAIError(e: unknown): Error {
   const msg = e instanceof Error ? e.message : String(e);
   console.error('[AI] provider error:', msg); // 원문은 서버 로그로만
+  if (/503|UNAVAILABLE|overloaded|high demand/i.test(msg)) {
+    return new Error('지금 AI(구글)가 붐벼서 응답을 못 받았어요. 1~2분 뒤 다시 눌러 주세요.');
+  }
   if (/429|too many requests|quota|rate limit|RESOURCE_EXHAUSTED|exceeded/i.test(msg)) {
     return new Error('지금 AI 사용량이 한도에 걸렸어요. 잠시 뒤 다시 눌러 주세요. (계속되면 예진매니저에게 문의)');
   }
@@ -226,6 +312,9 @@ function toFriendlyAIError(e: unknown): Error {
  */
 export function friendlyAIError(e: unknown): { message: string; status: number } {
   const msg = e instanceof Error ? e.message : String(e);
+  if (/붐벼|503|UNAVAILABLE|overloaded|high demand/i.test(msg)) {
+    return { message: '지금 AI(구글)가 붐벼서 응답을 못 받았어요. 1~2분 뒤 다시 눌러 주세요.', status: 503 };
+  }
   if (/한도|사용량|429|too many requests|quota|rate limit|RESOURCE_EXHAUSTED|exceeded/i.test(msg)) {
     return {
       message: '지금 AI 사용량이 한도에 걸렸어요. 잠시 뒤 다시 눌러 주세요. (계속되면 예진매니저에게 문의)',
@@ -350,10 +439,45 @@ export async function analyzeVideo(base64Video: string, mimeType: string, instru
   }
 }
 
+/**
+ * Gemini가 json 모드에서도 문자열 리터럴 안에 raw 개행·탭을 그대로 내보내는 경우가 있어
+ * (긴 한국어 마크다운에서 빈발) 파싱 전에 이스케이프로 복구한다.
+ * 유효한 JSON에는 제어문자가 문자열 안에 올 수 없으므로 이 변환은 정상 응답을 깨지 않는다.
+ */
+function escapeRawControlCharsInStrings(s: string): string {
+  let out = '';
+  let inStr = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!inStr) {
+      if (ch === '"') inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch + (s[i + 1] ?? '');
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = false;
+      out += ch;
+      continue;
+    }
+    const code = s.charCodeAt(i);
+    if (code < 32) {
+      out += code === 10 ? '\\n' : code === 13 ? '\\r' : code === 9 ? '\\t' : '\\u' + code.toString(16).padStart(4, '0');
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 /** ```json ...``` 코드펜스, 없으면 본문에서 첫 균형 잡힌 {…} 객체를 추출 */
 export function parseJsonResponse<T>(text: string): T {
   const fence = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  const candidate = (fence ? fence[1] : text).trim();
+  const candidate = escapeRawControlCharsInStrings((fence ? fence[1] : text).trim());
   try {
     return JSON.parse(candidate);
   } catch {
