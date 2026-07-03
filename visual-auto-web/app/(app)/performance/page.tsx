@@ -46,6 +46,18 @@ export default async function PerformancePage({
     .limit(1)
     .maybeSingle();
 
+  // 하이드레이션 안전: 날짜 포맷은 서버에서 1회만(KST 고정) → 클라이언트는 문자열 그대로 사용
+  const lastSyncedAt = (last as { created_at?: string } | null)?.created_at ?? null;
+  const syncedLabel = lastSyncedAt
+    ? new Date(lastSyncedAt).toLocaleString('ko-KR', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Seoul',
+      })
+    : '동기화 없음';
+
   return (
     <div className="py-6 md:py-0">
       <PerformanceDashboard
@@ -55,7 +67,7 @@ export default async function PerformancePage({
         branchName={branchName}
         branchOpts={branchOpts}
         isHq={me.role === 'hq_admin'}
-        lastSyncedAt={(last as { created_at?: string } | null)?.created_at ?? null}
+        syncedLabel={syncedLabel}
       />
     </div>
   );
