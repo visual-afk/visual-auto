@@ -27,7 +27,12 @@ const SMARTPLACE_URL = 'https://new.smartplace.naver.com/';
 
 /** 지점의 네이버 공개 리뷰 페이지 딥링크 (placeId > 단축링크 > 스마트플레이스 홈) */
 function reviewLinkFor(b?: BranchOption): string {
-  if (b?.naverPlaceId) return `https://pcmap.place.naver.com/hairshop/${b.naverPlaceId}/review/visitor`;
+  if (b?.naverPlaceId) {
+    // pcmap은 PC 전용 렌더링이라 모바일에선 m.place로 열어야 리뷰 탭이 제대로 뜬다
+    const mobile = typeof navigator !== 'undefined' && /iPhone|Android|Mobile/i.test(navigator.userAgent);
+    const host = mobile ? 'm.place.naver.com' : 'pcmap.place.naver.com';
+    return `https://${host}/hairshop/${b.naverPlaceId}/review/visitor`;
+  }
   if (b?.naverShortUrl) return b.naverShortUrl;
   return SMARTPLACE_URL;
 }
