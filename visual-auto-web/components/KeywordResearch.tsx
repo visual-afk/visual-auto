@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
+import KeywordRankSection from './KeywordRankSection';
 
 export type KeywordRow = {
   keyword: string;
@@ -221,6 +222,8 @@ export default function KeywordResearch({ initialSets }: { initialSets: KeywordS
                   {savingReflect ? '반영 중…' : '추천 주제에 반영하기'}
                 </button>
               </div>
+
+              {activeSet.branch_id && <KeywordRankSection branchId={activeSet.branch_id} />}
             </>
           )}
         </>
