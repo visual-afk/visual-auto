@@ -4,10 +4,11 @@ import { AlertCircle, Siren } from 'lucide-react';
 import { getMember, type Role } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { aggregateOpsHealth, fmtDaysAgo, type BranchOpsHealth } from '@/lib/ops-health';
+import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
 
 export const dynamic = 'force-dynamic';
 
-type Member = { branch_id: string | null; role: Role; is_active: boolean };
+type Member = { user_id: string; branch_id: string | null; role: Role; is_active: boolean };
 type Post = { branch_id: string; views: number | null };
 
 /** "원장1·디4·인1" 컴팩트 구성 (0은 생략) */
@@ -27,11 +28,11 @@ export default async function OverviewPage() {
   if (me.role !== 'hq_admin') redirect('/');
 
   const admin = getAdminSupabase();
-  const [{ data: branchesData }, { data: membersData }, { data: postsData }] = await Promise.all([
-    // 글쓰기 전용 브랜드는 지점 KPI 대상 아님
-    admin.from('branches').select('id, name').eq('kind', 'salon').order('name'),
-    admin.from('branch_users').select('branch_id, role, is_active').eq('is_active', true),
+  const [{ data: branchesData }, { data: membersData }, { data: postsData }, memberBranchMap] = await Promise.all([
+    admin.from('branches').select('id, name').order('name'),
+    admin.from('branch_users').select('user_id, branch_id, role, is_active').eq('is_active', true),
     admin.from('posts').select('branch_id, views'),
+    fetchMemberBranchMap(admin),
   ]);
   const branches = branchesData ?? [];
   const members = (membersData ?? []) as Member[];
@@ -44,7 +45,7 @@ export default async function OverviewPage() {
   const totalPeople = members.filter((m) => m.role !== 'hq_admin').length;
 
   const rows = branches.map((b) => {
-    const bMembers = members.filter((m) => m.branch_id === b.id);
+    const bMembers = members.filter((m) => effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id).includes(b.id));
     const bPosts = posts.filter((p) => p.branch_id === b.id);
     return {
       id: b.id,

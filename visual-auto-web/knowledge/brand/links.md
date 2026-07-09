@@ -17,6 +17,8 @@
 | 성수점 | https://naver.me/FRLTsCEs |
 | 강남신사점 | https://naver.me/G8hvr7IB |
 | 부산 서면전포점 | https://naver.me/x1uuPQij |
+| 서초방배점 | https://map.naver.com/p/entry/place/1903236993 |
+| 부천신중동점 | https://naver.me/xv3f0EqK |
 
 ## SNS
 
