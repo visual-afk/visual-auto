@@ -13,7 +13,7 @@ export default async function WritePage() {
 
   const admin = getAdminSupabase();
   // 본사: 전 지점 / 그 외: 본인 소속 지점(들)
-  let bq = admin.from('branches').select('id, name, naver_blog_url, imweb_url').order('name');
+  let bq = admin.from('branches').select('id, name, kind, naver_blog_url, imweb_url').order('name');
   if (!isHq) bq = bq.in('id', member.branchIds);
   const [{ data }, { data: drafts }] = await Promise.all([
     bq,
@@ -29,6 +29,7 @@ export default async function WritePage() {
   const branches = (data ?? []).map((b) => ({
     id: b.id,
     name: b.name,
+    kind: (b.kind ?? 'salon') as 'salon' | 'brand',
     naverBlogUrl: b.naver_blog_url,
     imwebUrl: b.imweb_url,
   }));

@@ -1,6 +1,7 @@
 import {
   PenLine,
   BarChart3,
+  CalendarDays,
   Users,
   LayoutGrid,
   Building2,
@@ -11,6 +12,8 @@ import {
   GraduationCap,
   Film,
   FileCog,
+  NotebookPen,
+  HeartHandshake,
   type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/lib/roles';
@@ -34,6 +37,7 @@ export const FOLDERS: NavFolder[] = [
     key: '콘텐츠',
     label: '콘텐츠',
     items: [
+      { href: '/calendar', label: '콘텐츠 캘린더', icon: CalendarDays, roles: ALL },
       { href: '/write', label: '글쓰기', icon: PenLine, roles: ALL },
       { href: '/reels', label: '릴스', icon: Film, roles: ALL },
       { href: '/review', label: '리뷰 답글', icon: MessageSquare, roles: ALL },
@@ -59,6 +63,8 @@ export const FOLDERS: NavFolder[] = [
     items: [
       { href: '/branches', label: '지점 관리', icon: Building2, roles: ['hq_admin'] },
       { href: '/members', label: '지점·사람', icon: Users, roles: ['hq_admin', 'branch_owner'] },
+      { href: '/journal', label: '업무일지·오픈체크', icon: NotebookPen, roles: ['hq_admin', 'branch_owner'] },
+      { href: '/interviews', label: '면담·미팅', icon: HeartHandshake, roles: ['hq_admin', 'branch_owner'] },
       { href: '/attendance', label: '출근 현황', icon: MapPin, roles: ALL },
     ],
   },

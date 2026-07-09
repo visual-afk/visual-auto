@@ -86,7 +86,12 @@ export default async function MembersPage({
   const pending = (pendingData ?? []) as PendingRow[];
 
   // 지점 목록 (본사: 초대 지점 선택 + 그룹 라벨용)
-  const { data: branchesData } = await admin.from('branches').select('id, name').order('name');
+  // 멤버 초대/지점 배정은 실제 지점만 — 글쓰기 전용 브랜드 제외
+  const { data: branchesData } = await admin
+    .from('branches')
+    .select('id, name')
+    .eq('kind', 'salon')
+    .order('name');
   const branches = branchesData ?? [];
   const branchName = new Map(branches.map((b) => [b.id, b.name]));
 

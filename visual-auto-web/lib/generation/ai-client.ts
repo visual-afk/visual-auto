@@ -439,6 +439,150 @@ export async function analyzeVideo(base64Video: string, mimeType: string, instru
   }
 }
 
+// ── 개인면담 분석 (원장 관리자시트 → 앱: 녹음 → 전사·요약·컨디션 점수) ──────
+
+export interface InterviewAnalysis {
+  transcript: string;
+  summary: string;
+  goalProfessional: string;
+  goalPersonal: string;
+  /** AI 제안 점수(0~10). 대화에서 판단 근거가 없으면 null. */
+  suggestedScores: {
+    mental: number | null;
+    physical: number | null;
+    leader_support: number | null;
+    popularity: number | null;
+  };
+  /** 이탈신호 키워드 (없으면 빈 배열) */
+  riskFlags: string[];
+}
+
+/** 인라인 오디오 한계(요청 총 20MB) 근처면 Files API로 우회하는 기준 */
+const INLINE_AUDIO_LIMIT_BYTES = 15 * 1024 * 1024;
+
+function parseScore(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 10 ? Math.round(n) : null;
+}
+
+/**
+ * 개인면담 녹음 → 전사 + 요약 + 목표 + 컨디션 점수 제안 + 이탈신호.
+ * 긴 한국어 전사문을 JSON에 담으면 이스케이프가 깨지므로(글쓰기와 같은 실패 계열)
+ * ===SECTION=== 구분자 포맷으로 받는다. 필수 섹션 누락 시 1회 재시도.
+ */
+export async function analyzeInterview(
+  base64Audio: string,
+  mimeType: string,
+  subjectName: string,
+): Promise<InterviewAnalysis> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('면담 분석에는 GEMINI_API_KEY 가 필요해요');
+  }
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    generationConfig: geminiGenerationConfig({ maxOutputTokens: 32000, temperature: 0.2 }),
+  });
+
+  const sections: DelimitedSection[] = [
+    { name: 'TRANSCRIPT', description: '대화 전사문. 군말("음","어")과 반복은 빼되 내용은 요약하지 말고 그대로. 화자는 [리더]/[구성원]으로 구분' },
+    { name: 'SUMMARY', description: '면담 핵심 요약 3~6문장 (무슨 이야기를 했고, 구성원의 상태가 어떤지)' },
+    { name: 'GOAL_PROFESSIONAL', description: '대화에서 나온 직업적 목표. 없으면 "없음"' },
+    { name: 'GOAL_PERSONAL', description: '대화에서 나온 개인적 목표. 없으면 "없음"' },
+    { name: 'SCORES', description: '한 줄 JSON: {"mental":0~10,"physical":0~10,"leader_support":0~10,"popularity":0~10}. 대화에서 판단할 근거가 없는 항목은 null' },
+    { name: 'RISK_FLAGS', description: '이탈·번아웃·불만 신호 키워드를 한 줄에 하나씩 (예: 급여 불만, 체력 저하). 없으면 "없음"' },
+  ];
+  const instruction = [
+    `다음은 미용실 리더(원장)가 구성원 "${subjectName}"과 나눈 개인면담 녹음이다.`,
+    '한국어로 분석하라. 점수는 구성원의 발언 내용·말투에서 근거를 찾아 보수적으로 제안하라.',
+    '- mental: 현재 정신(마음) 상태 / physical: 몸 상태 / leader_support: 리더에 대한 지지·신뢰 / popularity: 매장 내 관계·인기',
+    buildDelimitedInstruction(sections),
+  ].join('\n');
+
+  // 오디오 파트: 인라인(기본) / 15MB 초과 시 Files API 업로드로 우회
+  let audioPart: object = { inlineData: { mimeType, data: base64Audio } };
+  const approxBytes = Math.floor(base64Audio.length * 0.75);
+  if (approxBytes > INLINE_AUDIO_LIMIT_BYTES) {
+    const [{ GoogleAIFileManager, FileState }, fs, os, path] = await Promise.all([
+      import('@google/generative-ai/server'),
+      import('fs/promises'),
+      import('os'),
+      import('path'),
+    ]);
+    const fm = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+    const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : 'webm';
+    const tmp = path.join(os.tmpdir(), `interview-${Date.now()}.${ext}`);
+    try {
+      await fs.writeFile(tmp, Buffer.from(base64Audio, 'base64'));
+      const up = await fm.uploadFile(tmp, { mimeType });
+      let file = up.file;
+      for (let i = 0; file.state === FileState.PROCESSING && i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        file = await fm.getFile(file.name);
+      }
+      if (file.state !== FileState.ACTIVE) throw new Error('오디오 파일 처리에 실패했어요');
+      audioPart = { fileData: { mimeType, fileUri: file.uri } };
+    } finally {
+      await fs.unlink(tmp).catch(() => {});
+    }
+  }
+
+  const required = sections.filter((s) => s.required !== false).map((s) => s.name);
+  const attempt = async (): Promise<{ map: Map<string, string>; missing: string[] }> => {
+    let result;
+    try {
+      result = await model.generateContent([{ text: instruction }, audioPart as never]);
+    } catch (e) {
+      throw toFriendlyAIError(e);
+    }
+    assertNotTruncated(result.response.candidates?.[0]?.finishReason);
+    const text = result.response.text();
+    let map = parseDelimitedSections(text);
+    if (map.size === 0) map = jsonFallbackToSections(text) ?? map;
+    return { map, missing: required.filter((n) => !map.get(n)) };
+  };
+
+  let { map, missing } = await attempt();
+  if (missing.length > 0) {
+    console.warn('[AI 면담분석] 섹션 누락 → 1회 재시도:', missing.join(', '));
+    ({ map, missing } = await attempt());
+    if (missing.length > 0) throw new Error(`AI 응답 파싱 실패: ${missing.join(', ')} 섹션이 없어요`);
+  }
+
+  const noneToEmpty = (s: string | undefined) => {
+    const t = (s ?? '').trim();
+    return !t || t === '없음' ? '' : t;
+  };
+  let scores: InterviewAnalysis['suggestedScores'] = {
+    mental: null, physical: null, leader_support: null, popularity: null,
+  };
+  try {
+    const raw = parseJsonResponse<Record<string, unknown>>(map.get('SCORES') || '{}');
+    scores = {
+      mental: parseScore(raw.mental),
+      physical: parseScore(raw.physical),
+      leader_support: parseScore(raw.leader_support),
+      popularity: parseScore(raw.popularity),
+    };
+  } catch {
+    /* 점수 파싱 실패 시 전부 null — 원장이 슬라이더로 직접 입력 */
+  }
+  const riskFlags = (map.get('RISK_FLAGS') || '')
+    .split('\n')
+    .map((s) => s.replace(/^[-•*\d.)\s]+/, '').trim())
+    .filter((s) => s && s !== '없음');
+
+  return {
+    transcript: map.get('TRANSCRIPT') || '',
+    summary: map.get('SUMMARY') || '',
+    goalProfessional: noneToEmpty(map.get('GOAL_PROFESSIONAL')),
+    goalPersonal: noneToEmpty(map.get('GOAL_PERSONAL')),
+    suggestedScores: scores,
+    riskFlags,
+  };
+}
+
 /**
  * Gemini가 json 모드에서도 문자열 리터럴 안에 raw 개행·탭을 그대로 내보내는 경우가 있어
  * (긴 한국어 마크다운에서 빈발) 파싱 전에 이스케이프로 복구한다.
