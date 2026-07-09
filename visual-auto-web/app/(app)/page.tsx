@@ -19,10 +19,10 @@ export default async function HomePage() {
 
   return (
     <div className="py-6 md:py-0">
-      {/* 인사 — 지점·지역 자동 표시 */}
+      {/* 인사 — 지점·지역 자동 표시 (겸직자는 소속 지점 전부) */}
       <p className="text-sm text-ink-soft">
-        {member.branchName}
-        {member.region ? ` · ${member.region}` : ''}
+        {member.branchNames.length > 1 ? member.branchNames.join(' · ') : member.branchName}
+        {member.region && member.branchNames.length <= 1 ? ` · ${member.region}` : ''}
       </p>
       <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
         {member.displayName} 디자이너님 <Hand size={22} className="text-brand" />

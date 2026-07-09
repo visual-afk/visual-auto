@@ -16,6 +16,7 @@ export interface MemberContext {
   branchId: string | null; // 홈/기본 지점 (신원 표시·기본 선택값)
   branchName: string | null;
   branchIds: string[]; // 활동 가능한 전체 지점 (홈 ∪ member_branches). 본사는 [] (전 지점)
+  branchNames: string[]; // branchIds에 대응하는 지점 이름 (홈 지점 먼저). 겸직자 화면 표시용
   region: string | null;
   naverBlogUrl: string | null; // 지점 공용 네이버(레거시/폴백)
   imwebUrl: string | null; // 지점 공용 아임웹 (발행 '아임웹 열기' 대상)
@@ -56,13 +57,21 @@ export async function getMember(): Promise<MemberContext | null> {
 
   // 활동 가능한 전체 지점 (홈 ∪ member_branches). best-effort: 테이블 없기 전에도 안 깨지게.
   let branchIds: string[] = member.branch_id ? [member.branch_id] : [];
-  const { data: mbRows } = await admin
+  const branchNames: string[] = branch?.name ? [branch.name] : [];
+  const { data: mbRows, error: mbError } = await admin
     .from('member_branches')
-    .select('branch_id')
+    .select('branch_id, branches(name)')
     .eq('user_id', user.id);
+  if (mbError) console.error('[auth] member_branches 조회 실패 (홈 지점만 노출됨):', mbError.message);
   if (mbRows && mbRows.length > 0) {
     const set = new Set<string>(branchIds);
-    for (const r of mbRows as { branch_id: string }[]) if (r.branch_id) set.add(r.branch_id);
+    for (const r of mbRows) {
+      if (!r.branch_id || set.has(r.branch_id)) continue;
+      set.add(r.branch_id);
+      const rb = (r.branches as any) || null; // 임베드가 객체/배열 어느 쪽으로 와도 이름만 뽑는다
+      const name = Array.isArray(rb) ? rb[0]?.name : rb?.name;
+      if (name) branchNames.push(name);
+    }
     branchIds = [...set];
   }
 
@@ -76,6 +85,7 @@ export async function getMember(): Promise<MemberContext | null> {
     branchId: member.branch_id,
     branchName: branch?.name ?? null,
     branchIds,
+    branchNames,
     region: branch?.region ?? null,
     naverBlogUrl: branch?.naver_blog_url ?? null,
     imwebUrl: branch?.imweb_url ?? null,
