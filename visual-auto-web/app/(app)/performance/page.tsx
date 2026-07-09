@@ -1,11 +1,71 @@
 import { redirect } from 'next/navigation';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { aggregateBranch, fetchComparisonBundle, type PeriodType } from '@/lib/metrics';
+import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
+import { aggregateBranch, aggregateCompany, fetchComparisonBundle, type PeriodType } from '@/lib/metrics';
 import PerformanceDashboard, { type BranchOpt } from '@/components/PerformanceDashboard';
 import ComparisonChartSection from '@/components/ComparisonChartSection';
+import CompanyStatusBoard, { type BranchChip, type Crisis, type Kpi } from '@/components/CompanyStatusBoard';
+import DesignerBreakdown from '@/components/DesignerBreakdown';
+import PlaceStatsSection, { type PlaceStatRow } from '@/components/PlaceStatsSection';
 
 export const dynamic = 'force-dynamic';
+
+/** 원(won) → "3억 1,200만" 컴팩트 표기 */
+function formatKRW(won: number): string {
+  const eok = Math.floor(won / 100_000_000);
+  const man = Math.round((won % 100_000_000) / 10_000);
+  if (eok > 0) return man > 0 ? `${eok}억 ${man.toLocaleString()}만` : `${eok}억`;
+  return `${man.toLocaleString()}만`;
+}
+
+/** 본사 회사 현황 보드 데이터 조립 — 실데이터(원장 공석·지점 목록·매출 롤업) + 부족분 목업 */
+async function CompanyBoard({ period, refDate }: { period: PeriodType; refDate?: string }) {
+  const admin = getAdminSupabase();
+  const [{ data: branchesData }, { data: membersData }, memberBranchMap, rollup] = await Promise.all([
+    // 글쓰기 전용 브랜드(kind='brand')는 성과 보드 대상 아님
+    admin.from('branches').select('id, name').eq('kind', 'salon').order('name'),
+    admin.from('branch_users').select('user_id, branch_id, role, is_active').eq('is_active', true),
+    fetchMemberBranchMap(admin),
+    aggregateCompany(period, refDate),
+  ]);
+  const branches = branchesData ?? [];
+  const members = (membersData ?? []) as { user_id: string; branch_id: string | null; role: string }[];
+  const hasOwner = (bid: string) =>
+    members.some(
+      (m) => m.role === 'branch_owner' && effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id).includes(bid),
+    );
+
+  // 지점 상태: 원장 공석 → 위기(실데이터), 그 외 정상
+  const branchChips: BranchChip[] = branches.map((b) => ({
+    id: b.id,
+    name: b.name,
+    status: (hasOwner(b.id) ? 'ok' : 'crisis') as BranchChip['status'],
+  }));
+
+  // 위기: 원장 공석(실데이터 트리거) + 부가 수치는 목업
+  const crises: Crisis[] = [];
+  for (const b of branches) {
+    if (!hasOwner(b.id)) crises.push({ title: `${b.name} 원장 공석`, detail: '3주째 — 이행률 40%로 추락' });
+  }
+
+  // KPI: metrics_daily 있으면 실집계, 없으면 목업 폴백
+  const kpis: Kpi[] = rollup.hasData
+    ? [
+        { label: '전사 매출', value: formatKRW(rollup.sales.total), delta: rollup.sales.totalDelta },
+        { label: '신규', value: formatKRW(rollup.sales.new), delta: rollup.sales.newDelta },
+        { label: '재방', value: formatKRW(rollup.sales.repeat), delta: rollup.sales.repeatDelta },
+      ]
+    : [
+        { label: '전사 매출', value: '3억 1,200만', delta: 0.04 },
+        { label: '신규', value: '9,400만', delta: 0.09 },
+        { label: '재방', value: '2억 1,800만', delta: -0.03 },
+      ];
+
+  return (
+    <CompanyStatusBoard monthLabel={rollup.range.label} crises={crises} kpis={kpis} branches={branchChips} />
+  );
+}
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -49,21 +109,33 @@ export default async function PerformancePage({
       : null;
   const refDate = refParam ?? isoDay(new Date());
   const admin = getAdminSupabase();
+  const isHq = me.role === 'hq_admin';
 
-  // 본사: 지점 선택 / 원장: 자기 지점
+  // 본사: 전 지점 선택 / 멀티지점 원장: 소속 지점 선택 / 단일지점 원장: 자기 지점
+  const canPickBranch = isHq || me.branchIds.length > 1;
   let branchOpts: BranchOpt[] = [];
   let branchId: string | null = me.branchId;
   let branchName = me.branchName;
-  if (me.role === 'hq_admin') {
-    const { data } = await admin.from('branches').select('id, name, handsos_pk').order('name');
+  if (canPickBranch) {
+    let bq = admin.from('branches').select('id, name, handsos_pk').eq('kind', 'salon').order('name');
+    if (!isHq) bq = bq.in('id', me.branchIds);
+    const { data } = await bq;
     branchOpts = (data ?? []).map((b) => ({ id: b.id, name: b.name, hasSource: !!b.handsos_pk }));
-    branchId = sp.branch || branchOpts.find((b) => b.hasSource)?.id || branchOpts[0]?.id || null;
+    const picked = sp.branch && branchOpts.some((b) => b.id === sp.branch) ? sp.branch : null;
+    branchId =
+      picked || (isHq ? branchOpts.find((b) => b.hasSource)?.id : me.branchId) || branchOpts[0]?.id || null;
     branchName = branchOpts.find((b) => b.id === branchId)?.name ?? null;
   }
 
+  // 본사는 회사 현황 보드를 항상 위에 얹고, 아래에 지점 성과 대시보드
   if (!branchId) {
     return (
-      <div className="py-10 text-center text-sm text-ink-faint">연결된 지점이 없어요.</div>
+      <div className="py-6 md:py-0">
+        {isHq && <CompanyBoard period={period} refDate={refDate} />}
+        {!isHq && (
+          <div className="py-10 text-center text-sm text-ink-faint">연결된 지점이 없어요.</div>
+        )}
+      </div>
     );
   }
 
@@ -89,6 +161,14 @@ export default async function PerformancePage({
     }
   }
 
+  // 플레이스 통계 스냅샷 (스마트플레이스 스크린샷 OCR로 쌓인 기록)
+  const { data: placeRows } = await admin
+    .from('place_stats')
+    .select('id, stat_date, period, place_views, inflows, review_count')
+    .eq('branch_id', branchId)
+    .order('stat_date', { ascending: false })
+    .limit(8);
+
   // 마지막 동기화 시각
   const { data: last } = await admin
     .from('metrics_daily')
@@ -112,13 +192,15 @@ export default async function PerformancePage({
 
   return (
     <div className="space-y-8 py-6 md:py-0">
+      {isHq && <CompanyBoard period={period} refDate={refDate} />}
       <PerformanceDashboard
         data={data}
         period={period}
         branchId={branchId}
         branchName={branchName}
         branchOpts={branchOpts}
-        isHq={me.role === 'hq_admin'}
+        isHq={isHq}
+        canPickBranch={canPickBranch}
         syncedLabel={syncedLabel}
         refDate={refDate}
         prevRef={nav.prevRef}
@@ -127,6 +209,8 @@ export default async function PerformancePage({
         monthOptions={monthOptions}
       />
       {data.hasData && <ComparisonChartSection bundle={comparisonBundle} />}
+      <PlaceStatsSection rows={(placeRows ?? []) as PlaceStatRow[]} branchId={branchId} />
+      <DesignerBreakdown branchId={branchId} period={period} refDate={refDate} />
     </div>
   );
 }

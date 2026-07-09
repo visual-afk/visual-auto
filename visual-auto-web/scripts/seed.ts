@@ -33,6 +33,9 @@ const BRANCHES = [
   { name: '서면전포점', region: '부산 부산진구', slug: '서면전포점' },
 ];
 
+// 글쓰기 전용 브랜드 (kind='brand') — 운영 대시보드에는 안 나오고 콘텐츠 화면에만 노출
+const BRANDS = ['아카데미', '트리필드', '누혜', '비주얼살롱'];
+
 async function ensureUser(loginId: string, displayName: string) {
   const email = emailOf(loginId);
   // 이미 있으면 재사용
@@ -92,6 +95,15 @@ async function main() {
     if (error) throw error;
     branchIds[b.name] = data.id;
     console.log(`  🏪 ${b.name} (${b.region})`);
+  }
+
+  // 1-2) 글쓰기 전용 브랜드
+  for (const name of BRANDS) {
+    const { error } = await admin
+      .from('branches')
+      .upsert({ name, kind: 'brand', knowledge_slug: name }, { onConflict: 'name' });
+    if (error) throw error;
+    console.log(`  ✍️ ${name} (글쓰기 전용 브랜드)`);
   }
 
   // 2) 본사 hq_admin

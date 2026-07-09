@@ -29,7 +29,8 @@ export default async function OverviewPage() {
 
   const admin = getAdminSupabase();
   const [{ data: branchesData }, { data: membersData }, { data: postsData }, memberBranchMap] = await Promise.all([
-    admin.from('branches').select('id, name').order('name'),
+    // 글쓰기 전용 브랜드는 지점 KPI 대상 아님
+    admin.from('branches').select('id, name').eq('kind', 'salon').order('name'),
     admin.from('branch_users').select('user_id, branch_id, role, is_active').eq('is_active', true),
     admin.from('posts').select('branch_id, views'),
     fetchMemberBranchMap(admin),

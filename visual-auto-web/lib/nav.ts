@@ -1,6 +1,7 @@
 import {
   PenLine,
   BarChart3,
+  CalendarDays,
   Users,
   LayoutGrid,
   Building2,
@@ -36,6 +37,7 @@ export const FOLDERS: NavFolder[] = [
     key: '콘텐츠',
     label: '콘텐츠',
     items: [
+      { href: '/calendar', label: '콘텐츠 캘린더', icon: CalendarDays, roles: ALL },
       { href: '/write', label: '글쓰기', icon: PenLine, roles: ALL },
       { href: '/reels', label: '릴스', icon: Film, roles: ALL },
       { href: '/review', label: '리뷰 답글', icon: MessageSquare, roles: ALL },

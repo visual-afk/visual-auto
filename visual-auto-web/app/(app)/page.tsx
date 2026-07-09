@@ -1,75 +1,113 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Hand, Eye } from 'lucide-react';
+import { PenLine, Film, Bell, ChevronRight } from 'lucide-react';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
+function isThisMonth(s: string, now: Date) {
+  const d = new Date(s);
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
+
 export default async function HomePage() {
   const member = (await getMember())!;
-  if (member.role === 'hq_admin') redirect('/overview'); // 본사는 전체 현황으로
+  if (member.role === 'hq_admin') redirect('/performance'); // 본사는 회사 현황으로
+
   const admin = getAdminSupabase();
-  const { data: posts } = await admin
-    .from('posts')
-    .select('id, title, views, status, published_at, created_at')
-    .eq('author_id', member.userId)
-    .order('created_at', { ascending: false })
-    .limit(5);
+  const [{ data: posts }, { data: reels }] = await Promise.all([
+    admin.from('posts').select('views, status, published_at, created_at').eq('author_id', member.userId),
+    admin.from('reels').select('views, created_at').eq('author_id', member.userId),
+  ]);
+
+  const list = posts ?? [];
+  const reelList = reels ?? [];
+  const now = new Date();
+  // 발행한 글만 센다 — 생성만 하고 발행 안 한 초안이 "글 1"로 잡히면 혼란
+  const monthPosts = list.filter(
+    (p) => p.status === 'published' && isThisMonth(p.published_at || p.created_at, now)
+  ).length;
+  const monthReels = reelList.filter((r) => isThisMonth(r.created_at, now)).length;
+  const totalViews = [...list, ...reelList].reduce((s, p) => s + (p.views || 0), 0);
+
+  // 소스 없는 값은 목업 — 추후 시트/리뷰 테이블 연동 예정
+  const recommendedTopic = '써마지급 결관리';
+  const pendingReviews = 2;
 
   return (
     <div className="py-6 md:py-0">
-      {/* 인사 — 지점·지역 자동 표시 (겸직자는 소속 지점 전부) */}
-      <p className="text-sm text-ink-soft">
+      {/* 헤더 — 겸직자는 소속 지점 전부 표시 */}
+      <h1 className="text-2xl font-bold">오늘 이거 3개만요</h1>
+      <p className="mt-1 text-sm text-ink-soft">
+        {member.displayName} 디자이너님 ·{' '}
         {member.branchNames.length > 1 ? member.branchNames.join(' · ') : member.branchName}
         {member.region && member.branchNames.length <= 1 ? ` · ${member.region}` : ''}
       </p>
-      <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
-        {member.displayName} 디자이너님 <Hand size={22} className="text-brand" />
-      </h1>
 
-      {/* 오늘 글쓰기 */}
-      <Link
-        href="/write"
-        className="mt-6 block rounded-xl2 bg-brand p-6 text-brand-ink shadow-card transition active:scale-[0.99]"
-      >
-        <span className="text-lg font-bold">오늘 글쓰기 →</span>
-        <span className="mt-1 block text-sm opacity-90">시술 하나만 골라도 글이 완성돼요</span>
-      </Link>
+      {/* 오늘 할 일 3개 */}
+      <div className="mt-6 space-y-3">
+        <TaskCard
+          href="/write"
+          icon={<PenLine size={18} />}
+          title="블로그 쓰기"
+          sub={`추천 주제: ${recommendedTopic}`}
+        />
+        <TaskCard
+          href="/reels"
+          icon={<Film size={18} />}
+          title="릴스 1개 만들기"
+          sub="레퍼런스 골라서 5분이면 돼요"
+        />
+        <TaskCard
+          href="/review"
+          icon={<Bell size={18} />}
+          title={`새 리뷰 답글 ${pendingReviews}개`}
+          sub="답글 기다리는 리뷰가 있어요"
+          highlight
+        />
+      </div>
 
-      {/* 지난 글 */}
-      <h2 className="mb-3 mt-8 text-sm font-semibold text-ink-soft">지난 글</h2>
-      {posts && posts.length > 0 ? (
-        <ul className="space-y-2">
-          {posts.map((p) => (
-            <li key={p.id}>
-              <Link
-                href={`/track/${p.id}`}
-                className="flex items-center justify-between rounded-xl2 border border-line bg-surface px-4 py-3.5"
-              >
-                <span className="truncate font-medium">{p.title || '제목 없음'}</span>
-                <span className="ml-3 shrink-0 text-sm text-ink-soft">
-                  {p.status === 'published' ? (
-                    p.views != null ? (
-                      <span className="inline-flex items-center gap-1 font-semibold text-brand">
-                        <Eye size={14} /> {p.views.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-warn">조회수 입력</span>
-                    )
-                  ) : (
-                    <span className="text-ink-faint">작성 중</span>
-                  )}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="rounded-xl2 border border-dashed border-line px-4 py-8 text-center text-sm text-ink-faint">
-          아직 쓴 글이 없어요. 위에서 첫 글을 시작해보세요!
-        </p>
-      )}
+      {/* 이번 달 요약 */}
+      <div className="mt-6 rounded-xl2 border border-line bg-surface px-5 py-4 text-center text-sm font-semibold text-ink-soft">
+        내 이번 달 · 글 {monthPosts} · 릴스 {monthReels} · 조회 {totalViews.toLocaleString()}
+      </div>
     </div>
+  );
+}
+
+function TaskCard({
+  href,
+  icon,
+  title,
+  sub,
+  highlight,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  highlight?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 rounded-xl2 border px-4 py-4 shadow-card transition active:scale-[0.99] ${
+        highlight ? 'border-brand bg-brand-wash' : 'border-line bg-surface'
+      }`}
+    >
+      {highlight ? (
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-brand-ink">
+          {icon}
+        </span>
+      ) : (
+        <span className="h-6 w-6 shrink-0 rounded-full border-2 border-line" />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className={`block font-bold ${highlight ? 'text-brand' : ''}`}>{title}</span>
+        <span className="mt-0.5 block truncate text-sm text-ink-soft">{sub}</span>
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-ink-faint" />
+    </Link>
   );
 }

@@ -10,7 +10,12 @@ export default async function ReviewPage() {
   const needsBranchPick = isHq || member.branchIds.length > 1;
   const admin = getAdminSupabase();
 
-  let bq = admin.from('branches').select('id, name, naver_place_id, naver_short_url').order('name');
+  // 플레이스 리뷰 답글은 실제 지점 전용 — 글쓰기 전용 브랜드 제외
+  let bq = admin
+    .from('branches')
+    .select('id, name, naver_place_id, naver_short_url')
+    .eq('kind', 'salon')
+    .order('name');
   if (!isHq) bq = bq.in('id', member.branchIds);
   const { data } = await bq;
   const branches: BranchOption[] = (data ?? []).map((b) => ({

@@ -7,7 +7,19 @@ import type { Post, PhotoGuideItem } from '@/lib/types';
 import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
 
-const CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
+// 지점(살롱)은 시술 칩, 글쓰기 전용 브랜드는 브랜드별 칩
+const SALON_CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
+const BRAND_CHIPS: Record<string, string[]> = {
+  아카데미: ['수강후기', '커리큘럼', '원데이클래스', '수료생'],
+  트리필드: ['제품 소개', '사용 후기', '이벤트', '브랜드 스토리'],
+  누혜: ['제품 소개', '사용 후기', '이벤트', '브랜드 스토리'],
+  비주얼살롱: ['브랜드 소식', '지점 오픈', '이벤트', '교육/세미나'],
+};
+
+function chipSetFor(branch: BranchOpt | null): string[] {
+  if (!branch || branch.kind !== 'brand') return SALON_CHIPS;
+  return BRAND_CHIPS[branch.name] ?? [];
+}
 
 const RECORD_MIMES = ['audio/webm', 'audio/mp4', 'audio/ogg'];
 
@@ -25,7 +37,13 @@ interface Topic {
   reason: string;
 }
 
-type BranchOpt = { id: string; name: string; naverBlogUrl: string | null; imwebUrl: string | null };
+type BranchOpt = {
+  id: string;
+  name: string;
+  kind: 'salon' | 'brand'; // brand = 글쓰기 전용 (아카데미/트리필드/누혜/비주얼살롱)
+  naverBlogUrl: string | null;
+  imwebUrl: string | null;
+};
 
 export default function WriteStudio({
   branches,
@@ -41,6 +59,7 @@ export default function WriteStudio({
   const router = useRouter();
   const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
   const selectedBranch = branches.find((b) => b.id === branchId) ?? null;
+  const chipSet = chipSetFor(selectedBranch);
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
@@ -61,6 +80,13 @@ export default function WriteStudio({
 
   function toggleChip(c: string) {
     setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }
+
+  function pickBranch(id: string) {
+    setBranchId(id);
+    // 지점/브랜드가 바뀌면 새 칩셋에 없는 칩은 제거 (예: '결마지'가 아카데미 글에 안 넘어가게)
+    const next = chipSetFor(branches.find((b) => b.id === id) ?? null);
+    setChips((prev) => prev.filter((c) => next.includes(c)));
   }
 
   async function startRecording() {
@@ -231,7 +257,7 @@ export default function WriteStudio({
       {needsBranchPick && (
         <div className="mb-6">
           <p className="label">어느 지점으로 쓸까요?</p>
-          <select className="field" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <select className="field" value={branchId} onChange={(e) => pickBranch(e.target.value)}>
             <option value="">지점 선택</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
@@ -245,16 +271,18 @@ export default function WriteStudio({
       <div className="grid gap-6 md:grid-cols-2">
         {/* 좌측: 입력 */}
         <section className="space-y-6">
-          <div>
-            <p className="label">어떤 시술 했어요?</p>
-            <div className="flex flex-wrap gap-2">
-              {CHIPS.map((c) => (
-                <button key={c} onClick={() => toggleChip(c)} className={`chip ${chips.includes(c) ? 'chip-on' : ''}`}>
-                  {c}
-                </button>
-              ))}
+          {chipSet.length > 0 && (
+            <div>
+              <p className="label">{selectedBranch?.kind === 'brand' ? '어떤 내용이에요?' : '어떤 시술 했어요?'}</p>
+              <div className="flex flex-wrap gap-2">
+                {chipSet.map((c) => (
+                  <button key={c} onClick={() => toggleChip(c)} className={`chip ${chips.includes(c) ? 'chip-on' : ''}`}>
+                    {c}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
             <p className="label">기록</p>
