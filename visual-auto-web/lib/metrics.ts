@@ -50,14 +50,18 @@ interface RawSums {
 }
 const emptySums = (): RawSums => ({ cut: 0, perm: 0, recovery: 0, clinic: 0, dye: 0, etc: 0, new_sales: 0, repeat_sales: 0, guest_count: 0 });
 
-async function sumBranch(branchId: string, start: string, end: string): Promise<RawSums> {
-  const { data } = await getAdminSupabase()
+/** 단일 지점(string) 또는 여러 지점 합산(string[]) — 비주얼살롱(전지점) 뷰용 */
+export type BranchRef = string | string[];
+
+async function sumBranch(branchId: BranchRef, start: string, end: string): Promise<RawSums> {
+  let q = getAdminSupabase()
     .from('metrics_daily')
     .select('cut,perm,recovery,clinic,dye,etc,new_sales,repeat_sales,guest_count')
-    .eq('branch_id', branchId)
     .eq('scope', 'branch')
     .gte('date', start)
     .lte('date', end);
+  q = Array.isArray(branchId) ? q.in('branch_id', branchId) : q.eq('branch_id', branchId);
+  const { data } = await q;
   const s = emptySums();
   for (const r of data || []) {
     s.cut += r.cut; s.perm += r.perm; s.recovery += r.recovery; s.clinic += r.clinic;
@@ -68,14 +72,15 @@ async function sumBranch(branchId: string, start: string, end: string): Promise<
 }
 
 /** 앱 콘텐츠 조회수(노출 프록시): 기간 내 발행 글 views 합 */
-async function sumBlogViews(branchId: string, start: string, end: string): Promise<number> {
-  const { data } = await getAdminSupabase()
+async function sumBlogViews(branchId: BranchRef, start: string, end: string): Promise<number> {
+  let q = getAdminSupabase()
     .from('posts')
     .select('views, created_at')
-    .eq('branch_id', branchId)
     .not('views', 'is', null)
     .gte('created_at', start)
     .lte('created_at', end + 'T23:59:59');
+  q = Array.isArray(branchId) ? q.in('branch_id', branchId) : q.eq('branch_id', branchId);
+  const { data } = await q;
   return (data || []).reduce((a, p) => a + (p.views || 0), 0);
 }
 
@@ -94,8 +99,8 @@ export interface BranchDashboard {
   diagnosis: { tone: 'good' | 'warn' | 'neutral'; title: string; body: string };
 }
 
-/** 지점 대시보드 집계 */
-export async function aggregateBranch(branchId: string, type: PeriodType, ref?: string): Promise<BranchDashboard> {
+/** 지점 대시보드 집계 (배열이면 여러 지점 합산 — 비주얼살롱 전지점 뷰) */
+export async function aggregateBranch(branchId: BranchRef, type: PeriodType, ref?: string): Promise<BranchDashboard> {
   const range = resolveRange(type, ref);
   const [cur, prev, exposure] = await Promise.all([
     sumBranch(branchId, range.start, range.end),
@@ -185,18 +190,47 @@ export interface ComparisonBundle {
 
 type DayValue = { sales: number; guests: number };
 
-/** 기간 내 일별 {매출, 접객} — scope='branch' 행만 */
-async function fetchDailySeries(branchId: string, start: string, end: string): Promise<Map<string, DayValue>> {
-  const { data } = await getAdminSupabase()
+/** 비교 그래프 데이터 소스: salon=metrics_daily(HandSOS), brand=product_sales_daily(구글시트) */
+export type ComparisonSource = 'salon' | 'brand';
+
+/** 기간 내 일별 {매출, 접객|주문} */
+async function fetchDailySeries(
+  branchId: BranchRef,
+  start: string,
+  end: string,
+  source: ComparisonSource = 'salon',
+): Promise<Map<string, DayValue>> {
+  const map = new Map<string, DayValue>();
+  if (source === 'brand') {
+    // 브랜드: 채널 총계 행을 일별로 합산 (sales=매출, guests=주문수)
+    let q = getAdminSupabase()
+      .from('product_sales_daily')
+      .select('date,revenue,orders')
+      .eq('scope', 'channel')
+      .gte('date', start)
+      .lte('date', end);
+    q = Array.isArray(branchId) ? q.in('branch_id', branchId) : q.eq('branch_id', branchId);
+    const { data } = await q;
+    for (const r of data || []) {
+      const prev = map.get(r.date as string) || { sales: 0, guests: 0 };
+      map.set(r.date as string, { sales: prev.sales + (r.revenue || 0), guests: prev.guests + (r.orders || 0) });
+    }
+    return map;
+  }
+  let q = getAdminSupabase()
     .from('metrics_daily')
     .select('date,new_sales,repeat_sales,guest_count')
-    .eq('branch_id', branchId)
     .eq('scope', 'branch')
     .gte('date', start)
     .lte('date', end);
-  const map = new Map<string, DayValue>();
+  q = Array.isArray(branchId) ? q.in('branch_id', branchId) : q.eq('branch_id', branchId);
+  const { data } = await q;
   for (const r of data || []) {
-    map.set(r.date as string, { sales: (r.new_sales || 0) + (r.repeat_sales || 0), guests: r.guest_count || 0 });
+    const prev = map.get(r.date as string) || { sales: 0, guests: 0 };
+    map.set(r.date as string, {
+      sales: prev.sales + (r.new_sales || 0) + (r.repeat_sales || 0),
+      guests: prev.guests + (r.guest_count || 0),
+    });
   }
   return map;
 }
@@ -288,7 +322,11 @@ function buildSeries(
 }
 
 /** 저번달/지난 분기/작년 비교 시리즈 일괄 조회 (성과 페이지 서버 프리페치용). ref는 기준 기간 선택용. */
-export async function fetchComparisonBundle(branchId: string, ref?: string): Promise<ComparisonBundle> {
+export async function fetchComparisonBundle(
+  branchId: BranchRef,
+  ref?: string,
+  source: ComparisonSource = 'salon',
+): Promise<ComparisonBundle> {
   const base = ref ? new Date(ref + 'T00:00:00Z') : new Date();
   const todayIso = iso(new Date()); // 선이 멈추는 지점(cutoff)은 항상 실제 오늘 — 과거 달 선택 시 전체가 그려짐
   const thisYear = new Date().getUTCFullYear();
@@ -312,11 +350,11 @@ export async function fetchComparisonBundle(branchId: string, ref?: string): Pro
 
   const [cmR, pmR, lyR, cqR, pqR] = [monthRange(curMonth), monthRange(prevMonth), monthRange(lastYearMonth), quarterRange(curQ), quarterRange(prevQ)];
   const [cm, pm, ly, cq, pq] = await Promise.all([
-    fetchDailySeries(branchId, cmR[0], cmR[1]),
-    fetchDailySeries(branchId, pmR[0], pmR[1]),
-    fetchDailySeries(branchId, lyR[0], lyR[1]),
-    fetchDailySeries(branchId, cqR[0], cqR[1]),
-    fetchDailySeries(branchId, pqR[0], pqR[1]),
+    fetchDailySeries(branchId, cmR[0], cmR[1], source),
+    fetchDailySeries(branchId, pmR[0], pmR[1], source),
+    fetchDailySeries(branchId, lyR[0], lyR[1], source),
+    fetchDailySeries(branchId, cqR[0], cqR[1], source),
+    fetchDailySeries(branchId, pqR[0], pqR[1], source),
   ]);
 
   // 저번달: 일별, x축 = 두 달 중 긴 쪽
