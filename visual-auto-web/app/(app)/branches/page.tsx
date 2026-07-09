@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Info } from 'lucide-react';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { fetchMemberBranchMap, countMembersByBranch } from '@/lib/memberBranches';
 import BranchForm from '@/components/BranchForm';
 import BranchActions, { type BranchRowData } from '@/components/BranchActions';
 
@@ -12,14 +13,14 @@ export default async function BranchesPage() {
   if (me.role !== 'hq_admin') redirect('/');
 
   const admin = getAdminSupabase();
-  const [{ data: branchesData }, { data: members }, { data: posts }] = await Promise.all([
+  const [{ data: branchesData }, { data: members }, { data: posts }, memberBranchMap] = await Promise.all([
     admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, address, lat, lng, geofence_radius_m').order('name'),
-    admin.from('branch_users').select('branch_id'),
+    admin.from('branch_users').select('user_id, branch_id'),
     admin.from('posts').select('branch_id'),
+    fetchMemberBranchMap(admin),
   ]);
 
-  const memberCount = new Map<string, number>();
-  for (const m of members ?? []) if (m.branch_id) memberCount.set(m.branch_id, (memberCount.get(m.branch_id) || 0) + 1);
+  const memberCount = countMembersByBranch(members ?? [], memberBranchMap);
   const postCount = new Map<string, number>();
   for (const p of posts ?? []) if (p.branch_id) postCount.set(p.branch_id, (postCount.get(p.branch_id) || 0) + 1);
 

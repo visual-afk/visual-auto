@@ -37,11 +37,12 @@ export default async function HomePage() {
 
   return (
     <div className="py-6 md:py-0">
-      {/* 헤더 */}
+      {/* 헤더 — 겸직자는 소속 지점 전부 표시 */}
       <h1 className="text-2xl font-bold">오늘 이거 3개만요</h1>
       <p className="mt-1 text-sm text-ink-soft">
-        {member.displayName} 디자이너님 · {member.branchName}
-        {member.region ? ` · ${member.region}` : ''}
+        {member.displayName} 디자이너님 ·{' '}
+        {member.branchNames.length > 1 ? member.branchNames.join(' · ') : member.branchName}
+        {member.region && member.branchNames.length <= 1 ? ` · ${member.region}` : ''}
       </p>
 
       {/* 오늘 할 일 3개 */}

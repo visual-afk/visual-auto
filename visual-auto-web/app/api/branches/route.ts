@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { fetchMemberBranchMap, countMembersByBranch } from '@/lib/memberBranches';
 
 /** 숫자로 파싱, 비거나 NaN이면 null */
 function numOrNull(v: unknown): number | null {
@@ -25,14 +26,14 @@ export async function GET() {
   if ('error' in res) return res.error;
 
   const admin = getAdminSupabase();
-  const [{ data: branches }, { data: members }, { data: posts }] = await Promise.all([
+  const [{ data: branches }, { data: members }, { data: posts }, memberBranchMap] = await Promise.all([
     admin.from('branches').select('id, name, region, knowledge_slug, naver_blog_url, imweb_url, address, lat, lng, geofence_radius_m').order('name'),
-    admin.from('branch_users').select('branch_id'),
+    admin.from('branch_users').select('user_id, branch_id'),
     admin.from('posts').select('branch_id'),
+    fetchMemberBranchMap(admin),
   ]);
 
-  const memberCount = new Map<string, number>();
-  for (const m of members ?? []) if (m.branch_id) memberCount.set(m.branch_id, (memberCount.get(m.branch_id) || 0) + 1);
+  const memberCount = countMembersByBranch(members ?? [], memberBranchMap);
   const postCount = new Map<string, number>();
   for (const p of posts ?? []) if (p.branch_id) postCount.set(p.branch_id, (postCount.get(p.branch_id) || 0) + 1);
 

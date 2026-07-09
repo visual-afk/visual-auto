@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { getMember, canManage, roleLabel, type Role } from '@/lib/auth';
 import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
 import { aggregateTeamCoaching, type CoachingInputMember, type MemberCoaching } from '@/lib/coaching';
 import type { PeriodType } from '@/lib/metrics';
 import InviteForm from '@/components/InviteForm';
@@ -66,12 +67,21 @@ export default async function MembersPage({
 
   const admin = getAdminSupabase();
 
-  // 멤버
+  // 멤버 — 홈 지점(branch_id)뿐 아니라 member_branches로 배정된 사람도 포함
   let mq = admin
     .from('branch_users')
     .select('id, user_id, display_name, phone, role, is_active, branch_id')
     .order('created_at');
-  if (!isHq) mq = mq.in('branch_id', member.branchIds);
+  if (!isHq) {
+    const { data: assignedRows } = await admin
+      .from('member_branches')
+      .select('user_id')
+      .in('branch_id', member.branchIds);
+    const assignedIds = [...new Set((assignedRows ?? []).map((r) => r.user_id as string))];
+    mq = assignedIds.length
+      ? mq.or(`branch_id.in.(${member.branchIds.join(',')}),user_id.in.(${assignedIds.join(',')})`)
+      : mq.in('branch_id', member.branchIds);
+  }
   const { data: membersData } = await mq;
   const members = (membersData ?? []) as MemberRow[];
 
@@ -98,22 +108,11 @@ export default async function MembersPage({
   // 내가 배정(지점 추가/제거)할 수 있는 지점 (본사=전체 / 원장=소속 지점)
   const assignableBranches = isHq ? branches : branches.filter((b) => member.branchIds.includes(b.id));
 
-  // 각 멤버가 현재 소속된 지점 집합 (지점 배정 UI 초기값) — user_id → branch_id[]
-  const memberBranchMap = new Map<string, string[]>();
-  if (members.length > 0) {
-    const { data: mbRows } = await admin
-      .from('member_branches')
-      .select('user_id, branch_id')
-      .in(
-        'user_id',
-        members.map((m) => m.user_id),
-      );
-    for (const r of (mbRows ?? []) as { user_id: string; branch_id: string }[]) {
-      const arr = memberBranchMap.get(r.user_id) ?? [];
-      arr.push(r.branch_id);
-      memberBranchMap.set(r.user_id, arr);
-    }
-  }
+  // 각 멤버가 현재 소속된 지점 집합 (그룹핑 + 지점 배정 UI 초기값) — user_id → branch_id[]
+  const memberBranchMap = await fetchMemberBranchMap(
+    admin,
+    members.map((m) => m.user_id),
+  );
 
   // 코칭 지표 (사람별 릴스·블로그·리뷰 + 조회수 + 저장률 → 규칙 기반 코칭)
   const inputMembers: CoachingInputMember[] = members.map((m) => ({
@@ -142,10 +141,21 @@ export default async function MembersPage({
     ? groupBranches.map((b) => ({
         key: b.id,
         name: b.name,
-        members: members.filter((m) => m.branch_id === b.id),
+        members: members.filter((m) => effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id).includes(b.id)),
         pending: pending.filter((p) => p.branch_id === b.id),
       }))
     : [{ key: 'mine', name: member.branchName ?? '우리 지점', members, pending }];
+
+  // 본사(지점 없음) 멤버·초대는 지점 그룹에 안 걸리므로 별도 그룹으로 (본사만 보임)
+  if (showGroups && isHq) {
+    const hqMembers = members.filter(
+      (m) => m.role === 'hq_admin' && effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id).length === 0,
+    );
+    const hqPending = pending.filter((p) => !p.branch_id);
+    if (hqMembers.length > 0 || hqPending.length > 0) {
+      groups.unshift({ key: 'hq', name: '본사', members: hqMembers, pending: hqPending });
+    }
+  }
 
   return (
     <div className="py-6 md:py-0">
@@ -215,7 +225,7 @@ export default async function MembersPage({
                       myRole={member.role}
                       coaching={coaching.get(m.user_id)!}
                       assignableBranches={showGroups ? assignableBranches : []}
-                      currentBranchIds={memberBranchMap.get(m.user_id) ?? (m.branch_id ? [m.branch_id] : [])}
+                      currentBranchIds={effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id)}
                       homeBranchId={m.branch_id}
                     />
                   );

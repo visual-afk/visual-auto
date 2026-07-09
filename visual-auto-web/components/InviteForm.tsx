@@ -27,21 +27,25 @@ export default function InviteForm({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
-  // 초대 가능 역할: 원장은 디자이너/인턴, 본사는 원장도
+  // 초대 가능 역할: 원장은 디자이너/인턴, 본사는 원장·본사 관리자도
   const roleOptions = isHq
     ? [
         { value: 'designer', label: '디자이너' },
         { value: 'intern', label: '인턴' },
         { value: 'branch_owner', label: '원장' },
+        { value: 'hq_admin', label: '본사 관리자' },
       ]
     : [
         { value: 'designer', label: '디자이너' },
         { value: 'intern', label: '인턴' },
       ];
 
+  // 본사 관리자 초대는 지점이 없다 (전 지점 접근)
+  const needsBranch = isHq && role !== 'hq_admin';
+
   async function createInvite() {
     setError('');
-    if (isHq && !branchId) {
+    if (needsBranch && !branchId) {
       setError('지점을 선택해주세요');
       return;
     }
@@ -53,7 +57,7 @@ export default function InviteForm({
         invitee_name: name,
         invitee_contact: contact,
         role,
-        ...(isHq ? { branch_id: branchId } : {}),
+        ...(needsBranch ? { branch_id: branchId } : {}),
       }),
     });
     const data = await res.json();
@@ -95,8 +99,13 @@ export default function InviteForm({
           placeholder="연락처 (카톡·문자)"
         />
         {isHq && (
-          <select className="field md:w-40" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">지점 선택</option>
+          <select
+            className="field md:w-40 disabled:opacity-50"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            disabled={!needsBranch}
+          >
+            <option value="">{needsBranch ? '지점 선택' : '지점 없음(본사)'}</option>
             {branches?.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
