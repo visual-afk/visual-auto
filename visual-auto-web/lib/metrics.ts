@@ -17,18 +17,21 @@ export interface DateRange {
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** 기간 + 직전 동기간 범위(증감용). ref 기본 오늘(UTC). */
+/** 기간 + 직전 동기간 범위(증감용). ref 기본 오늘(UTC). 주간은 월~일 달력 주. */
 export function resolveRange(type: PeriodType, ref?: string): DateRange {
   const base = ref ? new Date(ref + 'T00:00:00Z') : new Date();
   if (type === 'week') {
-    const end = new Date(base);
+    // ref가 속한 주의 월요일 ~ 일요일
     const start = new Date(base);
-    start.setUTCDate(start.getUTCDate() - 6);
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    const prevStart = new Date(start);
+    prevStart.setUTCDate(prevStart.getUTCDate() - 7);
     const prevEnd = new Date(start);
     prevEnd.setUTCDate(prevEnd.getUTCDate() - 1);
-    const prevStart = new Date(prevEnd);
-    prevStart.setUTCDate(prevStart.getUTCDate() - 6);
-    return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label: '최근 7일' };
+    const label = `${start.getUTCMonth() + 1}/${start.getUTCDate()}~${end.getUTCMonth() + 1}/${end.getUTCDate()}`;
+    return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label };
   }
   // month
   const y = base.getUTCFullYear();
@@ -37,7 +40,8 @@ export function resolveRange(type: PeriodType, ref?: string): DateRange {
   const end = new Date(Date.UTC(y, m + 1, 0));
   const prevStart = new Date(Date.UTC(y, m - 1, 1));
   const prevEnd = new Date(Date.UTC(y, m, 0));
-  return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label: `${m + 1}월` };
+  const label = y === new Date().getUTCFullYear() ? `${m + 1}월` : `${y}년 ${m + 1}월`;
+  return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label };
 }
 
 interface RawSums {
@@ -283,13 +287,15 @@ function buildSeries(
   };
 }
 
-/** 저번달/지난 분기/작년 비교 시리즈 일괄 조회 (성과 페이지 서버 프리페치용) */
+/** 저번달/지난 분기/작년 비교 시리즈 일괄 조회 (성과 페이지 서버 프리페치용). ref는 기준 기간 선택용. */
 export async function fetchComparisonBundle(branchId: string, ref?: string): Promise<ComparisonBundle> {
   const base = ref ? new Date(ref + 'T00:00:00Z') : new Date();
-  const todayIso = iso(base);
+  const todayIso = iso(new Date()); // 선이 멈추는 지점(cutoff)은 항상 실제 오늘 — 과거 달 선택 시 전체가 그려짐
+  const thisYear = new Date().getUTCFullYear();
   const y = base.getUTCFullYear();
   const m = base.getUTCMonth();
   const q = Math.floor(m / 3); // 0~3
+  const monthLabel = (w: { y: number; m: number }) => (w.y === thisYear ? `${w.m + 1}월` : `${w.y}년 ${w.m + 1}월`);
 
   // 5개 윈도우: 이번달 / 지난달 / 이번분기 / 지난분기 / 작년 같은달
   const curMonth = { y, m };
@@ -318,8 +324,8 @@ export async function fetchComparisonBundle(branchId: string, ref?: string): Pro
   const dayLabels = Array.from({ length: monthLen }, (_, i) => `${i + 1}일`);
   const prevMonthSeries = buildSeries(
     'prev_month',
-    `${curMonth.m + 1}월`,
-    `${prevMonth.m + 1}월`,
+    monthLabel(curMonth),
+    monthLabel(prevMonth),
     dayLabels,
     dailyValues(cm, curMonth.y, curMonth.m, monthLen, todayIso),
     dailyValues(pm, prevMonth.y, prevMonth.m, monthLen, null),
@@ -331,8 +337,8 @@ export async function fetchComparisonBundle(branchId: string, ref?: string): Pro
   const lyLabels = Array.from({ length: lyLen }, (_, i) => `${i + 1}일`);
   const lastYearSeries = buildSeries(
     'last_year',
-    `올해 ${m + 1}월`,
-    `작년 ${m + 1}월`,
+    `${curMonth.y}년 ${m + 1}월`,
+    `${lastYearMonth.y}년 ${m + 1}월`,
     lyLabels,
     dailyValues(cm, curMonth.y, curMonth.m, lyLen, todayIso),
     dailyValues(ly, lastYearMonth.y, lastYearMonth.m, lyLen, null),
@@ -355,10 +361,14 @@ export async function fetchComparisonBundle(branchId: string, ref?: string): Pro
   const prevQDays = quarterDays(prevQ, null);
   const bucketCount = Math.ceil(Math.max(curQDays.sales.length, prevQDays.sales.length) / 7);
   const weekLabels = Array.from({ length: bucketCount }, (_, i) => `${i + 1}주차`);
+  const quarterLabel = (w: { y: number; m: number }) => {
+    const qn = Math.floor(w.m / 3) + 1;
+    return w.y === thisYear ? `${qn}분기` : `${w.y}년 ${qn}분기`;
+  };
   const prevQuarterSeries = buildSeries(
     'prev_quarter',
-    `${q + 1}분기`,
-    `${q === 0 ? 4 : q}분기`,
+    quarterLabel(curQ),
+    quarterLabel(prevQ),
     weekLabels,
     { sales: weeklyBuckets(curQDays.sales, bucketCount), guests: weeklyBuckets(curQDays.guests, bucketCount) },
     { sales: weeklyBuckets(prevQDays.sales, bucketCount), guests: weeklyBuckets(prevQDays.guests, bucketCount) },
