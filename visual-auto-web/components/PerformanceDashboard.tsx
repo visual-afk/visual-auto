@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, TrendingUp, TrendingDown, Wrench, Eye, CalendarCheck, Sparkles } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Wrench, Eye, CalendarCheck, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { BranchDashboard, PeriodType } from '@/lib/metrics';
 
 export type BranchOpt = { id: string; name: string; hasSource: boolean };
@@ -31,6 +31,11 @@ export default function PerformanceDashboard({
   isHq,
   canPickBranch,
   syncedLabel,
+  refDate,
+  prevRef,
+  nextRef,
+  canGoNext,
+  monthOptions,
 }: {
   data: BranchDashboard;
   period: PeriodType;
@@ -41,18 +46,29 @@ export default function PerformanceDashboard({
   /** 지점 선택 드롭다운 노출 (본사 or 여러 지점 소속). 기본값 = isHq */
   canPickBranch?: boolean;
   syncedLabel: string;
+  /** 기준일(YYYY-MM-DD) — 월간이면 그 달, 주간이면 그 월~일 주 */
+  refDate: string;
+  prevRef: string;
+  nextRef: string;
+  canGoNext: boolean;
+  /** 월 점프 드롭다운 (데이터 있는 가장 이른 달 ~ 이번 달, 최신순) */
+  monthOptions: { ref: string; label: string }[];
 }) {
   const showPicker = canPickBranch ?? isHq;
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const go = (next: { branch?: string; period?: string }) => {
+  const go = (next: { branch?: string; period?: string; ref?: string }) => {
     const p = new URLSearchParams();
     p.set('branch', next.branch ?? branchId);
     p.set('period', next.period ?? period);
+    p.set('ref', next.ref ?? refDate);
     router.push(`/performance?${p.toString()}`);
   };
+
+  // 월간 드롭다운의 현재 값: refDate가 속한 달의 1일
+  const refMonth = `${refDate.slice(0, 7)}-01`;
 
   async function refresh() {
     setRefreshing(true);
@@ -125,6 +141,41 @@ export default function PerformanceDashboard({
               {p === 'month' ? '월간' : '주간'}
             </button>
           ))}
+        </div>
+
+        {/* 기간 네비게이션: ◀ [기간] ▶ — 월간은 드롭다운 점프, 주간은 라벨 */}
+        <div className="flex items-center gap-1 rounded-full bg-canvas p-1">
+          <button
+            onClick={() => go({ ref: prevRef })}
+            className="rounded-full p-1.5 text-ink-soft active:bg-line"
+            aria-label="이전 기간"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          {period === 'month' ? (
+            <select
+              className="appearance-none rounded-full bg-transparent px-1 py-1 text-sm font-semibold text-ink outline-none"
+              value={monthOptions.some((o) => o.ref === refMonth) ? refMonth : monthOptions[0]?.ref ?? refMonth}
+              onChange={(e) => go({ ref: e.target.value })}
+              aria-label="월 선택"
+            >
+              {monthOptions.map((o) => (
+                <option key={o.ref} value={o.ref}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="px-1 text-sm font-semibold tabular-nums">{data.range.label}</span>
+          )}
+          <button
+            onClick={() => go({ ref: nextRef })}
+            disabled={!canGoNext}
+            className="rounded-full p-1.5 text-ink-soft active:bg-line disabled:opacity-30"
+            aria-label="다음 기간"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
 
