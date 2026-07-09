@@ -8,7 +8,7 @@ import DraftDeleteButton from '@/components/DraftDeleteButton';
 
 export const dynamic = 'force-dynamic';
 
-const TARGET_LABEL: Record<string, string> = { naver: '네이버', imweb: '아임웹' };
+const TARGET_LABEL: Record<string, string> = { naver: '네이버', imweb: '아임웹', manual: '직접 발행' };
 
 function fmtDate(s: string | null) {
   if (!s) return '-';

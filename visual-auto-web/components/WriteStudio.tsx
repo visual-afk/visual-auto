@@ -2,13 +2,15 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2 } from 'lucide-react';
+import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
 import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
 
 // 지점(살롱)은 시술 칩, 글쓰기 전용 브랜드는 브랜드별 칩
 const SALON_CHIPS = ['결마지', '펌', '염색', '클리닉', '컷'];
+// "어디에 쓸까요?" 칩 노출 순서 (지점 블로그 다음)
+const BRAND_ORDER = ['누혜', '아카데미', '비주얼살롱', '트리필드'];
 const BRAND_CHIPS: Record<string, string[]> = {
   아카데미: ['수강후기', '커리큘럼', '원데이클래스', '수료생'],
   트리필드: ['제품 소개', '사용 후기', '이벤트', '브랜드 스토리'],
@@ -50,15 +52,25 @@ export default function WriteStudio({
   needsBranchPick,
   myNaverUrl,
   initialPost,
+  initialBranchId,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
   myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
   initialPost: Post | null; // 발행 안 한 최신 초안 — 새로고침해도 이어쓰기
+  initialBranchId?: string | null; // 마지막으로 골랐던 지점/브랜드 (서버 기억)
 }) {
   const router = useRouter();
-  const [branchId, setBranchId] = useState<string>(needsBranchPick ? '' : branches[0]?.id ?? '');
+  const salons = branches.filter((b) => b.kind === 'salon');
+  const brands = branches
+    .filter((b) => b.kind === 'brand')
+    .sort((a, b) => BRAND_ORDER.indexOf(a.name) - BRAND_ORDER.indexOf(b.name));
+  const [branchId, setBranchId] = useState<string>(
+    needsBranchPick ? initialBranchId ?? '' : branches[0]?.id ?? '',
+  );
   const selectedBranch = branches.find((b) => b.id === branchId) ?? null;
+  // "지점 블로그"를 눌렀지만 아직 어느 지점인지 안 고른 상태 (살롱이 여러 개일 때)
+  const [salonScope, setSalonScope] = useState<boolean>(selectedBranch?.kind === 'salon');
   const chipSet = chipSetFor(selectedBranch);
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
@@ -84,9 +96,20 @@ export default function WriteStudio({
 
   function pickBranch(id: string) {
     setBranchId(id);
+    setSalonScope((branches.find((b) => b.id === id) ?? null)?.kind !== 'brand');
     // 지점/브랜드가 바뀌면 새 칩셋에 없는 칩은 제거 (예: '결마지'가 아카데미 글에 안 넘어가게)
     const next = chipSetFor(branches.find((b) => b.id === id) ?? null);
     setChips((prev) => prev.filter((c) => next.includes(c)));
+  }
+
+  // "지점 블로그" 칩: 살롱이 하나면 바로 그 지점, 여러 개면 아래 2차 칩에서 고르게
+  function pickSalonScope() {
+    if (salons.length === 1) {
+      pickBranch(salons[0].id);
+      return;
+    }
+    setSalonScope(true);
+    if (selectedBranch?.kind === 'brand') setBranchId('');
   }
 
   async function startRecording() {
@@ -215,7 +238,7 @@ export default function WriteStudio({
     }
   }
 
-  async function publish(target: 'naver' | 'imweb') {
+  async function publish(target: 'naver' | 'imweb' | 'manual') {
     if (!post) return;
     // 1) 본문 복사
     const text = [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
@@ -244,9 +267,11 @@ export default function WriteStudio({
     clearNotes();
     clearTopics();
     clearTopic();
-    // 5) 발행처 열기 + 조회수 입력 화면으로
-    const url = target === 'naver' ? naverUrl : imwebUrl;
-    if (url) window.open(url, '_blank');
+    // 5) 발행처 열기 + 조회수 입력 화면으로 (브랜드 글은 복사만 — 담당자가 직접 올림)
+    if (target !== 'manual') {
+      const url = target === 'naver' ? naverUrl : imwebUrl;
+      if (url) window.open(url, '_blank');
+    }
     router.push(`/track/${post.id}`);
   }
 
@@ -256,15 +281,36 @@ export default function WriteStudio({
 
       {needsBranchPick && (
         <div className="mb-6">
-          <p className="label">어느 지점으로 쓸까요?</p>
-          <select className="field" value={branchId} onChange={(e) => pickBranch(e.target.value)}>
-            <option value="">지점 선택</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>
+          <p className="label">어디에 쓸까요?</p>
+          <div className="flex flex-wrap gap-2">
+            {salons.length > 0 && (
+              <button
+                onClick={pickSalonScope}
+                className={`chip ${salonScope && selectedBranch?.kind !== 'brand' ? 'chip-on' : ''}`}
+              >
+                지점 블로그
+              </button>
+            )}
+            {brands.map((b) => (
+              <button key={b.id} onClick={() => pickBranch(b.id)} className={`chip ${branchId === b.id ? 'chip-on' : ''}`}>
                 {b.name}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
+          {salonScope && selectedBranch?.kind !== 'brand' && salons.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {salons.map((b) => (
+                <button key={b.id} onClick={() => pickBranch(b.id)} className={`chip ${branchId === b.id ? 'chip-on' : ''}`}>
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {selectedBranch && (
+            <p className="mt-2 flex items-center gap-1 text-sm font-medium text-brand">
+              <Sparkles size={14} /> {selectedBranch.name} 톤·지식으로 써드려요
+            </p>
+          )}
         </div>
       )}
 
@@ -381,7 +427,15 @@ export default function WriteStudio({
       </div>
 
       {/* 하단: 발행 (반자동 복붙) */}
-      {post && (
+      {post && selectedBranch?.kind === 'brand' && (
+        <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-ink-soft">복사한 글을 {selectedBranch.name} 계정에 붙여넣어 주세요</p>
+          <button className="btn-primary md:w-auto md:px-6" onClick={() => publish('manual')}>
+            <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
+          </button>
+        </div>
+      )}
+      {post && selectedBranch?.kind !== 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
           <div className="flex flex-col gap-3 md:flex-row md:items-start">

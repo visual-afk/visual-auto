@@ -72,7 +72,7 @@ create table if not exists posts (
   photo_guide jsonb default '[]'::jsonb,   -- [{position,label,종류,구도,포인트,alt}]
   photos jsonb default '[]'::jsonb,         -- [{slot,storage_path}]
   seo_score int,
-  publish_target text check (publish_target in ('naver','imweb')),
+  publish_target text check (publish_target in ('naver','imweb','manual')), -- manual = 브랜드 글 "발행용 복사"
   published_url text,
   views int,
   views_updated_at timestamptz,

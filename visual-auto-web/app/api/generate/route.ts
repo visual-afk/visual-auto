@@ -49,6 +49,13 @@ export async function POST(request: Request) {
   if ('error' in resolved) return resolved.error;
   const { branchId, branchName } = resolved;
 
+  // 마지막 글쓰기 지점/브랜드 기억 — 다음 방문 때 프리셀렉트 (실패해도 생성은 계속)
+  void getAdminSupabase()
+    .from('branch_users')
+    .update({ last_write_branch_id: branchId })
+    .eq('user_id', member.userId)
+    .then(() => {});
+
   const topic: string = (body.recommended_topic || body.topic || '').trim();
   const chips: string[] = body.treatment_chips || [];
   const notes: string = (body.user_notes || '').trim();
