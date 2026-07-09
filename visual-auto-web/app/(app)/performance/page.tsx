@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { aggregateBranch, type PeriodType } from '@/lib/metrics';
+import { aggregateBranch, fetchComparisonBundle, type PeriodType } from '@/lib/metrics';
 import PerformanceDashboard, { type BranchOpt } from '@/components/PerformanceDashboard';
+import ComparisonChartSection from '@/components/ComparisonChartSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,10 @@ export default async function PerformancePage({
     );
   }
 
-  const data = await aggregateBranch(branchId, period);
+  const [data, comparisonBundle] = await Promise.all([
+    aggregateBranch(branchId, period),
+    fetchComparisonBundle(branchId),
+  ]);
 
   // 마지막 동기화 시각
   const { data: last } = await admin
@@ -59,7 +63,7 @@ export default async function PerformancePage({
     : '동기화 없음';
 
   return (
-    <div className="py-6 md:py-0">
+    <div className="space-y-8 py-6 md:py-0">
       <PerformanceDashboard
         data={data}
         period={period}
@@ -69,6 +73,7 @@ export default async function PerformancePage({
         isHq={me.role === 'hq_admin'}
         syncedLabel={syncedLabel}
       />
+      {data.hasData && <ComparisonChartSection bundle={comparisonBundle} />}
     </div>
   );
 }

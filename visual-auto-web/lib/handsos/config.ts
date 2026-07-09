@@ -10,6 +10,8 @@ export const HANDSOS_BRANCHES: Record<string, string> = {
   '12549311': '마곡나루점',
   '12549306': '성수점',
   '12554562': '강남신사점',
+  '12558403': '서면전포점',
+  '12558477': '서초방배점',
 };
 
 export const COMPANY_ID = process.env.HANDSOS_COMPANY_ID || 'h66990005';

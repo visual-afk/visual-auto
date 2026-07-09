@@ -87,15 +87,19 @@ export async function crawlDate(
   return result;
 }
 
-/** 날짜 범위 백필 (스크립트용) */
-export async function crawlRange(start: string, end: string): Promise<CrawlResult[]> {
+/** 날짜 범위 백필 (스크립트용). skipDesigners=true면 지점 총합만 (그래프용 과거 데이터, ~3배 빠름). */
+export async function crawlRange(
+  start: string,
+  end: string,
+  opts: { skipDesigners?: boolean } = {},
+): Promise<CrawlResult[]> {
   const jar = await login();
   const out: CrawlResult[] = [];
   const cur = new Date(start + 'T00:00:00Z');
   const last = new Date(end + 'T00:00:00Z');
   while (cur <= last) {
     const ds = cur.toISOString().slice(0, 10);
-    out.push(await crawlDate(ds, { jar, sleepBranches: 3000, sleepDesigners: 1000 }));
+    out.push(await crawlDate(ds, { jar, sleepBranches: 3000, sleepDesigners: 1000, skipDesigners: opts.skipDesigners }));
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   return out;
