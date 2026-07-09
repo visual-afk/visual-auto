@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import InstagramConnect from '@/components/InstagramConnect';
+import StatsOcrUpload from '@/components/StatsOcrUpload';
 import DraftDeleteButton from '@/components/DraftDeleteButton';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +24,7 @@ function isThisMonth(s: string, now: Date) {
 export default async function TrackPage() {
   const member = (await getMember())!;
   const admin = getAdminSupabase();
-  const [{ data: posts }, { data: reels }] = await Promise.all([
+  const [{ data: posts }, { data: reels }, { data: igAccount }] = await Promise.all([
     admin
       .from('posts')
       .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
@@ -31,7 +34,25 @@ export default async function TrackPage() {
       .from('reels')
       .select('id, views, created_at')
       .eq('author_id', member.userId),
+    admin
+      .from('instagram_accounts')
+      .select('username, last_synced_at')
+      .eq('user_id', member.userId)
+      .maybeSingle(),
   ]);
+
+  // 인스타 연결 상태 (하이드레이션 안전: 날짜 라벨은 서버에서 KST로 1회 포맷)
+  const igSyncedAt = igAccount?.last_synced_at ?? null;
+  const igSyncedLabel = igSyncedAt
+    ? new Date(igSyncedAt).toLocaleString('ko-KR', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Seoul',
+      })
+    : null;
+  const igAutoSync = !!igAccount && (!igSyncedAt || Date.now() - new Date(igSyncedAt).getTime() > 12 * 3600_000);
 
   const list = posts || [];
   const reelList = reels || [];
@@ -53,6 +74,19 @@ export default async function TrackPage() {
         <Link href="/write" className="rounded-2xl bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink">
           + 오늘 글쓰기
         </Link>
+      </div>
+
+      {/* 자동 수집: 인스타 연결 + 블로그 통계 스크린샷 */}
+      <div className="mt-6 space-y-3">
+        <Suspense>
+          <InstagramConnect
+            connected={!!igAccount}
+            username={igAccount?.username ?? null}
+            syncedLabel={igSyncedLabel}
+            autoSync={igAutoSync}
+          />
+        </Suspense>
+        <StatsOcrUpload mode="blog" />
       </div>
 
       {/* 통계 */}
