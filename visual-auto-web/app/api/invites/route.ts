@@ -42,24 +42,28 @@ export async function POST(request: Request) {
   const inviteeName: string = (body.invitee_name || '').trim();
   const inviteeContact: string = (body.invitee_contact || '').trim();
 
-  // 초대 가능한 역할: 원장은 디자이너/인턴, 본사는 원장도 가능
+  // 초대 가능한 역할: 원장은 디자이너/인턴, 본사는 원장·본사 관리자도 가능
   const allowedRoles: string[] =
-    member.role === 'hq_admin' ? ['branch_owner', 'designer', 'intern'] : ['designer', 'intern'];
+    member.role === 'hq_admin'
+      ? ['hq_admin', 'branch_owner', 'designer', 'intern']
+      : ['designer', 'intern'];
   const role: string = allowedRoles.includes(body.role) ? body.role : 'designer';
 
-  // 지점 결정: 본사/멀티지점은 body.branch_id 지정(소속 검증), 단일지점 원장은 자기 지점
-  let branchId: string | null;
-  if (isMultiBranch(member)) {
-    branchId = body.branch_id || null;
-    if (!branchId) return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
-    if (!canActOnBranch(member, branchId)) {
-      return NextResponse.json({ error: '소속되지 않은 지점이에요' }, { status: 403 });
+  // 지점 결정: 본사 관리자 초대는 지점 없음 / 본사·멀티지점은 body.branch_id 지정(소속 검증) / 단일지점 원장은 자기 지점
+  let branchId: string | null = null;
+  if (role !== 'hq_admin') {
+    if (isMultiBranch(member)) {
+      branchId = body.branch_id || null;
+      if (!branchId) return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+      if (!canActOnBranch(member, branchId)) {
+        return NextResponse.json({ error: '소속되지 않은 지점이에요' }, { status: 403 });
+      }
+    } else {
+      branchId = member.branchId;
     }
-  } else {
-    branchId = member.branchId;
-  }
-  if (!branchId) {
-    return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+    if (!branchId) {
+      return NextResponse.json({ error: '지점을 선택해주세요' }, { status: 400 });
+    }
   }
 
   const admin = getAdminSupabase();
@@ -76,6 +80,19 @@ export async function POST(request: Request) {
       .eq('phone', phone)
       .maybeSingle();
     if (existing) {
+      // 본사 관리자 초대: 기존 계정이면 초대 없이 바로 승격
+      if (role === 'hq_admin') {
+        const { error: upErr } = await admin
+          .from('branch_users')
+          .update({ role: 'hq_admin' })
+          .eq('user_id', existing.user_id);
+        if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+        return NextResponse.json({
+          ok: true,
+          added_existing: true,
+          message: `${existing.display_name}님을 본사 관리자로 승격했어요 (초대 없이 바로 반영).`,
+        });
+      }
       if (existing.branch_id === branchId) {
         return NextResponse.json({ error: '이미 이 지점 멤버예요' }, { status: 409 });
       }
@@ -95,14 +112,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2) 같은 지점에 이미 대기 중인 초대가 있으면 중복 방지
-    const { data: dupInvite } = await admin
-      .from('invites')
-      .select('id')
-      .eq('branch_id', branchId)
-      .eq('invitee_contact', inviteeContact)
-      .eq('status', 'sent')
-      .maybeSingle();
+    // 2) 같은 지점(본사 초대는 지점 없음)에 이미 대기 중인 초대가 있으면 중복 방지
+    let dupQ = admin.from('invites').select('id').eq('invitee_contact', inviteeContact).eq('status', 'sent');
+    dupQ = branchId ? dupQ.eq('branch_id', branchId) : dupQ.is('branch_id', null);
+    const { data: dupInvite } = await dupQ.maybeSingle();
     if (dupInvite) {
       return NextResponse.json({ error: '이미 이 지점으로 보낸 초대가 있어요 (수락 대기 중)' }, { status: 409 });
     }
@@ -126,11 +139,15 @@ export async function POST(request: Request) {
   // 연락처가 있으면 카카오 초대장 자동 발송(실패해도 초대는 유효 → 링크 복사로 안내)
   let sent = false;
   if (inviteeContact) {
-    const { data: b } = await admin.from('branches').select('name').eq('id', branchId).maybeSingle();
+    let branchLabel = '본사';
+    if (branchId) {
+      const { data: b } = await admin.from('branches').select('name').eq('id', branchId).maybeSingle();
+      branchLabel = b?.name || '';
+    }
     const r = await sendInviteAlimtalk({
       toPhone: inviteeContact,
       inviteeName,
-      branchName: b?.name || '',
+      branchName: branchLabel,
       token: data.token,
     });
     sent = r.sent;

@@ -141,6 +141,17 @@ export default async function MembersPage({
       }))
     : [{ key: 'mine', name: member.branchName ?? '우리 지점', members, pending }];
 
+  // 본사(지점 없음) 멤버·초대는 지점 그룹에 안 걸리므로 별도 그룹으로 (본사만 보임)
+  if (showGroups && isHq) {
+    const hqMembers = members.filter(
+      (m) => m.role === 'hq_admin' && effectiveBranchIds(memberBranchMap, m.user_id, m.branch_id).length === 0,
+    );
+    const hqPending = pending.filter((p) => !p.branch_id);
+    if (hqMembers.length > 0 || hqPending.length > 0) {
+      groups.unshift({ key: 'hq', name: '본사', members: hqMembers, pending: hqPending });
+    }
+  }
+
   return (
     <div className="py-6 md:py-0">
       <div className="flex items-start justify-between gap-3">

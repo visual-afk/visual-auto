@@ -35,7 +35,14 @@ export async function POST(request: Request) {
     .eq('phone', phone)
     .maybeSingle();
   if (dup) {
-    if (dup.branch_id !== invite.branch_id) {
+    if (invite.role === 'hq_admin') {
+      // 본사 관리자 초대: 기존 계정을 승격 (새 계정·지점 추가 없음)
+      const { error: upErr } = await admin
+        .from('branch_users')
+        .update({ role: 'hq_admin' })
+        .eq('user_id', dup.user_id);
+      if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    } else if (dup.branch_id !== invite.branch_id) {
       const { error: mbErr } = await admin
         .from('member_branches')
         .upsert({ user_id: dup.user_id, branch_id: invite.branch_id }, { onConflict: 'user_id,branch_id' });
@@ -49,7 +56,10 @@ export async function POST(request: Request) {
       ok: true,
       existing: true,
       login_id: phone,
-      message: '이미 계정이 있어요. 기존 아이디·비밀번호로 로그인하면 이 지점도 함께 보여요.',
+      message:
+        invite.role === 'hq_admin'
+          ? '이미 계정이 있어요. 본사 관리자로 승격됐으니 기존 아이디·비밀번호로 로그인하세요.'
+          : '이미 계정이 있어요. 기존 아이디·비밀번호로 로그인하면 이 지점도 함께 보여요.',
     });
   }
 

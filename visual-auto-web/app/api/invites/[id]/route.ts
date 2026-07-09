@@ -18,18 +18,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .eq('id', id)
     .maybeSingle();
   if (!invite) return NextResponse.json({ error: '초대를 찾을 수 없어요' }, { status: 404 });
-  if (!canActOnBranch(member, invite.branch_id)) {
+  // 본사 초대는 branch_id가 없다 (본사만 접근 — canActOnBranch는 null이면 false)
+  if (member.role !== 'hq_admin' && !canActOnBranch(member, invite.branch_id)) {
     return NextResponse.json({ error: '다른 지점 초대는 보낼 수 없어요' }, { status: 403 });
   }
   if (!invite.invitee_contact) {
     return NextResponse.json({ sent: false, reason: 'no_recipient' });
   }
 
-  const { data: b } = await admin.from('branches').select('name').eq('id', invite.branch_id).maybeSingle();
+  let branchLabel = '본사';
+  if (invite.branch_id) {
+    const { data: b } = await admin.from('branches').select('name').eq('id', invite.branch_id).maybeSingle();
+    branchLabel = b?.name || '';
+  }
   const result = await sendInviteAlimtalk({
     toPhone: invite.invitee_contact,
     inviteeName: invite.invitee_name || '',
-    branchName: b?.name || '',
+    branchName: branchLabel,
     token: invite.token,
   });
   return NextResponse.json(result);
@@ -50,7 +55,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .eq('id', id)
     .maybeSingle();
   if (!invite) return NextResponse.json({ error: '초대를 찾을 수 없어요' }, { status: 404 });
-  if (!canActOnBranch(member, invite.branch_id)) {
+  if (member.role !== 'hq_admin' && !canActOnBranch(member, invite.branch_id)) {
     return NextResponse.json({ error: '다른 지점 초대는 취소할 수 없어요' }, { status: 403 });
   }
 
