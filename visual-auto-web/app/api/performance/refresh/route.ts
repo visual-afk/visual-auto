@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireMember, canActOnBranch, isMultiBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { crawlDate } from '@/lib/handsos/crawl';
+import { syncProductSheet } from '@/lib/product-sheet/sync';
+import { isProductSheetConfigured } from '@/lib/product-sheet/config';
 
 export const maxDuration = 300;
 
@@ -29,9 +31,44 @@ export async function POST(request: Request) {
 
   const { data: b } = await getAdminSupabase()
     .from('branches')
-    .select('handsos_pk')
+    .select('name, handsos_pk, kind')
     .eq('id', branchId)
     .maybeSingle();
+
+  // 브랜드는 본사 전용 새로고침
+  if (b?.kind === 'brand') {
+    if (member.role !== 'hq_admin') {
+      return NextResponse.json({ error: '권한이 없어요' }, { status: 403 });
+    }
+
+    // 비주얼살롱(전지점 합산 뷰): 전 지점 어제치 HandSOS 크롤 (지점 총합만)
+    if (b.name === '비주얼살롱') {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const date = d.toISOString().slice(0, 10);
+      try {
+        const result = await crawlDate(date, { skipDesigners: true, sleepBranches: 500 });
+        const okCount = result.branches.filter((br) => br.ok).length;
+        return NextResponse.json({ ok: true, date, designers: 0, branches: okCount });
+      } catch (e) {
+        console.error('[performance refresh:all-salon]', (e as Error).message);
+        return NextResponse.json({ error: 'HandSOS 수집 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }, { status: 500 });
+      }
+    }
+
+    // 제품 브랜드(누혜/트리필드/아카데미): HandSOS가 아니라 구글시트 동기화
+    if (!isProductSheetConfigured()) {
+      return NextResponse.json({ error: '제품 시트 연동 설정(PRODUCT_SHEET_ID)이 안 됐어요' }, { status: 400 });
+    }
+    try {
+      const s = await syncProductSheet();
+      return NextResponse.json({ ok: true, salesRows: s.salesRows, products: s.products });
+    } catch (e) {
+      console.error('[performance refresh:brand]', (e as Error).message);
+      return NextResponse.json({ error: '구글시트 동기화 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }, { status: 500 });
+    }
+  }
+
   if (!b?.handsos_pk) {
     return NextResponse.json({ error: '이 지점은 아직 HandSOS 연동이 안 됐어요' }, { status: 400 });
   }

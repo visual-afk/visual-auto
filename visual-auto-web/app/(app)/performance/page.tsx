@@ -3,7 +3,9 @@ import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
 import { aggregateBranch, aggregateCompany, fetchComparisonBundle, type PeriodType } from '@/lib/metrics';
+import { aggregateBrand, fetchProductCatalog } from '@/lib/product-metrics';
 import PerformanceDashboard, { type BranchOpt } from '@/components/PerformanceDashboard';
+import BrandPerformanceDashboard from '@/components/BrandPerformanceDashboard';
 import ComparisonChartSection from '@/components/ComparisonChartSection';
 import CompanyStatusBoard, { type BranchChip, type Crisis, type Kpi } from '@/components/CompanyStatusBoard';
 import DesignerBreakdown from '@/components/DesignerBreakdown';
@@ -69,6 +71,33 @@ async function CompanyBoard({ period, refDate }: { period: PeriodType; refDate?:
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
+/** 하이드레이션 안전: 날짜 포맷은 서버에서 1회만(KST 고정) → 클라이언트는 문자열 그대로 사용 */
+const fmtSynced = (ts: string | null | undefined) =>
+  ts
+    ? new Date(ts).toLocaleString('ko-KR', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Asia/Seoul',
+      })
+    : '동기화 없음';
+
+/** 월 점프 드롭다운: 데이터가 있는 가장 이른 달 ~ 이번 달 (최신순) */
+function buildMonthOptions(from: string): { ref: string; label: string }[] {
+  const out: { ref: string; label: string }[] = [];
+  const cur = new Date();
+  let y = cur.getUTCFullYear();
+  let m = cur.getUTCMonth();
+  const [fy, fm] = [Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1];
+  while (y > fy || (y === fy && m >= fm)) {
+    out.push({ ref: isoDay(new Date(Date.UTC(y, m, 1))), label: `${y}년 ${m + 1}월` });
+    m -= 1;
+    if (m < 0) { m = 11; y -= 1; }
+  }
+  return out;
+}
+
 /** 기간 네비게이션 — 월간은 달 단위, 주간은 월~일 주 단위로 이전/다음 ref 계산 */
 function buildPeriodNav(period: PeriodType, refDate: string) {
   const base = new Date(refDate + 'T00:00:00Z');
@@ -117,13 +146,32 @@ export default async function PerformancePage({
   let branchId: string | null = me.branchId;
   let branchName = me.branchName;
   if (canPickBranch) {
-    let bq = admin.from('branches').select('id, name, handsos_pk').eq('kind', 'salon').order('name');
+    // 본사는 살롱 지점 + 브랜드(누혜·트리필드·아카데미·비주얼살롱=전지점 합산)까지 선택 가능
+    let bq = admin
+      .from('branches')
+      .select('id, name, handsos_pk, kind')
+      .in('kind', isHq ? ['salon', 'brand'] : ['salon'])
+      .order('kind', { ascending: false }) // salon 먼저, brand 나중
+      .order('name');
     if (!isHq) bq = bq.in('id', me.branchIds);
-    const { data } = await bq;
-    branchOpts = (data ?? []).map((b) => ({ id: b.id, name: b.name, hasSource: !!b.handsos_pk }));
+    const [{ data }, { data: productBranches }] = await Promise.all([
+      bq,
+      isHq ? admin.from('products').select('branch_id') : Promise.resolve({ data: [] }),
+    ]);
+    const hasProducts = new Set((productBranches ?? []).map((p) => p.branch_id as string));
+    branchOpts = (data ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      kind: (b.kind === 'brand' ? 'brand' : 'salon') as BranchOpt['kind'],
+      // 브랜드의 소스: 비주얼살롱=전지점 합산(항상 가능), 나머지=시트 동기화 여부
+      hasSource: b.kind === 'brand' ? b.name === '비주얼살롱' || hasProducts.has(b.id) : !!b.handsos_pk,
+    }));
     const picked = sp.branch && branchOpts.some((b) => b.id === sp.branch) ? sp.branch : null;
     branchId =
-      picked || (isHq ? branchOpts.find((b) => b.hasSource)?.id : me.branchId) || branchOpts[0]?.id || null;
+      picked ||
+      (isHq ? branchOpts.find((b) => b.hasSource && b.kind !== 'brand')?.id : me.branchId) ||
+      branchOpts[0]?.id ||
+      null;
     branchName = branchOpts.find((b) => b.id === branchId)?.name ?? null;
   }
 
@@ -139,56 +187,79 @@ export default async function PerformancePage({
     );
   }
 
+  const nav = buildPeriodNav(period, refDate);
+  const selected = branchOpts.find((b) => b.id === branchId);
+  const isBrand = selected?.kind === 'brand';
+  // 비주얼살롱 브랜드 = 전 살롱 지점 합산 뷰 (HandSOS 데이터)
+  const isAllSalonView = isBrand && selected?.name === '비주얼살롱';
+
+  // 제품 브랜드(누혜·트리필드·아카데미): 구글시트 매출 대시보드
+  if (isBrand && !isAllSalonView) {
+    const [data, comparisonBundle, catalog, { data: earliest }] = await Promise.all([
+      aggregateBrand(branchId, period, refDate),
+      fetchComparisonBundle(branchId, refDate, 'brand'),
+      fetchProductCatalog(branchId),
+      admin
+        .from('product_sales_daily')
+        .select('date')
+        .eq('branch_id', branchId)
+        .order('date', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const syncedLabel = fmtSynced(catalog[0]?.synced_at);
+    const monthOptions = buildMonthOptions((earliest as { date?: string } | null)?.date ?? isoDay(new Date()));
+
+    return (
+      <div className="space-y-8 py-6 md:py-0">
+        {isHq && <CompanyBoard period={period} refDate={refDate} />}
+        <BrandPerformanceDashboard
+          data={data}
+          catalog={catalog}
+          period={period}
+          branchId={branchId}
+          branchName={branchName}
+          branchOpts={branchOpts}
+          syncedLabel={syncedLabel}
+          refDate={refDate}
+          prevRef={nav.prevRef}
+          nextRef={nav.nextRef}
+          canGoNext={nav.canGoNext}
+          monthOptions={monthOptions}
+        />
+        {data.hasData && (
+          <ComparisonChartSection bundle={comparisonBundle} secondaryLabel="주문" secondaryUnit="건" />
+        )}
+      </div>
+    );
+  }
+
+  // 살롱 지점 단일 뷰 or 비주얼살롱(전지점 합산) 뷰
+  const salonIds = branchOpts.filter((b) => b.kind !== 'brand').map((b) => b.id);
+  const branchRef = isAllSalonView ? salonIds : branchId;
   const [data, comparisonBundle, { data: earliest }] = await Promise.all([
-    aggregateBranch(branchId, period, refDate),
-    fetchComparisonBundle(branchId, refDate),
+    aggregateBranch(branchRef, period, refDate),
+    fetchComparisonBundle(branchRef, refDate),
     admin.from('metrics_daily').select('date').order('date', { ascending: true }).limit(1).maybeSingle(),
   ]);
 
-  // 월 점프 드롭다운: 데이터가 있는 가장 이른 달 ~ 이번 달 (최신순)
-  const nav = buildPeriodNav(period, refDate);
-  const monthOptions: { ref: string; label: string }[] = [];
-  {
-    const from = (earliest as { date?: string } | null)?.date ?? isoDay(new Date());
-    const cur = new Date();
-    let y = cur.getUTCFullYear();
-    let m = cur.getUTCMonth();
-    const [fy, fm] = [Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1];
-    while (y > fy || (y === fy && m >= fm)) {
-      monthOptions.push({ ref: isoDay(new Date(Date.UTC(y, m, 1))), label: `${y}년 ${m + 1}월` });
-      m -= 1;
-      if (m < 0) { m = 11; y -= 1; }
-    }
-  }
+  const monthOptions = buildMonthOptions((earliest as { date?: string } | null)?.date ?? isoDay(new Date()));
 
-  // 플레이스 통계 스냅샷 (스마트플레이스 스크린샷 OCR로 쌓인 기록)
-  const { data: placeRows } = await admin
-    .from('place_stats')
-    .select('id, stat_date, period, place_views, inflows, review_count')
-    .eq('branch_id', branchId)
-    .order('stat_date', { ascending: false })
-    .limit(8);
+  // 플레이스 통계 스냅샷 (지점 단위 개념 — 전지점 합산 뷰에선 생략)
+  const { data: placeRows } = isAllSalonView
+    ? { data: [] }
+    : await admin
+        .from('place_stats')
+        .select('id, stat_date, period, place_views, inflows, review_count')
+        .eq('branch_id', branchId)
+        .order('stat_date', { ascending: false })
+        .limit(8);
 
-  // 마지막 동기화 시각
-  const { data: last } = await admin
-    .from('metrics_daily')
-    .select('created_at')
-    .eq('branch_id', branchId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  // 하이드레이션 안전: 날짜 포맷은 서버에서 1회만(KST 고정) → 클라이언트는 문자열 그대로 사용
-  const lastSyncedAt = (last as { created_at?: string } | null)?.created_at ?? null;
-  const syncedLabel = lastSyncedAt
-    ? new Date(lastSyncedAt).toLocaleString('ko-KR', {
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Asia/Seoul',
-      })
-    : '동기화 없음';
+  // 마지막 동기화 시각 (전지점 뷰는 전체 중 최신)
+  let lastQ = admin.from('metrics_daily').select('created_at');
+  if (!isAllSalonView) lastQ = lastQ.eq('branch_id', branchId);
+  const { data: last } = await lastQ.order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const syncedLabel = fmtSynced((last as { created_at?: string } | null)?.created_at);
 
   return (
     <div className="space-y-8 py-6 md:py-0">
@@ -197,7 +268,7 @@ export default async function PerformancePage({
         data={data}
         period={period}
         branchId={branchId}
-        branchName={branchName}
+        branchName={isAllSalonView ? `${branchName} (전지점 합산)` : branchName}
         branchOpts={branchOpts}
         isHq={isHq}
         canPickBranch={canPickBranch}
@@ -209,8 +280,12 @@ export default async function PerformancePage({
         monthOptions={monthOptions}
       />
       {data.hasData && <ComparisonChartSection bundle={comparisonBundle} />}
-      <PlaceStatsSection rows={(placeRows ?? []) as PlaceStatRow[]} branchId={branchId} />
-      <DesignerBreakdown branchId={branchId} period={period} refDate={refDate} />
+      {!isAllSalonView && (
+        <>
+          <PlaceStatsSection rows={(placeRows ?? []) as PlaceStatRow[]} branchId={branchId} />
+          <DesignerBreakdown branchId={branchId} period={period} refDate={refDate} />
+        </>
+      )}
     </div>
   );
 }
