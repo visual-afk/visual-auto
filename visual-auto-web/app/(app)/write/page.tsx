@@ -1,5 +1,6 @@
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { canMakeCardNews } from '@/lib/flags';
 import WriteStudio from '@/components/WriteStudio';
 import type { Post } from '@/lib/types';
 
@@ -45,6 +46,7 @@ export default async function WritePage() {
       myNaverUrl={member.myNaverUrl}
       initialPost={(drafts?.[0] as Post | undefined) ?? null}
       initialBranchId={initialBranchId}
+      canCardNews={canMakeCardNews(member.role, 'info')}
     />
   );
 }
