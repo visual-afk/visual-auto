@@ -2,8 +2,8 @@ import { appendFileSync } from 'fs';
 import { resolve } from 'path';
 import { fetchTodayRows, fetchPlannedRows, updateStatus, updateDocUrl, updateGeneratedAt } from '../lib/google-sheets.js';
 import { loadKnowledge, loadPrompt, loadTemplate, callAI, parseJsonResponse } from '../lib/ai-client.js';
-import { loadBranchKnowledge, generateImage } from '../lib/claude-client.js';
-import { createBlogDoc, replaceImageTagsInDoc } from '../lib/google-docs.js';
+import { loadBranchKnowledge } from '../lib/claude-client.js';
+import { createBlogDoc } from '../lib/google-docs.js';
 import type { GeneratedPost, SeoOptimizedPost, PipelineLogEntry, SheetRow } from '../lib/types.js';
 
 const LOG_PATH = resolve(import.meta.dirname, '..', 'status', 'pipeline-log.jsonl');
@@ -19,18 +19,6 @@ function getPostTypeTemplate(postType: string): string {
     '시즌형': 'seasonal-post',
   };
   return map[postType] || 'info-post';
-}
-
-function extractImageDescriptions(content: string): string[] {
-  const descriptions: string[] = [];
-  // [IMAGE] 블록에서 포인트/구도/종류 정보 추출
-  const imageBlocks = content.split(/\[IMAGE\]/gi).slice(1);
-  for (const block of imageBlocks) {
-    const lines = block.split('\n').filter(l => l.trim().startsWith('-')).slice(0, 4);
-    const desc = lines.map(l => l.replace(/^-\s*/, '').replace(/^(종류|구도|포인트|alt 텍스트)\s*:\s*/i, '')).join(', ');
-    if (desc.trim()) descriptions.push(desc.trim());
-  }
-  return descriptions;
 }
 
 async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
@@ -132,41 +120,13 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
       '\n\n---\n',
       `태그: ${(optimized.optimized_tags || []).join(', ')}`,
       `메타 설명: ${optimized.optimized_meta_description || ''}`,
-      ...((draft.image_suggestions || []).length > 0 ? ['\n\n📸 이미지 제안:', ...(draft.image_suggestions || []).map((s, i) => `${i + 1}. ${s}`)] : []),
     ].join('\n');
 
     const platform = isWashing ? '블로그' : '아임웹';
     const docUrl = await createBlogDoc(optimized.optimized_title, finalContent, row.branch || undefined, platform, row.scheduledDate);
 
-    // 4-1. 문단별로 Gemini AI 이미지 자동 생성 + 삽입 ([IMAGE] 위치마다 매칭)
-    const docId = docUrl.match(/\/d\/([^/]+)/)?.[1];
-    if (docId) {
-      try {
-        const { generateImage } = await import('../lib/claude-client.js');
-        const { replaceImageTagsInDoc } = await import('../lib/google-docs.js');
-
-        const imageDescs = extractImageDescriptions(draft.content);
-        if (imageDescs.length > 0) {
-          console.log(`🎨 Gemini AI 이미지 ${imageDescs.length}장 생성 중...`);
-          const buffers: Buffer[] = [];
-          for (let i = 0; i < imageDescs.length; i++) {
-            const buf = await generateImage(imageDescs[i]);
-            if (buf) {
-              buffers.push(buf);
-              console.log(`  🎨 ${i + 1}/${imageDescs.length} 생성 완료`);
-            } else {
-              console.log(`  ⚠️ ${i + 1} 실패`);
-            }
-          }
-          if (buffers.length > 0) {
-            await replaceImageTagsInDoc(docId, buffers);
-            console.log(`  ✅ 문단별 AI 이미지 ${buffers.length}장 삽입 완료`);
-          }
-        }
-      } catch (err) {
-        console.log(`  ⚠️ 이미지 삽입 스킵: ${(err as Error).message?.slice(0, 80)}`);
-      }
-    }
+    // 4-1. 이미지 자동 생성·삽입 비활성화 (예진매니저 요청 2026-07-13)
+    //      사진은 예진매니저가 직접 넣으므로 봇은 이미지를 생성/삽입하지 않음
 
     // 5. 시트 업데이트
     await updateStatus(row.rowIndex, 'draft_ready');
