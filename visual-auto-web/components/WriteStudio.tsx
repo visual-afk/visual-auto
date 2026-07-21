@@ -23,6 +23,32 @@ function chipSetFor(branch: BranchOpt | null): string[] {
 
 const RECORD_MIMES = ['audio/webm', 'audio/mp4', 'audio/ogg'];
 
+/** 본문을 클립보드에 복사. 인앱 브라우저/비보안 컨텍스트에서는 execCommand로 폴백. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* 아래 폴백으로 */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -73,6 +99,10 @@ export default function WriteStudio({
   const [generating, setGenerating] = useState(false);
   const [post, setPost] = useState<Post | null>(initialPost);
   const [error, setError] = useState('');
+  // 복사 결과 안내: 'ok' | 'fail' | '' (안내 없음)
+  const [copyState, setCopyState] = useState<'' | 'ok' | 'fail'>('');
+  // 발행처를 연 뒤(붙여넣기 완료 확인 대기) 상태
+  const [openedTarget, setOpenedTarget] = useState<'naver' | 'imweb' | null>(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -215,15 +245,25 @@ export default function WriteStudio({
     }
   }
 
-  async function publish(target: 'naver' | 'imweb') {
+  function draftText(): string {
+    if (!post) return '';
+    return [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
+  }
+
+  // "본문 복사" 버튼 — 직접 클릭 제스처로 복사하고 결과를 눈에 보이게 안내
+  async function handleCopy() {
+    const ok = await copyText(draftText());
+    setCopyState(ok ? 'ok' : 'fail');
+    if (ok) window.setTimeout(() => setCopyState(''), 3000);
+  }
+
+  // Step 1: 발행처 열기 = 본문 복사 + 사진 저장만. DB/이동은 건드리지 않는다.
+  // (앵커 네비게이션이 실제 열기를 담당하므로 여기서 window.open은 하지 않는다)
+  async function openTarget(target: 'naver' | 'imweb') {
     if (!post) return;
-    // 1) 본문 복사
-    const text = [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* 클립보드 거부 시 무시 */
-    }
+    // 1) 본문 복사 (실패해도 사용자가 "본문 복사" 버튼으로 재시도 가능)
+    const ok = await copyText(draftText());
+    setCopyState(ok ? 'ok' : 'fail');
     // 2) 사진 갤러리에 저장(다운로드)
     photos.forEach((f, i) => {
       const url = URL.createObjectURL(f);
@@ -233,20 +273,22 @@ export default function WriteStudio({
       a.click();
       URL.revokeObjectURL(url);
     });
-    // 3) 발행 상태 기록
+    // 3) 붙여넣기 완료 확인 대기 상태로 전환 (초안은 화면·DB에 그대로 유지)
+    setOpenedTarget(target);
+  }
+
+  // Step 2: 붙여넣어 올린 뒤 "발행 완료" 클릭 → 상태 기록 + 초안 정리 + 조회수 화면
+  async function confirmPublished() {
+    if (!post || !openedTarget) return;
     await fetch('/api/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
+      body: JSON.stringify({ id: post.id, action: 'publish', publish_target: openedTarget }),
     });
-    // 4) 발행 완료 → 임시저장 초안 비우기
     clearChips();
     clearNotes();
     clearTopics();
     clearTopic();
-    // 5) 발행처 열기 + 조회수 입력 화면으로
-    const url = target === 'naver' ? naverUrl : imwebUrl;
-    if (url) window.open(url, '_blank');
     router.push(`/track/${post.id}`);
   }
 
@@ -382,20 +424,58 @@ export default function WriteStudio({
 
       {/* 하단: 발행 (반자동 복붙) */}
       {post && (
-        <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start">
-            {imwebUrl && (
-              <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
-                아임웹 열기
-              </button>
-            )}
-            <MyNaverBlogField
-              initialUrl={naverUrl}
-              onChange={setNaverUrl}
-              onOpen={() => publish('naver')}
-            />
-          </div>
+        <div className="mt-6 border-t border-line pt-5">
+          {openedTarget ? (
+            // Step 2: 붙여넣어 올린 뒤 발행 확정
+            <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-ink">
+                  {openedTarget === 'imweb' ? '아임웹' : '네이버 블로그'}에 붙여넣어 올리셨나요?
+                </p>
+                <p className="mt-0.5 text-xs text-ink-faint">
+                  아직 안 올렸으면 이 화면 그대로 두세요. 글은 그대로 있어요.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
+                  본문 다시 복사
+                </button>
+                <button className="btn-primary md:w-auto md:px-6" onClick={confirmPublished} type="button">
+                  네, 발행 완료
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Step 1: 본문 복사 + 발행처 열기
+            <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm text-ink-soft">열면 본문이 자동 복사돼요. 안 되면 "본문 복사"를 눌러주세요</p>
+                {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
+                {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
+              </div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
+                  본문 복사
+                </button>
+                {imwebUrl && (
+                  <a
+                    className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
+                    href={imwebUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => openTarget('imweb')}
+                  >
+                    아임웹 열기
+                  </a>
+                )}
+                <MyNaverBlogField
+                  initialUrl={naverUrl}
+                  onChange={setNaverUrl}
+                  onOpen={() => openTarget('naver')}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

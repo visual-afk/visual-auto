@@ -68,13 +68,20 @@ export default function MyNaverBlogField({
     setEditing(false);
   }
 
-  // 링크 있음 & 편집 아님 → 열기 버튼
+  // 링크 있음 & 편집 아님 → 열기 버튼 (앵커로 열어 인앱 브라우저에서도 확실히 새 탭)
   if (url && !editing) {
     return (
       <div className="flex flex-col items-stretch gap-1 md:items-end">
-        <button className="btn-primary md:w-auto md:px-6 disabled:opacity-40" onClick={onOpen} disabled={disabled}>
+        <a
+          className={`btn-primary inline-flex items-center justify-center md:w-auto md:px-6 ${disabled ? 'pointer-events-none opacity-40' : ''}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={disabled}
+          onClick={() => { if (!disabled) onOpen(); }}
+        >
           네이버 블로그 열기
-        </button>
+        </a>
         <button className="text-xs text-ink-faint underline" onClick={() => setEditing(true)}>
           내 블로그 링크 변경
         </button>
