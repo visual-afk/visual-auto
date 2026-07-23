@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy } from 'lucide-react';
+import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy, LayoutGrid } from 'lucide-react';
 import type { Post, PhotoGuideItem, PostPhoto } from '@/lib/types';
 import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
@@ -53,12 +53,14 @@ export default function WriteStudio({
   myNaverUrl,
   initialPost,
   initialBranchId,
+  canCardNews,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
   myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
   initialPost: Post | null; // 발행 안 한 최신 초안 — 새로고침해도 이어쓰기
   initialBranchId?: string | null; // 마지막으로 골랐던 지점/브랜드 (서버 기억)
+  canCardNews?: boolean; // 카드뉴스 만들기 권한 (기본 본사만 — lib/flags.ts)
 }) {
   const router = useRouter();
   const salons = branches.filter((b) => b.kind === 'salon');
@@ -240,6 +242,28 @@ export default function WriteStudio({
       setError((e as Error).message);
     } finally {
       setGenerating(false);
+    }
+  }
+
+  const [creatingCards, setCreatingCards] = useState(false);
+
+  // 초안 → 카드뉴스 에디터. 브랜드 모드(정보형/이미지형)는 서버가 프레임에서 정한다.
+  async function toCardNews() {
+    if (!post) return;
+    setCreatingCards(true);
+    setError('');
+    try {
+      const res = await fetch('/api/card-news', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '카드뉴스 생성 실패');
+      router.push(`/card-news/${data.cardNews.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+      setCreatingCards(false);
     }
   }
 
@@ -455,15 +479,31 @@ export default function WriteStudio({
       {post && selectedBranch?.kind === 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">복사한 글을 {selectedBranch.name} 계정에 붙여넣어 주세요</p>
-          <button className="btn-primary md:w-auto md:px-6" onClick={() => publish('manual')}>
-            <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
-          </button>
+          <div className="flex flex-col gap-3 md:flex-row">
+            <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('manual')}>
+              <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
+            </button>
+            {canCardNews && (
+              <button className="btn-primary md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards}>
+                <span className="flex items-center justify-center gap-1.5">
+                  <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
+                </span>
+              </button>
+            )}
+          </div>
         </div>
       )}
       {post && selectedBranch?.kind !== 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
           <div className="flex flex-col gap-3 md:flex-row md:items-start">
+            {canCardNews && (
+              <button className="btn-ghost md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards}>
+                <span className="flex items-center justify-center gap-1.5">
+                  <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
+                </span>
+              </button>
+            )}
             {imwebUrl && (
               <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
                 아임웹 열기
@@ -476,6 +516,9 @@ export default function WriteStudio({
             />
           </div>
         </div>
+      )}
+      {post && canCardNews && (
+        <p className="mt-2 text-xs text-ink-faint md:text-right">카드는 브랜드에 맞는 스타일로 만들어져요</p>
       )}
     </div>
   );
