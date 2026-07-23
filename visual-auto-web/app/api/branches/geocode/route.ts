@@ -1,15 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
-
-/** 지점 관리는 본사 전용 */
-async function requireHq() {
-  const res = await requireMember();
-  if ('error' in res) return { error: res.error };
-  if (res.member.role !== 'hq_admin') {
-    return { error: NextResponse.json({ error: '본사만 지점을 관리할 수 있어요' }, { status: 403 }) };
-  }
-  return { member: res.member };
-}
+import { requireHq } from '@/lib/auth';
 
 type KakaoDoc = {
   x?: string; // 경도(lng)
