@@ -2,8 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy } from 'lucide-react';
-import type { Post, PhotoGuideItem } from '@/lib/types';
+import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy, LayoutGrid } from 'lucide-react';
+import type { Post, PhotoGuideItem, PostPhoto } from '@/lib/types';
 import { usePersistentState } from '@/lib/usePersistentState';
 import MyNaverBlogField from './MyNaverBlogField';
 
@@ -53,12 +53,14 @@ export default function WriteStudio({
   myNaverUrl,
   initialPost,
   initialBranchId,
+  canCardNews,
 }: {
   branches: BranchOpt[];
   needsBranchPick: boolean; // 본사: 글 쓸 지점을 직접 골라야 함
   myNaverUrl: string | null; // 본인 개인 네이버 블로그 글쓰기 링크 (사람별)
   initialPost: Post | null; // 발행 안 한 최신 초안 — 새로고침해도 이어쓰기
   initialBranchId?: string | null; // 마지막으로 골랐던 지점/브랜드 (서버 기억)
+  canCardNews?: boolean; // 카드뉴스 만들기 권한 (기본 본사만 — lib/flags.ts)
 }) {
   const router = useRouter();
   const salons = branches.filter((b) => b.kind === 'salon');
@@ -75,10 +77,12 @@ export default function WriteStudio({
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
-  // 새로고침해도 안 날아가게 자동 임시저장 (사진은 파일이라 제외)
+  // 새로고침해도 안 날아가게 자동 임시저장
   const [chips, setChips, clearChips] = usePersistentState<string[]>('va:write:chips', []);
   const [notes, setNotes, clearNotes] = usePersistentState<string>('va:write:notes', '');
-  const [photos, setPhotos] = useState<File[]>([]);
+  // 사진은 고르는 즉시 서버(post-photos)에 올라간다 — 새로고침 생존 + 카드뉴스에서 재사용
+  const [photos, setPhotos, clearPhotos] = usePersistentState<PostPhoto[]>('va:write:photos', []);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [topics, setTopics, clearTopics] = usePersistentState<Topic[]>('va:write:topics', []);
   const [topic, setTopic, clearTopic] = usePersistentState<string>('va:write:topic', '');
   const [loadingTopics, setLoadingTopics] = useState(false);
@@ -160,9 +164,28 @@ export default function WriteStudio({
     }
   }
 
-  function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []).slice(0, 2);
-    setPhotos(files);
+    if (!files.length) return;
+    setUploadingPhotos(true);
+    setError('');
+    try {
+      const uploaded: PostPhoto[] = [];
+      for (const [i, f] of files.entries()) {
+        const form = new FormData();
+        form.append('photo', f);
+        form.append('slot', String(i + 1));
+        const res = await fetch('/api/upload-photo', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '사진 업로드 실패');
+        uploaded.push({ slot: data.slot, storage_path: data.storage_path, url: data.url });
+      }
+      setPhotos(uploaded);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingPhotos(false);
+    }
   }
 
   async function getTopics() {
@@ -205,6 +228,7 @@ export default function WriteStudio({
           user_notes: notes,
           branch_id: branchId,
           post_id: post?.id, // 초안이 있으면 덮어쓰기 — 유령 초안이 쌓이지 않게
+          photo_paths: photos.map((p) => ({ slot: p.slot, storage_path: p.storage_path })),
         }),
       });
       const data = await res.json();
@@ -218,6 +242,28 @@ export default function WriteStudio({
       setError((e as Error).message);
     } finally {
       setGenerating(false);
+    }
+  }
+
+  const [creatingCards, setCreatingCards] = useState(false);
+
+  // 초안 → 카드뉴스 에디터. 브랜드 모드(정보형/이미지형)는 서버가 프레임에서 정한다.
+  async function toCardNews() {
+    if (!post) return;
+    setCreatingCards(true);
+    setError('');
+    try {
+      const res = await fetch('/api/card-news', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '카드뉴스 생성 실패');
+      router.push(`/card-news/${data.cardNews.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+      setCreatingCards(false);
     }
   }
 
@@ -247,15 +293,21 @@ export default function WriteStudio({
     } catch {
       /* 클립보드 거부 시 무시 */
     }
-    // 2) 사진 갤러리에 저장(다운로드)
-    photos.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${post.title || 'photo'}-${i + 1}.${f.name.split('.').pop() || 'jpg'}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
+    // 2) 사진 갤러리에 저장(다운로드) — 업로드된 사진을 받아서 저장 (a[download]는 크로스오리진에서 무시돼 blob으로)
+    for (const [i, p] of photos.entries()) {
+      if (!p.url) continue;
+      try {
+        const blob = await fetch(p.url).then((r) => r.blob());
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${post.title || 'photo'}-${i + 1}.${p.storage_path.split('.').pop() || 'jpg'}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        /* 사진 저장 실패는 발행을 막지 않는다 */
+      }
+    }
     // 3) 발행 상태 기록
     await fetch('/api/posts', {
       method: 'PATCH',
@@ -267,6 +319,7 @@ export default function WriteStudio({
     clearNotes();
     clearTopics();
     clearTopic();
+    clearPhotos();
     // 5) 발행처 열기 + 조회수 입력 화면으로 (브랜드 글은 복사만 — 담당자가 직접 올림)
     if (target !== 'manual') {
       const url = target === 'naver' ? naverUrl : imwebUrl;
@@ -364,15 +417,11 @@ export default function WriteStudio({
                 <Camera size={24} />
                 <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
               </label>
-              {photos.map((f, i) => (
-                <img
-                  key={i}
-                  src={URL.createObjectURL(f)}
-                  alt=""
-                  className="h-20 w-20 rounded-2xl object-cover"
-                />
+              {photos.map((p) => (
+                <img key={p.storage_path} src={p.url} alt="" className="h-20 w-20 rounded-2xl object-cover" />
               ))}
             </div>
+            {uploadingPhotos && <p className="mt-1 text-sm text-ink-faint">사진 올리는 중…</p>}
           </div>
 
           <div>
@@ -430,15 +479,31 @@ export default function WriteStudio({
       {post && selectedBranch?.kind === 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">복사한 글을 {selectedBranch.name} 계정에 붙여넣어 주세요</p>
-          <button className="btn-primary md:w-auto md:px-6" onClick={() => publish('manual')}>
-            <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
-          </button>
+          <div className="flex flex-col gap-3 md:flex-row">
+            <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('manual')}>
+              <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
+            </button>
+            {canCardNews && (
+              <button className="btn-primary md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards}>
+                <span className="flex items-center justify-center gap-1.5">
+                  <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
+                </span>
+              </button>
+            )}
+          </div>
         </div>
       )}
       {post && selectedBranch?.kind !== 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
           <div className="flex flex-col gap-3 md:flex-row md:items-start">
+            {canCardNews && (
+              <button className="btn-ghost md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards}>
+                <span className="flex items-center justify-center gap-1.5">
+                  <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
+                </span>
+              </button>
+            )}
             {imwebUrl && (
               <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
                 아임웹 열기
@@ -451,6 +516,9 @@ export default function WriteStudio({
             />
           </div>
         </div>
+      )}
+      {post && canCardNews && (
+        <p className="mt-2 text-xs text-ink-faint md:text-right">카드는 브랜드에 맞는 스타일로 만들어져요</p>
       )}
     </div>
   );

@@ -24,7 +24,7 @@ function isThisMonth(s: string, now: Date) {
 export default async function TrackPage() {
   const member = (await getMember())!;
   const admin = getAdminSupabase();
-  const [{ data: posts }, { data: reels }, { data: igAccount }] = await Promise.all([
+  const [{ data: posts }, { data: reels }, { data: cardNews }, { data: igAccount }] = await Promise.all([
     admin
       .from('posts')
       .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
@@ -33,6 +33,10 @@ export default async function TrackPage() {
     admin
       .from('reels')
       .select('id, views, created_at')
+      .eq('author_id', member.userId),
+    admin
+      .from('card_news')
+      .select('id, post_id, views, status, created_at')
       .eq('author_id', member.userId),
     admin
       .from('instagram_accounts')
@@ -56,13 +60,16 @@ export default async function TrackPage() {
 
   const list = posts || [];
   const reelList = reels || [];
+  const cardList = cardNews || [];
+  // 글 → 만들어둔 카드뉴스 (목록에 "카드" 배지 + 에디터 링크)
+  const cardByPost = new Map(cardList.filter((c) => c.post_id).map((c) => [c.post_id as string, c.id]));
   const now = new Date();
   // 발행한 글만 센다 — 생성만 하고 발행 안 한 초안이 "이번 달 글"로 잡히면 혼란
   const monthCount = list.filter(
     (p) => p.status === 'published' && isThisMonth(p.published_at || p.created_at, now)
   ).length;
   const monthReels = reelList.filter((r) => isThisMonth(r.created_at, now)).length;
-  const withViews = [...list, ...reelList].filter((p) => p.views != null);
+  const withViews = [...list, ...reelList, ...cardList].filter((p) => p.views != null);
   const totalViews = withViews.reduce((s, p) => s + (p.views || 0), 0);
   const avgViews = withViews.length ? Math.round(totalViews / withViews.length) : 0;
   const today = now.toISOString().slice(0, 10);
@@ -125,6 +132,14 @@ export default async function TrackPage() {
                   <Link href={p.status === 'published' ? `/track/${p.id}` : '/write'} className="truncate font-semibold">
                     {p.title || '제목 없음'}
                   </Link>
+                  {cardByPost.has(p.id) && (
+                    <Link
+                      href={`/card-news/${cardByPost.get(p.id)}`}
+                      className="shrink-0 rounded-full bg-brand-wash px-2 py-0.5 text-[11px] font-semibold text-brand"
+                    >
+                      카드
+                    </Link>
+                  )}
                 </span>
                 <span className="hidden text-sm text-ink-soft md:block">
                   {p.publish_target ? TARGET_LABEL[p.publish_target] : '-'}
