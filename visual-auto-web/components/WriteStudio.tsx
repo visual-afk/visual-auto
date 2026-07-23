@@ -168,8 +168,9 @@ export default function WriteStudio({
   }
 
   function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []).slice(0, 2);
-    setPhotos(files);
+    const files = Array.from(e.target.files || []);
+    setPhotos((prev) => [...prev, ...files]);
+    e.target.value = ''; // 같은 파일 다시 고를 수 있게 초기화
   }
 
   async function getTopics() {
@@ -354,19 +355,23 @@ export default function WriteStudio({
           </div>
 
           <div>
-            <p className="label">사진 (1~2장)</p>
+            <p className="label">사진 (여러 장 가능)</p>
             <div className="flex gap-3">
               <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-line bg-surface text-ink-faint">
                 <Camera size={24} />
                 <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
               </label>
               {photos.map((f, i) => (
-                <img
+                <button
                   key={i}
-                  src={URL.createObjectURL(f)}
-                  alt=""
-                  className="h-20 w-20 rounded-2xl object-cover"
-                />
+                  type="button"
+                  onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                  className="relative h-20 w-20 shrink-0"
+                  title="탭하면 사진을 뺍니다"
+                >
+                  <img src={URL.createObjectURL(f)} alt="" className="h-20 w-20 rounded-2xl object-cover" />
+                  <span className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 text-xs text-white">✕</span>
+                </button>
               ))}
             </div>
           </div>
