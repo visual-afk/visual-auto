@@ -117,7 +117,7 @@ export default function MemberCoachingCard({
       {/* 활동 · 조회수 · 저장률 */}
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
         <span className="text-ink-soft">
-          릴스 {coaching.reelsCount} · 블로그 {coaching.blogCount} · 리뷰 {coaching.reviewCount}
+          릴스 {coaching.reelsCount} · 아임웹 {coaching.imwebCount} · 네이버 {coaching.naverCount} · 리뷰 {coaching.reviewCount}
         </span>
         <span className="flex items-baseline gap-3">
           <span className="text-ink-soft">
