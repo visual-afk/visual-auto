@@ -44,6 +44,24 @@ export function resolveRange(type: PeriodType, ref?: string): DateRange {
   return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label };
 }
 
+/**
+ * 오늘(KST) 포함 최근 7일 + 직전 7일(증감용). 코칭 화면 전용.
+ * resolveRange('week')는 달력 주(월~일)라 월요일 새벽에 창이 리셋돼 전원 0으로 보이는 착시가 있어,
+ * 코칭 경로만 롤링 7일을 쓴다. ref 없으면 KST 기준 오늘(resolveRange의 UTC 오늘과 달리 새벽 밀림 없음).
+ */
+export function resolveRolling7(ref?: string): DateRange {
+  const base = ref ? new Date(ref + 'T00:00:00Z') : new Date(Date.now() + 9 * 3600 * 1000);
+  const end = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 6);
+  const prevStart = new Date(start);
+  prevStart.setUTCDate(prevStart.getUTCDate() - 7);
+  const prevEnd = new Date(start);
+  prevEnd.setUTCDate(prevEnd.getUTCDate() - 1);
+  const label = `${start.getUTCMonth() + 1}/${start.getUTCDate()}~${end.getUTCMonth() + 1}/${end.getUTCDate()}`;
+  return { start: iso(start), end: iso(end), prevStart: iso(prevStart), prevEnd: iso(prevEnd), label };
+}
+
 interface RawSums {
   cut: number; perm: number; recovery: number; clinic: number; dye: number; etc: number;
   new_sales: number; repeat_sales: number; guest_count: number;
