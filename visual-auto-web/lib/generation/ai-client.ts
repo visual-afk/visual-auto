@@ -330,6 +330,10 @@ export function friendlyAIError(e: unknown): { message: string; status: number }
       status: 502,
     };
   }
+  // 영상 분석에서 던진 디자이너용 한국어 메시지는 그대로 전달(안전필터·처리실패·빈응답 등)
+  if (/영상|클립|안전 필터/.test(msg)) {
+    return { message: msg, status: 502 };
+  }
   return { message: '글을 쓰는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.', status: 500 };
 }
 
@@ -339,15 +343,29 @@ export function friendlyAIError(e: unknown): { message: string; status: number }
  * thinkingBudget: 0 으로 사고를 끄면 토큰이 전부 실제 응답에 쓰인다.
  * (구버전 SDK 타입엔 thinkingConfig가 없어 런타임 통과용으로 캐스팅한다.)
  */
-function geminiGenerationConfig(opts: { maxOutputTokens: number; temperature?: number; json?: boolean }) {
+function geminiGenerationConfig(opts: {
+  maxOutputTokens: number;
+  temperature?: number;
+  json?: boolean;
+  /** 사고 예산. 기본 0(글쓰기 잘림 방지). 영상 이해 등 추론이 필요하면 양수/생략(모델 기본). */
+  thinkingBudget?: number;
+}) {
   return {
     maxOutputTokens: opts.maxOutputTokens,
     ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
-    thinkingConfig: { thinkingBudget: 0 },
+    // thinkingBudget: 0(기본)이면 사고 끔. 영상 분석은 양수로 켜서 이해력을 확보한다.
+    ...(opts.thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget: opts.thinkingBudget } } : { thinkingConfig: { thinkingBudget: 0 } }),
     // json 모드: 네이티브 JSON 출력 강제(산문 반환 방지)
     ...(opts.json ? { responseMimeType: 'application/json' } : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
+}
+
+/** 응답이 막혔는지(SAFETY/RECITATION/OTHER) 판별해 명확한 에러를 던진다. */
+function assertNotBlocked(finishReason: string | undefined) {
+  if (finishReason && /SAFETY|RECITATION|BLOCK|PROHIBITED|OTHER/i.test(finishReason)) {
+    throw new Error('AI가 이 영상을 분석하지 못했어요(안전 필터). 다른 클립으로 다시 시도해 주세요.');
+  }
 }
 
 /** 응답이 잘렸는지(finishReason=MAX_TOKENS) 판별해 명확한 에러를 던진다. */
@@ -416,26 +434,72 @@ export async function transcribeAudio(base64Audio: string, mimeType: string): Pr
 
 /**
  * 영상 분석 (Gemini). 릴스 레퍼런스 영상을 받아 instruction 대로 분석한다.
- * Claude는 영상 입력 불가 → 항상 Gemini. v1은 inlineData(base64, ≲20MB) 사용.
+ * Claude는 영상 입력 불가 → 항상 Gemini.
+ *
+ * v2 변경(먹통 수정):
+ *  - inline base64 폐기 → **항상 Files API** 로 올린다. 인라인 영상은 코덱/mov·
+ *    요청 총량(~20MB) 한계로 작은 파일에서도 실패가 잦았다. Files API가 구글 권장 경로.
+ *  - **thinking 켬**(thinkingBudget 양수). 영상 이해는 추론이 필요해 0이면 빈/부실 응답이 났다.
+ *    사고가 출력 예산을 먹지 않도록 maxOutputTokens 도 넉넉히 준다.
+ *  - 빈응답·차단(SAFETY)·잘림(MAX_TOKENS)을 명확한 에러로 던진다(조용한 파싱 실패 방지).
  */
 export async function analyzeVideo(base64Video: string, mimeType: string, instruction: string): Promise<string> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('영상 분석에는 GEMINI_API_KEY 가 필요해요');
   }
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const [{ GoogleGenerativeAI }, { GoogleAIFileManager, FileState }, fs, os, path] = await Promise.all([
+    import('@google/generative-ai'),
+    import('@google/generative-ai/server'),
+    import('fs/promises'),
+    import('os'),
+    import('path'),
+  ]);
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-    generationConfig: geminiGenerationConfig({ maxOutputTokens: 2000, temperature: 0.4, json: true }),
+    generationConfig: geminiGenerationConfig({
+      maxOutputTokens: 8000,   // 사고 토큰이 출력을 잠식하지 않게 넉넉히 (실제 JSON 출력은 수백 토큰)
+      temperature: 0.4,
+      json: true,
+      thinkingBudget: 2048,    // 영상 이해용 사고 켬 (0이면 빈 응답 빈발)
+    }),
   });
+
+  const fm = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+  const ext = /mp4/i.test(mimeType) ? 'mp4' : /quicktime|mov/i.test(mimeType) ? 'mov' : /webm/i.test(mimeType) ? 'webm' : 'mp4';
+  const tmp = path.join(os.tmpdir(), `reels-${Date.now()}-${Math.round(base64Video.length)}.${ext}`);
+  let fileName: string | undefined;
   try {
+    await fs.writeFile(tmp, Buffer.from(base64Video, 'base64'));
+    const up = await fm.uploadFile(tmp, { mimeType });
+    let file = up.file;
+    fileName = file.name;
+    // 영상은 서버측 처리(트랜스코딩)에 시간이 걸린다 → ACTIVE 될 때까지 폴링(최대 ~2분)
+    for (let i = 0; file.state === FileState.PROCESSING && i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      file = await fm.getFile(file.name);
+    }
+    if (file.state !== FileState.ACTIVE) {
+      throw new Error('영상 처리에 실패했어요. 다른 클립으로 다시 시도해 주세요.');
+    }
+
     const result = await model.generateContent([
       { text: instruction },
-      { inlineData: { mimeType, data: base64Video } },
+      { fileData: { mimeType, fileUri: file.uri } },
     ]);
-    return result.response.text().trim();
+    const finishReason = result.response.candidates?.[0]?.finishReason;
+    assertNotBlocked(finishReason);
+    assertNotTruncated(finishReason);
+    const text = result.response.text().trim();
+    if (!text) {
+      throw new Error('AI가 영상에서 분석 내용을 뽑지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+    return text;
   } catch (e) {
     throw toFriendlyAIError(e);
+  } finally {
+    if (fileName) await fm.deleteFile(fileName).catch(() => {});
+    await fs.unlink(tmp).catch(() => {});
   }
 }
 
