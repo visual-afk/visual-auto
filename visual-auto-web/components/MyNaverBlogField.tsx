@@ -27,11 +27,13 @@ export default function MyNaverBlogField({
   onChange,
   onOpen,
   disabled = false,
+  opened = false,
 }: {
   initialUrl: string | null;
   onChange: (url: string | null) => void; // 부모(WriteStudio)의 publish 대상 갱신
   onOpen: () => void; // "네이버 블로그 열기" 클릭 = 발행 흐름 실행
   disabled?: boolean; // 검토 전에는 발행 잠금
+  opened?: boolean; // 이미 한 번 열었으면 ✓ 표시
 }) {
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [editing, setEditing] = useState(!initialUrl);
@@ -80,7 +82,7 @@ export default function MyNaverBlogField({
           aria-disabled={disabled}
           onClick={() => { if (!disabled) onOpen(); }}
         >
-          네이버 블로그 열기
+          네이버 블로그 열기{opened ? ' ✓' : ''}
         </a>
         <button className="text-xs text-ink-faint underline" onClick={() => setEditing(true)}>
           내 블로그 링크 변경

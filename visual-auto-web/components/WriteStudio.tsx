@@ -120,8 +120,9 @@ export default function WriteStudio({
   const [error, setError] = useState('');
   // 복사 결과 안내: 'ok' | 'fail' | '' (안내 없음)
   const [copyState, setCopyState] = useState<'' | 'ok' | 'fail'>('');
-  // 발행처를 연 뒤(붙여넣기 완료 확인 대기) 상태
-  const [openedTarget, setOpenedTarget] = useState<'naver' | 'imweb' | null>(null);
+  // 연 발행처(복수 가능) — 같은 글을 아임웹·네이버 양쪽에 올릴 수 있다
+  const [opened, setOpened] = useState<{ imweb: boolean; naver: boolean }>({ imweb: false, naver: false });
+  const anyOpened = opened.imweb || opened.naver;
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -293,17 +294,21 @@ export default function WriteStudio({
       a.click();
       URL.revokeObjectURL(url);
     });
-    // 3) 붙여넣기 완료 확인 대기 상태로 전환 (초안은 화면·DB에 그대로 유지)
-    setOpenedTarget(target);
+    // 3) 이 발행처를 "열었음"으로 표시 (초안은 화면·DB에 그대로 유지). 다른 곳도 더 열 수 있다.
+    setOpened((o) => ({ ...o, [target]: true }));
   }
 
-  // Step 2: 붙여넣어 올린 뒤 "발행 완료" 클릭 → 상태 기록 + 초안 정리 + 조회수 화면
+  // Step 2: 붙여넣어 올린 뒤 "발행 완료" 클릭 → 연 발행처들 기록 + 초안 정리 + 조회수 화면
   async function confirmPublished() {
-    if (!post || !openedTarget) return;
+    if (!post || !anyOpened) return;
+    const publish_targets = [
+      ...(opened.imweb ? ['imweb'] : []),
+      ...(opened.naver ? ['naver'] : []),
+    ];
     await fetch('/api/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: post.id, action: 'publish', publish_target: openedTarget }),
+      body: JSON.stringify({ id: post.id, action: 'publish', publish_targets }),
     });
     clearChips();
     clearNotes();
@@ -448,91 +453,70 @@ export default function WriteStudio({
 
       {/* 하단: 발행 (반자동 복붙) */}
       {post && (
-        <div className="mt-6 border-t border-line pt-5">
-          {openedTarget ? (
-            // Step 2: 붙여넣어 올린 뒤 발행 확정
-            <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-medium text-ink">
-                  {openedTarget === 'imweb' ? '아임웹' : '네이버 블로그'}에 붙여넣어 올리셨나요?
+        <div className="mt-6 space-y-4 border-t border-line pt-5">
+          {/* 본문 복사 + 발행처 열기 — 아임웹·네이버 양쪽 다 열 수 있다 */}
+          <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm text-ink-soft">올릴 곳을 누르면 본문이 자동 복사돼요. 양쪽에 올리려면 두 곳 다 누르세요.</p>
+              {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
+              {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
+              {imwebUrl && (
+                <p className="mt-1 text-xs text-ink-faint">
+                  아임웹은 처음에 먼저 로그인(로그인 유지 체크)해야 글쓰기가 열려요.
+                  {isStandalone && ' 홈 화면 앱에서는 로그인이 매번 필요할 수 있어요 — 사파리/크롬 주소창으로 열면 로그인이 유지돼요.'}
                 </p>
-                <p className="mt-0.5 text-xs text-ink-faint">
-                  창이 닫혔으면 <b>다시 열기</b>를 누르세요. 글은 그대로 있어요 — 처음부터 다시 안 해도 돼요.
-                </p>
-                <button
-                  type="button"
-                  className="mt-1 text-xs text-ink-faint underline"
-                  onClick={() => setOpenedTarget(null)}
-                >
-                  아직 안 올렸어요 ← 뒤로
-                </button>
-              </div>
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
-                  본문 다시 복사
-                </button>
-                {(openedTarget === 'imweb' ? imwebUrl : naverUrl) && (
+              )}
+            </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start">
+              <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
+                본문 복사
+              </button>
+              {imwebUrl && (
+                <div className="flex flex-col items-stretch gap-1 md:items-start">
                   <a
-                    className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
-                    href={(openedTarget === 'imweb' ? imwebUrl : naverUrl) as string}
+                    className={`btn-ghost inline-flex items-center justify-center gap-1 md:w-auto md:px-6 ${opened.imweb ? 'border-brand text-brand' : ''}`}
+                    href={imwebUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => openTarget('imweb')}
                   >
-                    {openedTarget === 'imweb' ? '아임웹' : '네이버 블로그'} 다시 열기
+                    아임웹 글쓰기 열기{opened.imweb ? ' ✓' : ''}
                   </a>
-                )}
-                <button className="btn-primary md:w-auto md:px-6" onClick={confirmPublished} type="button">
-                  네, 발행 완료
-                </button>
-              </div>
-            </div>
-          ) : (
-            // Step 1: 본문 복사 + 발행처 열기
-            <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm text-ink-soft">열면 본문이 자동 복사돼요. 안 되면 "본문 복사"를 눌러주세요</p>
-                {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
-                {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
-                {imwebUrl && (
-                  <p className="mt-1 text-xs text-ink-faint">
-                    아임웹은 처음에 먼저 로그인(로그인 유지 체크)해야 글쓰기가 열려요.
-                    {isStandalone && ' 홈 화면 앱에서는 로그인이 매번 필요할 수 있어요 — 사파리/크롬 주소창으로 열면 로그인이 유지돼요.'}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
-                  본문 복사
-                </button>
-                {imwebUrl && (
-                  <div className="flex flex-col items-stretch gap-1 md:items-start">
+                  {imwebLogin && (
                     <a
-                      className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
-                      href={imwebUrl}
+                      className="text-xs text-ink-faint underline"
+                      href={imwebLogin}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => openTarget('imweb')}
                     >
-                      아임웹 글쓰기 열기
+                      안 열리면 → 아임웹 로그인
                     </a>
-                    {imwebLogin && (
-                      <a
-                        className="text-xs text-ink-faint underline"
-                        href={imwebLogin}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        안 열리면 → 아임웹 로그인
-                      </a>
-                    )}
-                  </div>
-                )}
-                <MyNaverBlogField
-                  initialUrl={naverUrl}
-                  onChange={setNaverUrl}
-                  onOpen={() => openTarget('naver')}
-                />
+                  )}
+                </div>
+              )}
+              <MyNaverBlogField
+                initialUrl={naverUrl}
+                onChange={setNaverUrl}
+                onOpen={() => openTarget('naver')}
+                opened={opened.naver}
+              />
+            </div>
+          </div>
+
+          {/* 붙여넣어 올린 뒤 발행 확정 — 한 곳이라도 열면 나타난다 */}
+          {anyOpened && (
+            <div className="flex flex-col items-stretch gap-3 rounded-2xl bg-brand-wash p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-ink">
+                  {[opened.imweb ? '아임웹' : null, opened.naver ? '네이버 블로그' : null].filter(Boolean).join('·')}에 붙여넣어 올리셨나요?
+                </p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  다 올렸으면 "발행 완료"를 눌러주세요. 창이 닫혔으면 위 버튼으로 다시 열면 돼요 — 글은 안 날아가요. (한 곳 더 올릴 거면 그 버튼도 눌러요)
+                </p>
               </div>
+              <button className="btn-primary md:w-auto md:px-6" onClick={confirmPublished} type="button">
+                네, 발행 완료
+              </button>
             </div>
           )}
         </div>

@@ -31,7 +31,9 @@ export interface Post {
   photo_guide: PhotoGuideItem[];
   photos: PostPhoto[];
   seo_score: number | null;
-  publish_target: 'naver' | 'imweb' | null;
+  publish_target: 'naver' | 'imweb' | null; // (레거시) 단일 발행처
+  posted_imweb: boolean; // 아임웹에 올렸는지
+  posted_naver: boolean; // 네이버에 올렸는지 (양쪽 동시 발행 가능)
   published_url: string | null;
   views: number | null;
   views_updated_at: string | null;
