@@ -213,7 +213,7 @@ function label(x: number, y: number, text: string, fill: string, pill = false) {
     const w = text.length * 20 + 24;
     return (
       <g>
-        <rect x={x - w / 2} y={y - 22} width={w} height={32} rx={8} fill="#3a2a18" />
+        <rect x={x - w / 2} y={y - 22} width={w} height={32} rx={8} fill={C.pillWarm} />
         <text x={x} y={y} textAnchor="middle" fontSize={21} fontWeight={600} fill={fill}>
           {text}
         </text>
