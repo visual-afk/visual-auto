@@ -14,6 +14,7 @@ import {
   FileCog,
   NotebookPen,
   HeartHandshake,
+  Network,
   type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/lib/roles';
@@ -25,6 +26,11 @@ const ALL: Role[] = ['hq_admin', 'branch_owner', 'designer', 'intern'];
 
 /** 앱 전체 정보구조(5폴더). 사이드바(PC)·모바일 메뉴가 공유한다. 아이템별 roles로 접근권한 보존. */
 export const FOLDERS: NavFolder[] = [
+  {
+    key: '본사전략실',
+    label: '본사전략실',
+    items: [{ href: '/strategy', label: '기본표', icon: Network, roles: ['hq_admin'] }],
+  },
   {
     key: '현황',
     label: '현황',
