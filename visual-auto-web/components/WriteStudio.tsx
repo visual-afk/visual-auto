@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2 } from 'lucide-react';
 import type { Post, PhotoGuideItem } from '@/lib/types';
@@ -22,6 +22,16 @@ function chipSetFor(branch: BranchOpt | null): string[] {
 }
 
 const RECORD_MIMES = ['audio/webm', 'audio/mp4', 'audio/ogg'];
+
+/** 아임웹 글쓰기 딥링크에서 로그인 페이지 URL을 조립. 저장값이 비정상이면 null. */
+function imwebLoginUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return `${new URL(url).origin}/?mode=login`;
+  } catch {
+    return null;
+  }
+}
 
 /** 본문을 클립보드에 복사. 인앱 브라우저/비보안 컨텍스트에서는 execCommand로 폴백. */
 async function copyText(text: string): Promise<boolean> {
@@ -89,6 +99,15 @@ export default function WriteStudio({
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
+  const imwebLogin = imwebLoginUrl(imwebUrl);
+  // 홈 화면 앱(standalone)에서는 아임웹 로그인 세션이 매번 끊길 수 있어 별도 안내
+  const [isStandalone, setIsStandalone] = useState(false);
+  useEffect(() => {
+    const standalone =
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsStandalone(!!standalone);
+  }, []);
   // 새로고침해도 안 날아가게 자동 임시저장 (사진은 파일이라 제외)
   const [chips, setChips, clearChips] = usePersistentState<string[]>('va:write:chips', []);
   const [notes, setNotes, clearNotes] = usePersistentState<string>('va:write:notes', '');
@@ -438,13 +457,30 @@ export default function WriteStudio({
                   {openedTarget === 'imweb' ? '아임웹' : '네이버 블로그'}에 붙여넣어 올리셨나요?
                 </p>
                 <p className="mt-0.5 text-xs text-ink-faint">
-                  아직 안 올렸으면 이 화면 그대로 두세요. 글은 그대로 있어요.
+                  창이 닫혔으면 <b>다시 열기</b>를 누르세요. 글은 그대로 있어요 — 처음부터 다시 안 해도 돼요.
                 </p>
+                <button
+                  type="button"
+                  className="mt-1 text-xs text-ink-faint underline"
+                  onClick={() => setOpenedTarget(null)}
+                >
+                  아직 안 올렸어요 ← 뒤로
+                </button>
               </div>
               <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
                   본문 다시 복사
                 </button>
+                {(openedTarget === 'imweb' ? imwebUrl : naverUrl) && (
+                  <a
+                    className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
+                    href={(openedTarget === 'imweb' ? imwebUrl : naverUrl) as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {openedTarget === 'imweb' ? '아임웹' : '네이버 블로그'} 다시 열기
+                  </a>
+                )}
                 <button className="btn-primary md:w-auto md:px-6" onClick={confirmPublished} type="button">
                   네, 발행 완료
                 </button>
@@ -457,21 +493,39 @@ export default function WriteStudio({
                 <p className="text-sm text-ink-soft">열면 본문이 자동 복사돼요. 안 되면 "본문 복사"를 눌러주세요</p>
                 {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
                 {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
+                {imwebUrl && (
+                  <p className="mt-1 text-xs text-ink-faint">
+                    아임웹은 처음에 먼저 로그인(로그인 유지 체크)해야 글쓰기가 열려요.
+                    {isStandalone && ' 홈 화면 앱에서는 로그인이 매번 필요할 수 있어요 — 사파리/크롬 주소창으로 열면 로그인이 유지돼요.'}
+                  </p>
+                )}
               </div>
               <div className="flex flex-col gap-3 md:flex-row md:items-start">
                 <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
                   본문 복사
                 </button>
                 {imwebUrl && (
-                  <a
-                    className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
-                    href={imwebUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => openTarget('imweb')}
-                  >
-                    아임웹 열기
-                  </a>
+                  <div className="flex flex-col items-stretch gap-1 md:items-start">
+                    <a
+                      className="btn-ghost inline-flex items-center justify-center md:w-auto md:px-6"
+                      href={imwebUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => openTarget('imweb')}
+                    >
+                      아임웹 글쓰기 열기
+                    </a>
+                    {imwebLogin && (
+                      <a
+                        className="text-xs text-ink-faint underline"
+                        href={imwebLogin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        안 열리면 → 아임웹 로그인
+                      </a>
+                    )}
+                  </div>
                 )}
                 <MyNaverBlogField
                   initialUrl={naverUrl}
