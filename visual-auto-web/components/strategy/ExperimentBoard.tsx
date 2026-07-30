@@ -92,7 +92,7 @@ export default function ExperimentBoard({
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       {e.assigneeName && <span className="rounded-full px-2 py-0.5 text-xs" style={{ background: C.accentSoft, color: C.accent }}>{e.assigneeName}</span>}
                       {e.dueDate && <span className="text-xs" style={{ color: e.overdue ? C.warn : C.textDim }}>~{e.dueDate.slice(5).replace('-', '/')}</span>}
-                      {e.promotion === '승격' && <span className="rounded-full px-2 py-0.5 text-xs" style={{ background: '#22331f', color: C.good }}>승격</span>}
+                      {e.promotion === '승격' && <span className="rounded-full px-2 py-0.5 text-xs" style={{ background: C.goodBg, color: C.good }}>승격</span>}
                     </div>
                   </div>
                 ))}
