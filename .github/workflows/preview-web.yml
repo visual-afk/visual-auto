@@ -1,0 +1,43 @@
+name: preview-web
+
+# 카드뉴스 브랜치 확인용 Vercel 프리뷰 배포 — main 머지 없이 배포 URL을 만든다.
+# 프로덕션 도메인은 건드리지 않는다 (--prod 없음). 확인 끝나면 이 파일은 지워도 된다.
+on:
+  push:
+    branches: ['yejin/cardnews-tracking']
+    paths:
+      - 'visual-auto-web/**'
+      - '.github/workflows/preview-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: preview-web
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: visual-auto-web
+    env:
+      VERCEL_ORG_ID: team_Au7w5Gh6BZvOx6NF79uvKusm
+      VERCEL_PROJECT_ID: prj_efzxzX92nPzPUWbdmodaTG61Ujv8
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i -g vercel@latest
+      - run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      - run: vercel build --token="$VERCEL_TOKEN"
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - name: deploy preview
+        run: |
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+          echo "PREVIEW_URL=$URL" >> "$GITHUB_OUTPUT"
+          echo "### 프리뷰 배포 완료" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
+        id: deploy
