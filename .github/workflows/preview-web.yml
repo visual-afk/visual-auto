@@ -37,7 +37,10 @@ jobs:
             -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
             -d '{"ssoProtection": null}' -o /dev/null && echo "preview protection off"
       - run: npm i -g vercel@latest
-      - run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+      # env 변수가 Production에만 등록돼 있어 preview 빌드가 빈 env로 죽는다(MIDDLEWARE_INVOCATION_FAILED).
+      # production env를 받아 preview 빌드에 그대로 쓴다.
+      - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: cp .vercel/.env.production.local .vercel/.env.preview.local
       - run: vercel build --token="$VERCEL_TOKEN"
         env:
           NODE_OPTIONS: --max-old-space-size=4096
