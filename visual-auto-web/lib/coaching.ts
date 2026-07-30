@@ -51,8 +51,9 @@ interface ContentRow {
   author_id: string;
   views: number | null;
   saves: number | null;
-  /** posts 전용 — 발행처. reels 행에는 없다(optional) */
-  publish_target?: 'naver' | 'imweb' | null;
+  /** posts 전용 — 발행처(복수 가능). reels 행에는 없다(optional) */
+  posted_imweb?: boolean;
+  posted_naver?: boolean;
 }
 
 export interface CoachingInputMember {
@@ -85,7 +86,7 @@ export async function aggregateTeamCoaching(
     .lte('published_at', endTs);
   let postsQ = admin
     .from('posts')
-    .select('author_id, views, saves, publish_target')
+    .select('author_id, views, saves, posted_imweb, posted_naver')
     .eq('status', 'published')
     .gte('published_at', startTs)
     .lte('published_at', endTs);
@@ -131,9 +132,10 @@ export async function aggregateTeamCoaching(
       if (kind === 'reel') {
         a.reelsCount++;
       } else {
-        a.blogCount++;
-        // 발행처가 아임웹이면 아임웹, 그 외(네이버/미지정)는 네이버로 집계(개인 블로그 기본값)
-        if (r.publish_target === 'imweb') a.imwebCount++; else a.naverCount++;
+        a.blogCount++; // 활동량은 글 1개당 1 (양쪽에 올려도 1글)
+        // 올린 곳별로 각각 집계 — 같은 글을 아임웹·네이버 둘 다 올리면 양쪽에 반영
+        if (r.posted_imweb) a.imwebCount++;
+        if (r.posted_naver) a.naverCount++;
       }
       if (r.views != null) { a.viewSum += r.views; a.viewN++; }
       if (r.saves != null && r.views != null && r.views > 0) { a.saveSum += r.saves; a.saveViewSum += r.views; }

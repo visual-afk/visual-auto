@@ -8,7 +8,13 @@ import DraftDeleteButton from '@/components/DraftDeleteButton';
 
 export const dynamic = 'force-dynamic';
 
-const TARGET_LABEL: Record<string, string> = { naver: '네이버', imweb: '아임웹' };
+/** 올린 곳 라벨 — 양쪽에 올렸으면 "아임웹·네이버" */
+function targetLabel(p: { posted_imweb?: boolean; posted_naver?: boolean }): string {
+  const t: string[] = [];
+  if (p.posted_imweb) t.push('아임웹');
+  if (p.posted_naver) t.push('네이버');
+  return t.length ? t.join('·') : '-';
+}
 
 function fmtDate(s: string | null) {
   if (!s) return '-';
@@ -27,7 +33,7 @@ export default async function TrackPage() {
   const [{ data: posts }, { data: reels }, { data: igAccount }] = await Promise.all([
     admin
       .from('posts')
-      .select('id, title, status, publish_target, views, next_check_at, published_at, created_at')
+      .select('id, title, status, posted_imweb, posted_naver, views, next_check_at, published_at, created_at')
       .eq('author_id', member.userId)
       .order('created_at', { ascending: false }),
     admin
@@ -127,7 +133,7 @@ export default async function TrackPage() {
                   </Link>
                 </span>
                 <span className="hidden text-sm text-ink-soft md:block">
-                  {p.publish_target ? TARGET_LABEL[p.publish_target] : '-'}
+                  {targetLabel(p)}
                 </span>
                 <span className="text-right text-sm md:col-auto">
                   {p.status !== 'published' ? (

@@ -31,10 +31,18 @@ export async function PATCH(request: Request) {
   const patch: Record<string, unknown> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
 
-  // 발행 (⑥): 어디로 복사해 갔는지 + 상태 + 3일 뒤 리마인드
+  // 발행 (⑥): 어디에 올렸는지(복수 가능) + 상태 + 3일 뒤 리마인드
   if (body.action === 'publish') {
     patch.status = 'published';
-    if (body.publish_target) patch.publish_target = body.publish_target;
+    // 복수 발행처: publish_targets 배열(신규) 우선, 없으면 publish_target 단일(구버전 호환).
+    // 이미 true인 발행처는 유지(추가 발행). 켜진 것만 true로 올린다.
+    const targets: string[] = Array.isArray(body.publish_targets)
+      ? body.publish_targets
+      : body.publish_target
+        ? [body.publish_target]
+        : [];
+    if (targets.includes('imweb')) patch.posted_imweb = true;
+    if (targets.includes('naver')) patch.posted_naver = true;
     patch.published_at = new Date().toISOString();
     const d = new Date();
     d.setDate(d.getDate() + 3);
