@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireMember } from '@/lib/auth';
-import { analyzeVideo, friendlyAIError, loadPromptFor, parseJsonResponse } from '@/lib/generation/ai-client';
+import { getAdminSupabase } from '@/lib/supabase/admin';
 
-export const maxDuration = 120;
+const BUCKET = 'reels-video';
 
-/** 레퍼런스 영상 업로드 → 구조 분석. (Gemini, inline ≲20MB) */
-export async function POST(request: Request) {
+/**
+ * 레퍼런스 영상 업로드 준비 — 서명 업로드 URL 발급.
+ *
+ * 영상을 라우트로 프록시하지 않는다(Vercel 바디 ~4.5MB 한계) — 면담 녹음과 동일하게
+ * 클라이언트가 이 URL로 스토리지에 직접 올리고, 이어서 /api/reels/analyze/process 를 부른다.
+ */
+export async function POST() {
   const res = await requireMember();
   if ('error' in res) return res.error;
   const { member } = res;
@@ -14,24 +19,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '영상 분석은 Gemini 설정이 필요해요. 관리자에게 문의해주세요.' }, { status: 503 });
   }
 
-  const form = await request.formData().catch(() => null);
-  const file = form?.get('file');
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: '영상 파일을 올려주세요' }, { status: 400 });
-  }
-  if (file.size > 20 * 1024 * 1024) {
-    return NextResponse.json({ error: '영상이 너무 커요(20MB 이하). 짧게 잘라서 올려주세요.' }, { status: 400 });
+  // 경로 접두어를 branchId(없으면 userId)로 고정 → process 단계에서 소유권 검증에 씀
+  const owner = member.branchId ?? member.userId;
+  const path = `${owner}/${crypto.randomUUID()}.mp4`;
+
+  const admin = getAdminSupabase();
+  const { data: signed, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !signed) {
+    console.error('[reels analyze] signed url', error?.message);
+    return NextResponse.json({ error: '업로드 준비에 실패했어요. 다시 시도해주세요.' }, { status: 500 });
   }
 
-  try {
-    const base64 = Buffer.from(await file.arrayBuffer()).toString('base64');
-    const instruction = await loadPromptFor('reels-analyze', member.branchId);
-    const text = await analyzeVideo(base64, file.type || 'video/mp4', instruction);
-    const analysis = parseJsonResponse(text);
-    return NextResponse.json({ analysis });
-  } catch (e) {
-    console.error('[reels analyze]', (e as Error).message);
-    const { message, status } = friendlyAIError(e);
-    return NextResponse.json({ error: message }, { status });
-  }
+  return NextResponse.json({ upload: { path, token: signed.token, signedUrl: signed.signedUrl } });
 }
