@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import type { CalendarDay, ScheduleItem } from '@/lib/contentCalendar';
+import { ChevronLeft, ChevronRight, Plus, Table2 } from 'lucide-react';
+import type { CalendarDay, ScheduleItem, PublishedItem } from '@/lib/contentCalendar';
 import CalendarGrid from './CalendarGrid';
 import DayDetail from './DayDetail';
 import ScheduleEditor, { type AssigneeOpt, type BranchOpt } from './ScheduleEditor';
+import ContentDetailModal from './ContentDetailModal';
+import BulkPlanner from './BulkPlanner';
 
 function shiftMonth(month: string, diff: number): string {
   const [y, m] = month.split('-').map(Number);
@@ -47,6 +49,8 @@ export default function ContentCalendar({
     open: false,
     item: null,
   });
+  const [detail, setDetail] = useState<PublishedItem | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const canEdit = editableBranches.length > 0;
   const showBranch = branchParam === 'all';
@@ -100,14 +104,22 @@ export default function ContentCalendar({
           </select>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {canEdit && (
-            <button
-              onClick={() => setEditor({ open: true, item: null })}
-              className="flex items-center gap-1.5 rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-ink"
-            >
-              <Plus size={15} /> 일정 추가
-            </button>
+            <>
+              <button
+                onClick={() => setBulkOpen(true)}
+                className="flex items-center gap-1.5 rounded-2xl border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink-soft hover:border-brand hover:text-brand"
+              >
+                <Table2 size={15} /> 월 기획 짜기
+              </button>
+              <button
+                onClick={() => setEditor({ open: true, item: null })}
+                className="flex items-center gap-1.5 rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-brand-ink"
+              >
+                <Plus size={15} /> 일정 추가
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -118,6 +130,7 @@ export default function ContentCalendar({
         todayStr={todayStr}
         selectedDate={selectedDate}
         onSelect={(d) => setSelectedDate(d === selectedDate ? null : d)}
+        onOpenPublished={setDetail}
         showBranch={showBranch}
       />
 
@@ -125,10 +138,12 @@ export default function ContentCalendar({
         <DayDetail
           date={selectedDate}
           day={days[selectedDate] ?? { schedule: [], published: [] }}
+          todayStr={todayStr}
           canEdit={canEdit}
           showBranch={showBranch}
           onAdd={() => setEditor({ open: true, item: null })}
           onEdit={(item) => setEditor({ open: true, item })}
+          onOpenPublished={setDetail}
         />
       )}
 
@@ -140,6 +155,19 @@ export default function ContentCalendar({
           branchOpts={editableBranches}
           assignees={assignees}
           onClose={() => setEditor({ open: false, item: null })}
+        />
+      )}
+
+      {detail && <ContentDetailModal item={detail} onClose={() => setDetail(null)} />}
+
+      {bulkOpen && (
+        <BulkPlanner
+          month={month}
+          defaultDate={selectedDate ?? (todayStr.startsWith(month) ? todayStr : `${month}-01`)}
+          defaultBranchId={defaultBranchId}
+          branchOpts={editableBranches}
+          assignees={assignees}
+          onClose={() => setBulkOpen(false)}
         />
       )}
     </div>

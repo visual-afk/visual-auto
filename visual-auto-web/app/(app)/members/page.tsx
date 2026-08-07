@@ -5,7 +5,7 @@ import { logAccess } from '@/lib/access-log';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
 import { aggregateTeamCoaching, type CoachingInputMember, type MemberCoaching } from '@/lib/coaching';
-import type { PeriodType } from '@/lib/metrics';
+import { resolveRange, resolveRolling7, type PeriodType } from '@/lib/metrics';
 import InviteForm from '@/components/InviteForm';
 import PendingInvite from '@/components/PendingInvite';
 import MemberCoachingCard from '@/components/MemberCoachingCard';
@@ -60,7 +60,8 @@ export default async function MembersPage({
 
   const sp = await searchParams;
   const period: PeriodType = sp.period === 'month' ? 'month' : 'week';
-  const periodWord = period === 'week' ? '이번 주' : '이번 달';
+  const periodWord = period === 'week' ? '최근 7일' : '이번 달';
+  const rangeLabel = (period === 'week' ? resolveRolling7() : resolveRange('month')).label;
 
   // 멤버 이름·휴대폰을 보는 화면 → 접근 로그
   await logAccess(member, '/members', 'view_members');
@@ -166,7 +167,10 @@ export default async function MembersPage({
             {isHq ? `전체 ${members.length}명` : `${member.branchName} · ${roleSummary(members) || '아직 멤버 없음'}`}
           </p>
         </div>
-        <PeriodToggle value={period} />
+        <div className="flex flex-col items-end gap-1">
+          <PeriodToggle value={period} />
+          <span className="text-xs text-ink-faint">{rangeLabel}</span>
+        </div>
       </div>
 
       {/* 이번 주(달) 챙길 사람 요약 */}

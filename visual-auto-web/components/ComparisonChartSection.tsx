@@ -12,8 +12,13 @@ const GRID_COLOR = '#e8e6e1'; // line 토큰
 type MetricKey = 'sales' | 'guests';
 
 const won = (n: number) =>
-  n === 0 ? '0' : n >= 100_000_000 ? `${(n / 100_000_000).toFixed(1)}억` : `${Math.round(n / 10_000).toLocaleString()}만`;
-const fmtValue = (metric: MetricKey, v: number) => (metric === 'sales' ? `${won(v)}원` : `${v.toLocaleString()}명`);
+  n === 0
+    ? '0'
+    : Math.abs(n) >= 100_000_000
+      ? `${(n / 100_000_000).toFixed(1)}억`
+      : `${Math.round(n / 10_000).toLocaleString()}만`;
+const fmtValue = (metric: MetricKey, v: number, unit: string) =>
+  metric === 'sales' ? `${won(v)}원` : `${v.toLocaleString()}${unit}`;
 const fmtAxis = (metric: MetricKey, v: number) => (metric === 'sales' ? won(v) : v.toLocaleString());
 
 function Delta({ v }: { v: number | null }) {
@@ -41,7 +46,17 @@ const VB_W = 560;
 const VB_H = 220;
 const PAD = { l: 48, r: 10, t: 10, b: 26 };
 
-function LineChart({ series, metric }: { series: ComparisonSeries; metric: MetricKey }) {
+function LineChart({
+  series,
+  metric,
+  secondaryLabel,
+  secondaryUnit,
+}: {
+  series: ComparisonSeries;
+  metric: MetricKey;
+  secondaryLabel: string;
+  secondaryUnit: string;
+}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
@@ -49,12 +64,16 @@ function LineChart({ series, metric }: { series: ComparisonSeries; metric: Metri
   const cmp = series.points.map((p) => (metric === 'sales' ? p.cmpSales : p.cmpGuests));
   const n = series.points.length;
 
-  const maxVal = Math.max(1, ...cur.filter((v): v is number => v != null), ...cmp.filter((v): v is number => v != null));
+  const nonNull = [...cur, ...cmp].filter((v): v is number => v != null);
+  const maxVal = Math.max(1, ...nonNull);
   const yMax = niceCeil(maxVal);
+  // 환불이 매출보다 큰 날은 음수 — 스케일을 0 밑으로 확장 (살롱 데이터는 항상 yMin=0)
+  const minVal = Math.min(0, ...nonNull);
+  const yMin = minVal < 0 ? -niceCeil(-minVal) : 0;
   const plotW = VB_W - PAD.l - PAD.r;
   const plotH = VB_H - PAD.t - PAD.b;
   const x = (i: number) => PAD.l + (n > 1 ? (i * plotW) / (n - 1) : plotW / 2);
-  const y = (v: number) => PAD.t + plotH - (v / yMax) * plotH;
+  const y = (v: number) => PAD.t + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
   /** null에서 끊기는 연속 구간별 경로 */
   const linePath = (vals: (number | null)[]) => {
@@ -71,9 +90,9 @@ function LineChart({ series, metric }: { series: ComparisonSeries; metric: Metri
     return d;
   };
 
-  /** 현재 시리즈 아래 은은한 면 채움 (연속 구간별) */
+  /** 현재 시리즈 아래 은은한 면 채움 (연속 구간별) — 기준선은 0 */
   const areaPath = (vals: (number | null)[]) => {
-    const base = PAD.t + plotH;
+    const base = y(0);
     let d = '';
     let run: number[] = [];
     const flush = () => {
@@ -113,23 +132,25 @@ function LineChart({ series, metric }: { series: ComparisonSeries; metric: Metri
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         className="h-auto w-full touch-none select-none"
         role="img"
-        aria-label={`${series.currentLabel}와 ${series.compareLabel} ${metric === 'sales' ? '매출' : '접객수'} 비교 그래프`}
+        aria-label={`${series.currentLabel}와 ${series.compareLabel} ${metric === 'sales' ? '매출' : secondaryLabel} 비교 그래프`}
         onPointerMove={onMove}
         onPointerDown={onMove}
         onPointerLeave={() => setHoverIdx(null)}
       >
-        {/* 그리드 (0 / 중간 / 상한) + y 라벨 */}
+        {/* 그리드 (하한 / 중간 / 상한) + y 라벨 */}
         {[0, 0.5, 1].map((t) => {
           const gy = PAD.t + plotH - t * plotH;
           return (
             <g key={t}>
               <line x1={PAD.l} x2={VB_W - PAD.r} y1={gy} y2={gy} stroke={GRID_COLOR} strokeWidth={1} />
               <text x={PAD.l - 6} y={gy + 4} textAnchor="end" fontSize={11} fill="#9a9aa2">
-                {fmtAxis(metric, yMax * t)}
+                {fmtAxis(metric, yMin + (yMax - yMin) * t)}
               </text>
             </g>
           );
         })}
+        {/* 음수 구간이 있으면 0 기준선 표시 */}
+        {yMin < 0 && <line x1={PAD.l} x2={VB_W - PAD.r} y1={y(0)} y2={y(0)} stroke="#9a9aa2" strokeWidth={1} strokeDasharray="2 3" />}
         {/* x 라벨 */}
         {tickIdxs.map((i) => (
           <text key={i} x={x(i)} y={VB_H - 8} textAnchor="middle" fontSize={11} fill="#9a9aa2">
@@ -162,13 +183,13 @@ function LineChart({ series, metric }: { series: ComparisonSeries; metric: Metri
           {hover.cur != null && (
             <p className="mt-0.5 flex items-center gap-1.5 text-ink-soft">
               <span className="inline-block h-0.5 w-3 rounded" style={{ background: CUR_COLOR }} />
-              {series.currentLabel} <b className="text-ink">{fmtValue(metric, hover.cur)}</b>
+              {series.currentLabel} <b className="text-ink">{fmtValue(metric, hover.cur, secondaryUnit)}</b>
             </p>
           )}
           {hover.cmp != null && (
             <p className="mt-0.5 flex items-center gap-1.5 text-ink-soft">
               <span className="inline-block h-0.5 w-3 rounded border-t-2 border-dashed" style={{ borderColor: CMP_COLOR }} />
-              {series.compareLabel} <b className="text-ink">{fmtValue(metric, hover.cmp)}</b>
+              {series.compareLabel} <b className="text-ink">{fmtValue(metric, hover.cmp, secondaryUnit)}</b>
             </p>
           )}
         </div>
@@ -183,7 +204,16 @@ const COMPARE_TABS: { key: CompareType; label: string }[] = [
   { key: 'last_year', label: '작년' },
 ];
 
-export default function ComparisonChartSection({ bundle }: { bundle: ComparisonBundle }) {
+export default function ComparisonChartSection({
+  bundle,
+  secondaryLabel = '객수',
+  secondaryUnit = '명',
+}: {
+  bundle: ComparisonBundle;
+  /** 보조 지표 이름/단위 — 살롱: 객수·명, 제품 브랜드: 주문·건 */
+  secondaryLabel?: string;
+  secondaryUnit?: string;
+}) {
   const [compare, setCompare] = useState<CompareType>('prev_month');
   const [metric, setMetric] = useState<MetricKey>('sales');
 
@@ -218,7 +248,7 @@ export default function ComparisonChartSection({ bundle }: { bundle: ComparisonB
               onClick={() => setMetric(mKey)}
               className={`rounded-full px-3 py-1 text-sm font-semibold ${metric === mKey ? 'bg-brand text-brand-ink' : 'text-ink-soft'}`}
             >
-              {mKey === 'sales' ? '매출' : '객수'}
+              {mKey === 'sales' ? '매출' : secondaryLabel}
             </button>
           ))}
         </div>
@@ -231,7 +261,7 @@ export default function ComparisonChartSection({ bundle }: { bundle: ComparisonB
           <>
             {/* 요약: 직접 라벨 */}
             <p className="text-sm text-ink-soft">
-              <b className="text-base text-ink">{series.currentLabel} {fmtValue(metric, curTotal)}</b>
+              <b className="text-base text-ink">{series.currentLabel} {fmtValue(metric, curTotal, secondaryUnit)}</b>
               {series.hasCompareData && delta != null && (
                 <>
                   {' '}· {series.compareLabel} 같은 기간보다 <Delta v={delta} />
@@ -254,7 +284,7 @@ export default function ComparisonChartSection({ bundle }: { bundle: ComparisonB
             </div>
 
             <div className="mt-2">
-              <LineChart series={series} metric={metric} />
+              <LineChart series={series} metric={metric} secondaryLabel={secondaryLabel} secondaryUnit={secondaryUnit} />
             </div>
 
             {!series.hasCompareData && (
@@ -281,12 +311,12 @@ export default function ComparisonChartSection({ bundle }: { bundle: ComparisonB
                         <td className="py-1 pr-2 text-ink-soft">{p.label}</td>
                         <td className="py-1 pr-2 tabular-nums">
                           {(metric === 'sales' ? p.curSales : p.curGuests) != null
-                            ? fmtValue(metric, (metric === 'sales' ? p.curSales : p.curGuests)!)
+                            ? fmtValue(metric, (metric === 'sales' ? p.curSales : p.curGuests)!, secondaryUnit)
                             : '–'}
                         </td>
                         <td className="py-1 tabular-nums">
                           {(metric === 'sales' ? p.cmpSales : p.cmpGuests) != null
-                            ? fmtValue(metric, (metric === 'sales' ? p.cmpSales : p.cmpGuests)!)
+                            ? fmtValue(metric, (metric === 'sales' ? p.cmpSales : p.cmpGuests)!, secondaryUnit)
                             : '–'}
                         </td>
                       </tr>

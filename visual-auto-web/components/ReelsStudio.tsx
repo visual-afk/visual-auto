@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import type { ContentProfile } from '@/lib/reels';
 import { usePersistentState } from '@/lib/usePersistentState';
+import { getBrowserSupabase } from '@/lib/supabase/client';
+
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 export type BranchOption = { id: string; name: string };
 export type PastReel = { id: string; title: string | null; views: number | null; status: string; created_at: string; published_url: string | null };
@@ -68,12 +71,42 @@ export default function ReelsStudio({
     e.target.value = '';
     if (!file) return;
     setErr('');
+    if (file.size > MAX_VIDEO_BYTES) {
+      setErr('영상이 너무 커요(50MB 이하). 짧게 잘라서 올려주세요.');
+      return;
+    }
     setAnalysis(null);
     setAnalyzing(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/reels/analyze', { method: 'POST', body: fd });
+      // 1) 서명 업로드 URL 발급 (영상은 라우트로 프록시 금지 — Vercel 바디 한계)
+      const prepRes = await fetch('/api/reels/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_type: file.type || 'video/mp4' }),
+      });
+      const prep = await prepRes.json().catch(() => ({}));
+      if (!prepRes.ok) {
+        setErr(prep.error || '영상 분석 준비에 실패했어요');
+        return;
+      }
+
+      // 2) 스토리지 직접 업로드
+      const { error: upErr } = await getBrowserSupabase()
+        .storage.from('reels-video')
+        .uploadToSignedUrl(prep.upload.path, prep.upload.token, file, {
+          contentType: file.type || 'video/mp4',
+        });
+      if (upErr) {
+        setErr('영상 업로드에 실패했어요. 다시 시도해주세요.');
+        return;
+      }
+
+      // 3) 분석 실행
+      const res = await fetch('/api/reels/analyze/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: prep.upload.path }),
+      });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) setErr(d.error || '영상 분석 실패');
       else setAnalysis(d.analysis);
@@ -202,7 +235,7 @@ export default function ReelsStudio({
           </span>
         </button>
         <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={onPickVideo} />
-        <p className="mt-1.5 text-xs text-ink-faint">짧은 클립(20MB 이하)이면 돼요.</p>
+        <p className="mt-1.5 text-xs text-ink-faint">짧은 클립(50MB 이하)이면 돼요.</p>
 
         {analysis && (
           <div className="mt-3 rounded-xl border border-brand-wash bg-brand-wash/40 p-3 text-sm">

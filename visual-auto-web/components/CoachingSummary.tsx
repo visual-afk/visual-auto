@@ -16,7 +16,7 @@ export default function CoachingSummary({
     return (
       <div className="mt-6 flex items-center gap-2.5 rounded-xl2 border border-ok/30 bg-ok/5 px-4 py-3.5 text-sm">
         <PartyPopper size={18} className="shrink-0 text-ok" />
-        <span className="font-semibold text-ink">{periodWord}는 다 잘 하고 있어요. 칭찬 한마디 어때요? 👍</span>
+        <span className="font-semibold text-ink">{periodWord} 다 잘 하고 있어요. 칭찬 한마디 어때요? 👍</span>
       </div>
     );
   }

@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, TrendingUp, TrendingDown, Wrench, Eye, CalendarCheck, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, Wrench, Eye, CalendarCheck, Sparkles } from 'lucide-react';
 import type { BranchDashboard, PeriodType } from '@/lib/metrics';
+import PerformanceControls, { type BranchOpt } from '@/components/PerformanceControls';
 
-export type BranchOpt = { id: string; name: string; hasSource: boolean };
+export type { BranchOpt };
 
 const won = (n: number) => `${Math.round(n / 10000).toLocaleString()}만원`;
 const pctText = (r: number | null) => (r == null ? '–' : `${Math.round(r * 100)}%`);
@@ -59,17 +60,6 @@ export default function PerformanceDashboard({
   const [refreshing, setRefreshing] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const go = (next: { branch?: string; period?: string; ref?: string }) => {
-    const p = new URLSearchParams();
-    p.set('branch', next.branch ?? branchId);
-    p.set('period', next.period ?? period);
-    p.set('ref', next.ref ?? refDate);
-    router.push(`/performance?${p.toString()}`);
-  };
-
-  // 월간 드롭다운의 현재 값: refDate가 속한 달의 1일
-  const refMonth = `${refDate.slice(0, 7)}-01`;
-
   async function refresh() {
     setRefreshing(true);
     setMsg('');
@@ -82,7 +72,7 @@ export default function PerformanceDashboard({
       const d = await res.json().catch(() => ({}));
       if (!res.ok) setMsg(d.error || '새로고침 실패');
       else {
-        setMsg(`${d.date} 수집 완료 (디자이너 ${d.designers}명)`);
+        setMsg(`${d.date} 수집 완료${d.designers ? ` (디자이너 ${d.designers}명)` : ''}`);
         router.refresh();
       }
     } catch {
@@ -120,64 +110,18 @@ export default function PerformanceDashboard({
       </div>
 
       {/* 컨트롤: 지점(본사·멀티지점) + 기간 */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {showPicker && (
-          <select className="field w-auto py-2" value={branchId} onChange={(e) => go({ branch: e.target.value })}>
-            {branchOpts.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-                {!b.hasSource ? ' (연동 전)' : ''}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="flex gap-1 rounded-full bg-canvas p-1">
-          {(['month', 'week'] as PeriodType[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => go({ period: p })}
-              className={`rounded-full px-3 py-1 text-sm font-semibold ${period === p ? 'bg-brand text-brand-ink' : 'text-ink-soft'}`}
-            >
-              {p === 'month' ? '월간' : '주간'}
-            </button>
-          ))}
-        </div>
-
-        {/* 기간 네비게이션: ◀ [기간] ▶ — 월간은 드롭다운 점프, 주간은 라벨 */}
-        <div className="flex items-center gap-1 rounded-full bg-canvas p-1">
-          <button
-            onClick={() => go({ ref: prevRef })}
-            className="rounded-full p-1.5 text-ink-soft active:bg-line"
-            aria-label="이전 기간"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          {period === 'month' ? (
-            <select
-              className="appearance-none rounded-full bg-transparent px-1 py-1 text-sm font-semibold text-ink outline-none"
-              value={monthOptions.some((o) => o.ref === refMonth) ? refMonth : monthOptions[0]?.ref ?? refMonth}
-              onChange={(e) => go({ ref: e.target.value })}
-              aria-label="월 선택"
-            >
-              {monthOptions.map((o) => (
-                <option key={o.ref} value={o.ref}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="px-1 text-sm font-semibold tabular-nums">{data.range.label}</span>
-          )}
-          <button
-            onClick={() => go({ ref: nextRef })}
-            disabled={!canGoNext}
-            className="rounded-full p-1.5 text-ink-soft active:bg-line disabled:opacity-30"
-            aria-label="다음 기간"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
+      <PerformanceControls
+        branchId={branchId}
+        period={period}
+        refDate={refDate}
+        rangeLabel={data.range.label}
+        prevRef={prevRef}
+        nextRef={nextRef}
+        canGoNext={canGoNext}
+        monthOptions={monthOptions}
+        branchOpts={branchOpts}
+        showPicker={showPicker}
+      />
 
       {msg && <p className="mt-3 text-sm text-ink-soft">{msg}</p>}
 

@@ -27,11 +27,13 @@ export default function MyNaverBlogField({
   onChange,
   onOpen,
   disabled = false,
+  opened = false,
 }: {
   initialUrl: string | null;
   onChange: (url: string | null) => void; // 부모(WriteStudio)의 publish 대상 갱신
   onOpen: () => void; // "네이버 블로그 열기" 클릭 = 발행 흐름 실행
   disabled?: boolean; // 검토 전에는 발행 잠금
+  opened?: boolean; // 이미 한 번 열었으면 ✓ 표시
 }) {
   const [url, setUrl] = useState<string | null>(initialUrl);
   const [editing, setEditing] = useState(!initialUrl);
@@ -68,13 +70,20 @@ export default function MyNaverBlogField({
     setEditing(false);
   }
 
-  // 링크 있음 & 편집 아님 → 열기 버튼
+  // 링크 있음 & 편집 아님 → 열기 버튼 (앵커로 열어 인앱 브라우저에서도 확실히 새 탭)
   if (url && !editing) {
     return (
       <div className="flex flex-col items-stretch gap-1 md:items-end">
-        <button className="btn-primary md:w-auto md:px-6 disabled:opacity-40" onClick={onOpen} disabled={disabled}>
-          네이버 블로그 열기
-        </button>
+        <a
+          className={`btn-primary inline-flex items-center justify-center md:w-auto md:px-6 ${disabled ? 'pointer-events-none opacity-40' : ''}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={disabled}
+          onClick={() => { if (!disabled) onOpen(); }}
+        >
+          네이버 블로그 열기{opened ? ' ✓' : ''}
+        </a>
         <button className="text-xs text-ink-faint underline" onClick={() => setEditing(true)}>
           내 블로그 링크 변경
         </button>

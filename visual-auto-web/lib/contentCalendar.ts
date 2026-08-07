@@ -34,6 +34,8 @@ export interface PublishedItem {
   date: string; // KST YYYY-MM-DD (published_at ?? created_at)
   views: number | null;
   url: string | null;
+  author_id: string | null; // auth.users id (branch_users.user_id 로 매핑)
+  authorName: string | null;
 }
 
 export interface CalendarDay {
@@ -58,6 +60,10 @@ export interface CalendarReportData {
 }
 
 const pct = (cur: number, prev: number): number | null => (prev > 0 ? (cur - prev) / prev : null);
+
+/** 기한 지난 미완료 계획 (todayStr = KST 'YYYY-MM-DD') */
+export const isOverdue = (s: Pick<ScheduleItem, 'status' | 'scheduled_date'>, todayStr: string): boolean =>
+  s.status === 'planned' && s.scheduled_date < todayStr;
 
 /** UTC ISO → KST 날짜 문자열 */
 function kstDateOf(iso: string): string {
@@ -109,7 +115,11 @@ async function fetchSchedule(branchIds: string[] | null, month: string): Promise
   }));
 }
 
-async function fetchPublished(branchIds: string[] | null, month: string): Promise<PublishedItem[]> {
+async function fetchPublished(
+  branchIds: string[] | null,
+  month: string,
+  withAuthors = false,
+): Promise<PublishedItem[]> {
   const admin = getAdminSupabase();
   const { gte, lt } = kstMonthRangeUtc(month);
   // published_at 우선, null 이면 created_at 기준 (metrics.ts 와 동일한 폴백)
@@ -118,7 +128,7 @@ async function fetchPublished(branchIds: string[] | null, month: string): Promis
   const buildQuery = (table: 'posts' | 'reels') => {
     let q = admin
       .from(table)
-      .select('id, branch_id, title, views, published_at, created_at, published_url')
+      .select('id, branch_id, author_id, title, views, published_at, created_at, published_url')
       .eq('status', 'published')
       .or(rangeOr);
     if (branchIds) q = q.in('branch_id', branchIds);
@@ -129,12 +139,28 @@ async function fetchPublished(branchIds: string[] | null, month: string): Promis
   type Row = {
     id: string;
     branch_id: string;
+    author_id: string | null;
     title: string | null;
     views: number | null;
     published_at: string | null;
     created_at: string;
     published_url: string | null;
   };
+  const postRows = (posts ?? []) as Row[];
+  const reelRows = (reels ?? []) as Row[];
+
+  // 작성자 이름: author_id(auth uid) → branch_users.user_id 매핑 (assignee의 branch_users.id 와 다름!)
+  const authorNames = new Map<string, string>();
+  if (withAuthors) {
+    const ids = [...new Set([...postRows, ...reelRows].map((r) => r.author_id).filter(Boolean))] as string[];
+    if (ids.length > 0) {
+      const { data: users } = await admin.from('branch_users').select('user_id, display_name').in('user_id', ids);
+      for (const u of (users ?? []) as { user_id: string; display_name: string }[]) {
+        authorNames.set(u.user_id, u.display_name);
+      }
+    }
+  }
+
   const toItem = (kind: 'post' | 'reel') => (r: Row): PublishedItem => ({
     id: r.id,
     kind,
@@ -144,11 +170,10 @@ async function fetchPublished(branchIds: string[] | null, month: string): Promis
     date: kstDateOf(r.published_at || r.created_at),
     views: r.views,
     url: r.published_url,
+    author_id: r.author_id,
+    authorName: r.author_id ? (authorNames.get(r.author_id) ?? null) : null,
   });
-  return [
-    ...((posts ?? []) as Row[]).map(toItem('post')),
-    ...((reels ?? []) as Row[]).map(toItem('reel')),
-  ];
+  return [...postRows.map(toItem('post')), ...reelRows.map(toItem('reel'))];
 }
 
 /** 캘린더 한 달치: 날짜별 계획 + 발행물. branchIds=null 이면 전사. */
@@ -160,7 +185,7 @@ export async function fetchCalendarMonth(
   const [names, schedule, published] = await Promise.all([
     fetchBranchNames(),
     fetchSchedule(branchIds, m),
-    fetchPublished(branchIds, m),
+    fetchPublished(branchIds, m, true), // 캘린더 표시용은 작성자 포함
   ]);
 
   const days: Record<string, CalendarDay> = {};

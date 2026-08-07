@@ -31,10 +31,18 @@ export async function PATCH(request: Request) {
   const patch: Record<string, unknown> = {};
   for (const k of EDITABLE) if (k in body) patch[k] = body[k];
 
-  // 발행 (⑥): 어디로 복사해 갔는지 + 상태 + 3일 뒤 리마인드
+  // 발행 (⑥): 어디에 올렸는지(복수 가능) + 상태 + 3일 뒤 리마인드
   if (body.action === 'publish') {
     patch.status = 'published';
-    if (body.publish_target) patch.publish_target = body.publish_target;
+    // 복수 발행처: publish_targets 배열(신규) 우선, 없으면 publish_target 단일(구버전 호환).
+    // 이미 true인 발행처는 유지(추가 발행). 켜진 것만 true로 올린다.
+    const targets: string[] = Array.isArray(body.publish_targets)
+      ? body.publish_targets
+      : body.publish_target
+        ? [body.publish_target]
+        : [];
+    if (targets.includes('imweb')) patch.posted_imweb = true;
+    if (targets.includes('naver')) patch.posted_naver = true;
     patch.published_at = new Date().toISOString();
     const d = new Date();
     d.setDate(d.getDate() + 3);
@@ -44,7 +52,8 @@ export async function PATCH(request: Request) {
   // 조회수 입력 (⑦)
   if (body.action === 'record_views') {
     if (body.published_url !== undefined) patch.published_url = String(body.published_url).trim();
-    if (body.views !== undefined) patch.views = Number(body.views) || 0;
+    // 빈 조회수는 0으로 굳히지 않고 null(=미입력)로 남긴다 — /track에서 "조회수 입력" 유지, 총/평균 오염 방지
+    if (body.views !== undefined) patch.views = body.views === '' || body.views == null ? null : Number(body.views) || 0;
     if (body.saves !== undefined) patch.saves = body.saves === '' || body.saves == null ? null : Number(body.saves) || 0;
     patch.views_updated_at = new Date().toISOString();
     if (patch.status == null) patch.status = 'published';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, RotateCw, PenLine, Pencil, Mic, Square, Trash2, Sparkles, Copy, LayoutGrid } from 'lucide-react';
 import type { Post, PhotoGuideItem, PostPhoto } from '@/lib/types';
@@ -24,6 +24,42 @@ function chipSetFor(branch: BranchOpt | null): string[] {
 }
 
 const RECORD_MIMES = ['audio/webm', 'audio/mp4', 'audio/ogg'];
+
+/** 아임웹 글쓰기 딥링크에서 로그인 페이지 URL을 조립. 저장값이 비정상이면 null. */
+function imwebLoginUrl(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return `${new URL(url).origin}/?mode=login`;
+  } catch {
+    return null;
+  }
+}
+
+/** 본문을 클립보드에 복사. 인앱 브라우저/비보안 컨텍스트에서는 execCommand로 폴백. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* 아래 폴백으로 */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -77,7 +113,16 @@ export default function WriteStudio({
   // 네이버는 개인별(본인 링크), 아임웹은 지점 공용
   const [naverUrl, setNaverUrl] = useState<string | null>(myNaverUrl);
   const imwebUrl = selectedBranch?.imwebUrl ?? null;
-  // 새로고침해도 안 날아가게 자동 임시저장
+  const imwebLogin = imwebLoginUrl(imwebUrl);
+  // 홈 화면 앱(standalone)에서는 아임웹 로그인 세션이 매번 끊길 수 있어 별도 안내
+  const [isStandalone, setIsStandalone] = useState(false);
+  useEffect(() => {
+    const standalone =
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsStandalone(!!standalone);
+  }, []);
+  // 새로고침해도 안 날아가게 자동 임시저장 (사진은 파일이라 제외)
   const [chips, setChips, clearChips] = usePersistentState<string[]>('va:write:chips', []);
   const [notes, setNotes, clearNotes] = usePersistentState<string>('va:write:notes', '');
   // 사진은 고르는 즉시 서버(post-photos)에 올라간다 — 새로고침 생존 + 카드뉴스에서 재사용
@@ -89,6 +134,11 @@ export default function WriteStudio({
   const [generating, setGenerating] = useState(false);
   const [post, setPost] = useState<Post | null>(initialPost);
   const [error, setError] = useState('');
+  // 복사 결과 안내: 'ok' | 'fail' | '' (안내 없음)
+  const [copyState, setCopyState] = useState<'' | 'ok' | 'fail'>('');
+  // 연 발행처(복수 가능) — 같은 글을 아임웹·네이버 양쪽에 올릴 수 있다
+  const [opened, setOpened] = useState<{ imweb: boolean; naver: boolean }>({ imweb: false, naver: false });
+  const anyOpened = opened.imweb || opened.naver;
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -166,6 +216,7 @@ export default function WriteStudio({
 
   async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []).slice(0, 2);
+    e.target.value = ''; // 같은 파일 다시 고를 수 있게 초기화
     if (!files.length) return;
     setUploadingPhotos(true);
     setError('');
@@ -185,6 +236,24 @@ export default function WriteStudio({
       setError((err as Error).message);
     } finally {
       setUploadingPhotos(false);
+    }
+  }
+
+  // 업로드된 사진을 사용자 갤러리에 저장(다운로드). a[download]는 크로스오리진에서 무시돼 blob으로.
+  async function downloadPhotos(title: string | null) {
+    for (const [i, p] of photos.entries()) {
+      if (!p.url) continue;
+      try {
+        const blob = await fetch(p.url).then((r) => r.blob());
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title || 'photo'}-${i + 1}.${p.storage_path.split('.').pop() || 'jpg'}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        /* 사진 저장 실패는 발행을 막지 않는다 */
+      }
     }
   }
 
@@ -284,48 +353,58 @@ export default function WriteStudio({
     }
   }
 
-  async function publish(target: 'naver' | 'imweb' | 'manual') {
+  function draftText(): string {
+    if (!post) return '';
+    return [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
+  }
+
+  // "본문 복사" 버튼 — 직접 클릭 제스처로 복사하고 결과를 눈에 보이게 안내
+  async function handleCopy() {
+    const ok = await copyText(draftText());
+    setCopyState(ok ? 'ok' : 'fail');
+    if (ok) window.setTimeout(() => setCopyState(''), 3000);
+  }
+
+  // Step 1: 발행처 열기 = 본문 복사 + 사진 저장만. DB/이동은 건드리지 않는다.
+  // (앵커 네비게이션이 실제 열기를 담당하므로 여기서 window.open은 하지 않는다)
+  async function openTarget(target: 'naver' | 'imweb') {
     if (!post) return;
-    // 1) 본문 복사
-    const text = [post.title, '', post.content, '', (post.tags || []).map((t) => `#${t}`).join(' ')].join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* 클립보드 거부 시 무시 */
-    }
-    // 2) 사진 갤러리에 저장(다운로드) — 업로드된 사진을 받아서 저장 (a[download]는 크로스오리진에서 무시돼 blob으로)
-    for (const [i, p] of photos.entries()) {
-      if (!p.url) continue;
-      try {
-        const blob = await fetch(p.url).then((r) => r.blob());
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${post.title || 'photo'}-${i + 1}.${p.storage_path.split('.').pop() || 'jpg'}`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch {
-        /* 사진 저장 실패는 발행을 막지 않는다 */
-      }
-    }
-    // 3) 발행 상태 기록
+    // 1) 본문 복사 (실패해도 사용자가 "본문 복사" 버튼으로 재시도 가능)
+    const ok = await copyText(draftText());
+    setCopyState(ok ? 'ok' : 'fail');
+    // 2) 사진 갤러리에 저장(다운로드) — 업로드된 사진(PostPhoto)을 받아서 저장
+    await downloadPhotos(post.title);
+    // 3) 이 발행처를 "열었음"으로 표시 (초안은 화면·DB에 그대로 유지). 다른 곳도 더 열 수 있다.
+    setOpened((o) => ({ ...o, [target]: true }));
+  }
+
+  // Step 2: 붙여넣어 올린 뒤 "발행 완료" 클릭 → 연 발행처들 기록 + 초안 정리 + 조회수 화면
+  async function confirmPublished() {
+    if (!post || !anyOpened) return;
+    const publish_targets = [
+      ...(opened.imweb ? ['imweb'] : []),
+      ...(opened.naver ? ['naver'] : []),
+    ];
     await fetch('/api/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: post.id, action: 'publish', publish_target: target }),
+      body: JSON.stringify({ id: post.id, action: 'publish', publish_targets }),
     });
-    // 4) 발행 완료 → 임시저장 초안 비우기
     clearChips();
     clearNotes();
     clearTopics();
     clearTopic();
     clearPhotos();
-    // 5) 발행처 열기 + 조회수 입력 화면으로 (브랜드 글은 복사만 — 담당자가 직접 올림)
-    if (target !== 'manual') {
-      const url = target === 'naver' ? naverUrl : imwebUrl;
-      if (url) window.open(url, '_blank');
-    }
     router.push(`/track/${post.id}`);
+  }
+
+  // 브랜드 글: "발행용 복사" — 본문 복사 + 사진 저장만. 담당자가 직접 브랜드 계정에 올린다.
+  // (네이버/아임웹 자동 열기·발행 기록 없음 — 초안 상태로 남겨두고 복사만)
+  async function copyForManual() {
+    if (!post) return;
+    const ok = await copyText(draftText());
+    setCopyState(ok ? 'ok' : 'fail');
+    await downloadPhotos(post.title);
   }
 
   return (
@@ -411,14 +490,23 @@ export default function WriteStudio({
           </div>
 
           <div>
-            <p className="label">사진 (1~2장)</p>
+            <p className="label">사진 (여러 장 가능)</p>
             <div className="flex gap-3">
               <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-line bg-surface text-ink-faint">
                 <Camera size={24} />
                 <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
               </label>
               {photos.map((p) => (
-                <img key={p.storage_path} src={p.url} alt="" className="h-20 w-20 rounded-2xl object-cover" />
+                <button
+                  key={p.storage_path}
+                  type="button"
+                  onClick={() => setPhotos((prev) => prev.filter((x) => x.storage_path !== p.storage_path))}
+                  className="relative h-20 w-20 shrink-0"
+                  title="탭하면 사진을 뺍니다"
+                >
+                  <img src={p.url} alt="" className="h-20 w-20 rounded-2xl object-cover" />
+                  <span className="absolute right-1 top-1 rounded-full bg-black/60 px-1.5 text-xs text-white">✕</span>
+                </button>
               ))}
             </div>
             {uploadingPhotos && <p className="mt-1 text-sm text-ink-faint">사진 올리는 중…</p>}
@@ -478,9 +566,13 @@ export default function WriteStudio({
       {/* 하단: 발행 (반자동 복붙) */}
       {post && selectedBranch?.kind === 'brand' && (
         <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink-soft">복사한 글을 {selectedBranch.name} 계정에 붙여넣어 주세요</p>
+          <div>
+            <p className="text-sm text-ink-soft">복사한 글을 {selectedBranch.name} 계정에 붙여넣어 주세요</p>
+            {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
+            {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
+          </div>
           <div className="flex flex-col gap-3 md:flex-row">
-            <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('manual')}>
+            <button className="btn-ghost md:w-auto md:px-6" onClick={copyForManual} type="button">
               <span className="flex items-center justify-center gap-1.5"><Copy size={16} /> 발행용 복사</span>
             </button>
             {canCardNews && (
@@ -494,27 +586,79 @@ export default function WriteStudio({
         </div>
       )}
       {post && selectedBranch?.kind !== 'brand' && (
-        <div className="mt-6 flex flex-col items-stretch gap-3 border-t border-line pt-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-ink-soft">올린 뒤 붙여넣기만 하면 돼요</p>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start">
-            {canCardNews && (
-              <button className="btn-ghost md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards}>
-                <span className="flex items-center justify-center gap-1.5">
-                  <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
-                </span>
+        <div className="mt-6 space-y-4 border-t border-line pt-5">
+          {/* 본문 복사 + 발행처 열기 — 아임웹·네이버 양쪽 다 열 수 있다 */}
+          <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm text-ink-soft">올릴 곳을 누르면 본문이 자동 복사돼요. 양쪽에 올리려면 두 곳 다 누르세요.</p>
+              {copyState === 'ok' && <p className="mt-0.5 text-xs font-medium text-brand">복사됐어요! 붙여넣기(길게 눌러 붙여넣기) 하면 돼요</p>}
+              {copyState === 'fail' && <p className="mt-0.5 text-xs font-medium text-warn">복사가 안 되는 브라우저예요. 글을 길게 눌러 직접 복사해주세요</p>}
+              {imwebUrl && (
+                <p className="mt-1 text-xs text-ink-faint">
+                  아임웹은 처음에 먼저 로그인(로그인 유지 체크)해야 글쓰기가 열려요.
+                  {isStandalone && ' 홈 화면 앱에서는 로그인이 매번 필요할 수 있어요 — 사파리/크롬 주소창으로 열면 로그인이 유지돼요.'}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start">
+              {canCardNews && (
+                <button className="btn-ghost md:w-auto md:px-6" onClick={toCardNews} disabled={creatingCards} type="button">
+                  <span className="flex items-center justify-center gap-1.5">
+                    <LayoutGrid size={16} /> {creatingCards ? '카드 구성 중…' : '카드뉴스로'}
+                  </span>
+                </button>
+              )}
+              <button className="btn-ghost md:w-auto md:px-6" onClick={handleCopy} type="button">
+                본문 복사
               </button>
-            )}
-            {imwebUrl && (
-              <button className="btn-ghost md:w-auto md:px-6" onClick={() => publish('imweb')}>
-                아임웹 열기
-              </button>
-            )}
-            <MyNaverBlogField
-              initialUrl={naverUrl}
-              onChange={setNaverUrl}
-              onOpen={() => publish('naver')}
-            />
+              {imwebUrl && (
+                <div className="flex flex-col items-stretch gap-1 md:items-start">
+                  <a
+                    className={`btn-ghost inline-flex items-center justify-center gap-1 md:w-auto md:px-6 ${opened.imweb ? 'border-brand text-brand' : ''}`}
+                    href={imwebUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => openTarget('imweb')}
+                  >
+                    아임웹 글쓰기 열기{opened.imweb ? ' ✓' : ''}
+                  </a>
+                  {imwebLogin && (
+                    <a
+                      className="text-xs text-ink-faint underline"
+                      href={imwebLogin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      안 열리면 → 아임웹 로그인
+                    </a>
+                  )}
+                </div>
+              )}
+              <MyNaverBlogField
+                initialUrl={naverUrl}
+                onChange={setNaverUrl}
+                onOpen={() => openTarget('naver')}
+                opened={opened.naver}
+              />
+            </div>
           </div>
+
+          {/* 붙여넣어 올린 뒤 발행 확정 — 한 곳이라도 열면 나타난다 */}
+          {anyOpened && (
+            <div className="flex flex-col items-stretch gap-3 rounded-2xl bg-brand-wash p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-ink">
+                  {[opened.imweb ? '아임웹' : null, opened.naver ? '네이버 블로그' : null].filter(Boolean).join('·')}에 붙여넣어 올리셨나요?
+                </p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  다 올렸으면 "발행 완료"를 눌러주세요. 창이 닫혔으면 위 버튼으로 다시 열면 돼요 — 글은 안 날아가요. (한 곳 더 올릴 거면 그 버튼도 눌러요)
+                </p>
+              </div>
+              <button className="btn-primary md:w-auto md:px-6" onClick={confirmPublished} type="button">
+                네, 발행 완료
+              </button>
+            </div>
+          )}
         </div>
       )}
       {post && canCardNews && (

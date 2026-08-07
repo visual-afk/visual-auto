@@ -4,7 +4,7 @@
  */
 
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { resolveRange, type PeriodType } from '@/lib/metrics';
+import { resolveRange, resolveRolling7, type PeriodType } from '@/lib/metrics';
 import type { Role } from '@/lib/roles';
 
 /** 챙겨야 하는 이유(플래그) */
@@ -24,7 +24,12 @@ const LOW_VIEWS_RATIO = 0.5;
 export interface MemberCoaching {
   userId: string;
   reelsCount: number;
+  /** 블로그 총합 (아임웹 + 네이버). totalCount 계산·하위호환용 */
   blogCount: number;
+  /** 아임웹(공식 홈페이지) 발행 글 수 */
+  imwebCount: number;
+  /** 네이버 블로그(개인) 발행 글 수 */
+  naverCount: number;
   reviewCount: number;
   totalCount: number;
   avgViews: number;
@@ -46,6 +51,9 @@ interface ContentRow {
   author_id: string;
   views: number | null;
   saves: number | null;
+  /** posts 전용 — 발행처(복수 가능). reels 행에는 없다(optional) */
+  posted_imweb?: boolean;
+  posted_naver?: boolean;
 }
 
 export interface CoachingInputMember {
@@ -64,7 +72,8 @@ export async function aggregateTeamCoaching(
   period: PeriodType,
   ref?: string,
 ): Promise<Map<string, MemberCoaching>> {
-  const range = resolveRange(period, ref);
+  // 주간 뷰는 달력 주 대신 롤링 7일(월요일 리셋 착시 방지). 월간은 기존 달력 월.
+  const range = period === 'week' ? resolveRolling7(ref) : resolveRange(period, ref);
   const admin = getAdminSupabase();
   const startTs = `${range.start}T00:00:00`;
   const endTs = `${range.end}T23:59:59`;
@@ -77,7 +86,7 @@ export async function aggregateTeamCoaching(
     .lte('published_at', endTs);
   let postsQ = admin
     .from('posts')
-    .select('author_id, views, saves')
+    .select('author_id, views, saves, posted_imweb, posted_naver')
     .eq('status', 'published')
     .gte('published_at', startTs)
     .lte('published_at', endTs);
@@ -103,6 +112,8 @@ export async function aggregateTeamCoaching(
   type Acc = {
     reelsCount: number;
     blogCount: number;
+    imwebCount: number;
+    naverCount: number;
     reviewCount: number;
     viewSum: number;
     viewN: number;
@@ -112,13 +123,20 @@ export async function aggregateTeamCoaching(
   const acc = new Map<string, Acc>();
   const get = (id: string): Acc => {
     let a = acc.get(id);
-    if (!a) { a = { reelsCount: 0, blogCount: 0, reviewCount: 0, viewSum: 0, viewN: 0, saveSum: 0, saveViewSum: 0 }; acc.set(id, a); }
+    if (!a) { a = { reelsCount: 0, blogCount: 0, imwebCount: 0, naverCount: 0, reviewCount: 0, viewSum: 0, viewN: 0, saveSum: 0, saveViewSum: 0 }; acc.set(id, a); }
     return a;
   };
   const addContent = (rows: ContentRow[], kind: 'reel' | 'blog') => {
     for (const r of rows) {
       const a = get(r.author_id);
-      if (kind === 'reel') a.reelsCount++; else a.blogCount++;
+      if (kind === 'reel') {
+        a.reelsCount++;
+      } else {
+        a.blogCount++; // 활동량은 글 1개당 1 (양쪽에 올려도 1글)
+        // 올린 곳별로 각각 집계 — 같은 글을 아임웹·네이버 둘 다 올리면 양쪽에 반영
+        if (r.posted_imweb) a.imwebCount++;
+        if (r.posted_naver) a.naverCount++;
+      }
       if (r.views != null) { a.viewSum += r.views; a.viewN++; }
       if (r.saves != null && r.views != null && r.views > 0) { a.saveSum += r.saves; a.saveViewSum += r.views; }
     }
@@ -135,7 +153,7 @@ export async function aggregateTeamCoaching(
 
   const out = new Map<string, MemberCoaching>();
   for (const m of members) {
-    const a = acc.get(m.userId) ?? { reelsCount: 0, blogCount: 0, reviewCount: 0, viewSum: 0, viewN: 0, saveSum: 0, saveViewSum: 0 };
+    const a = acc.get(m.userId) ?? { reelsCount: 0, blogCount: 0, imwebCount: 0, naverCount: 0, reviewCount: 0, viewSum: 0, viewN: 0, saveSum: 0, saveViewSum: 0 };
     const totalCount = a.reelsCount + a.blogCount + a.reviewCount;
     const avgViews = a.viewN ? Math.round(a.viewSum / a.viewN) : 0;
     const saveRate = a.saveViewSum > 0 ? a.saveSum / a.saveViewSum : null;
@@ -157,6 +175,8 @@ export async function aggregateTeamCoaching(
       userId: m.userId,
       reelsCount: a.reelsCount,
       blogCount: a.blogCount,
+      imwebCount: a.imwebCount,
+      naverCount: a.naverCount,
       reviewCount: a.reviewCount,
       totalCount,
       avgViews,

@@ -83,7 +83,7 @@ export async function checkBranch(branchId: string, opts?: { sleepMs?: number })
     .select('id, published_url')
     .eq('branch_id', branchId)
     .eq('status', 'published')
-    .eq('publish_target', 'naver')
+    .eq('posted_naver', true)
     .not('published_url', 'is', null);
   const postByKey = new Map<string, { id: string; url: string }>();
   for (const p of (posts ?? []) as { id: string; published_url: string }[]) {

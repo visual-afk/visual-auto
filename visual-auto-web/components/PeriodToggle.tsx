@@ -24,7 +24,7 @@ export default function PeriodToggle({ value }: { value: 'week' | 'month' }) {
             value === k ? 'bg-brand text-brand-ink' : 'text-ink-soft'
           }`}
         >
-          {k === 'week' ? '이번 주' : '이번 달'}
+          {k === 'week' ? '최근 7일' : '이번 달'}
         </button>
       ))}
     </div>
