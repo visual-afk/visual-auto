@@ -217,7 +217,7 @@ function ExperimentSummary({ exp, onClick }: { exp: Experiment; onClick: () => v
           {exp.assigneeName || '담당 미정'} · {exp.dueDate ? `~${exp.dueDate.slice(5).replace('-', '/')}` : '기한 미정'}
         </span>
         {exp.checkMetricName && (
-          <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: '#22331f', color: C.good }}>
+          <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ background: C.goodBg, color: C.good }}>
             확인: {exp.checkMetricName}
           </span>
         )}
