@@ -52,7 +52,8 @@ export async function PATCH(request: Request) {
   // 조회수 입력 (⑦)
   if (body.action === 'record_views') {
     if (body.published_url !== undefined) patch.published_url = String(body.published_url).trim();
-    if (body.views !== undefined) patch.views = Number(body.views) || 0;
+    // 빈 조회수는 0으로 굳히지 않고 null(=미입력)로 남긴다 — /track에서 "조회수 입력" 유지, 총/평균 오염 방지
+    if (body.views !== undefined) patch.views = body.views === '' || body.views == null ? null : Number(body.views) || 0;
     if (body.saves !== undefined) patch.saves = body.saves === '' || body.saves == null ? null : Number(body.saves) || 0;
     patch.views_updated_at = new Date().toISOString();
     if (patch.status == null) patch.status = 'published';
