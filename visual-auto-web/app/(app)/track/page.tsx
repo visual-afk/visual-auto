@@ -10,12 +10,14 @@ export const dynamic = 'force-dynamic';
 
 type Scope = 'own' | 'branch' | 'all';
 
-/** 올린 곳 라벨 — 양쪽에 올렸으면 "아임웹·네이버" */
-function targetLabel(p: { posted_imweb?: boolean; posted_naver?: boolean }): string {
+/** 올린 곳 라벨 — 양쪽에 올렸으면 "아임웹·네이버", 브랜드 글은 "직접 발행" */
+function targetLabel(p: { posted_imweb?: boolean; posted_naver?: boolean; publish_target?: string | null }): string {
   const t: string[] = [];
   if (p.posted_imweb) t.push('아임웹');
   if (p.posted_naver) t.push('네이버');
-  return t.length ? t.join('·') : '-';
+  if (t.length) return t.join('·');
+  if (p.publish_target === 'manual') return '직접 발행';
+  return '-';
 }
 
 function fmtDate(s: string | null) {
@@ -48,7 +50,7 @@ export default async function TrackPage({
   let postsQ = admin
     .from('posts')
     .select(
-      'id, title, status, posted_imweb, posted_naver, views, next_check_at, published_at, created_at, author_id, branch_id'
+      'id, title, status, posted_imweb, posted_naver, publish_target, views, next_check_at, published_at, created_at, author_id, branch_id'
     )
     .order('created_at', { ascending: false });
   let reelsQ = admin.from('reels').select('id, views, created_at, author_id, branch_id');
@@ -60,9 +62,13 @@ export default async function TrackPage({
     reelsQ = reelsQ.in('branch_id', member.branchIds);
   } // all → 필터 없음 (본사 전 지점)
 
-  const [{ data: posts }, { data: reels }, { data: igAccount }] = await Promise.all([
+  const [{ data: posts }, { data: reels }, { data: cardNews }, { data: igAccount }] = await Promise.all([
     postsQ,
     reelsQ,
+    admin
+      .from('card_news')
+      .select('id, post_id, views, status, created_at')
+      .eq('author_id', member.userId),
     admin
       .from('instagram_accounts')
       .select('username, last_synced_at')
@@ -97,13 +103,16 @@ export default async function TrackPage({
 
   const list = posts || [];
   const reelList = reels || [];
+  const cardList = cardNews || [];
+  // 글 → 만들어둔 카드뉴스 (목록에 "카드" 배지 + 에디터 링크)
+  const cardByPost = new Map(cardList.filter((c) => c.post_id).map((c) => [c.post_id as string, c.id]));
   const now = new Date();
   // 발행한 글만 센다 — 생성만 하고 발행 안 한 초안이 "이번 달 글"로 잡히면 혼란
   const monthCount = list.filter(
     (p) => p.status === 'published' && isThisMonth(p.published_at || p.created_at, now)
   ).length;
   const monthReels = reelList.filter((r) => isThisMonth(r.created_at, now)).length;
-  const withViews = [...list, ...reelList].filter((p) => p.views != null);
+  const withViews = [...list, ...reelList, ...cardList].filter((p) => p.views != null);
   const totalViews = withViews.reduce((s, p) => s + (p.views || 0), 0);
   const avgViews = withViews.length ? Math.round(totalViews / withViews.length) : 0;
   const today = now.toISOString().slice(0, 10);
@@ -209,6 +218,14 @@ export default async function TrackPage({
                       </Link>
                     ) : (
                       <span className="truncate font-semibold">{p.title || '제목 없음'}</span>
+                    )}
+                    {cardByPost.has(p.id) && (
+                      <Link
+                        href={`/card-news/${cardByPost.get(p.id)}`}
+                        className="shrink-0 rounded-full bg-brand-wash px-2 py-0.5 text-[11px] font-semibold text-brand"
+                      >
+                        카드
+                      </Link>
                     )}
                   </span>
                   {byline && <span className="mt-0.5 truncate text-xs text-ink-faint">{byline}</span>}

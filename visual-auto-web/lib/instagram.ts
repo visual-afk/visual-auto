@@ -116,9 +116,13 @@ interface IgMedia {
   permalink?: string;
 }
 
+// 인스타 링크로 추적하는 테이블들 — 릴스 + 카드뉴스(캐러셀). 스키마 동형(published_url/ig_media_id/views/saves).
+const IG_TABLES = ['reels', 'card_news'] as const;
+type IgTable = (typeof IG_TABLES)[number];
+
 /**
- * 연결 계정의 미디어와 내 릴스(published_url이 인스타 링크)를 매칭해
- * 조회수(views)·저장수(saved)를 reels 테이블에 반영한다.
+ * 연결 계정의 미디어와 내 콘텐츠(published_url이 인스타 링크인 릴스·카드뉴스)를 매칭해
+ * 조회수(views)·저장수(saved)를 반영한다. 캐러셀도 permalink(/p/) shortcode로 동일하게 매칭된다.
  */
 export async function igSyncUser(userId: string): Promise<{ matched: number; updated: number }> {
   const admin = getAdminSupabase();
@@ -130,22 +134,26 @@ export async function igSyncUser(userId: string): Promise<{ matched: number; upd
   if (!accountRow) throw new Error('인스타그램이 연결되어 있지 않아요');
   const account = await igEnsureFreshToken(accountRow as IgAccount);
 
-  // 내 릴스 중 인스타 링크가 등록된 것
-  const { data: reels } = await admin
-    .from('reels')
-    .select('id, published_url, ig_media_id')
-    .eq('author_id', userId)
-    .not('published_url', 'is', null);
-  const igReels = (reels || [])
-    .map((r) => ({ ...r, shortcode: igShortcode(r.published_url) }))
-    .filter((r) => r.shortcode);
-  if (!igReels.length) {
+  // 인스타 링크가 등록된 내 콘텐츠 수집
+  const items: { table: IgTable; id: string; shortcode: string; ig_media_id: string | null }[] = [];
+  for (const table of IG_TABLES) {
+    const { data } = await admin
+      .from(table)
+      .select('id, published_url, ig_media_id')
+      .eq('author_id', userId)
+      .not('published_url', 'is', null);
+    for (const r of data || []) {
+      const shortcode = igShortcode(r.published_url);
+      if (shortcode) items.push({ table, id: r.id, shortcode, ig_media_id: r.ig_media_id });
+    }
+  }
+  if (!items.length) {
     await admin.from('instagram_accounts').update({ last_synced_at: new Date().toISOString() }).eq('user_id', userId);
     return { matched: 0, updated: 0 };
   }
 
-  // 최근 미디어 permalink 로 매칭 (이미 매칭된 릴스는 ig_media_id 캐시 사용)
-  const needMatch = igReels.filter((r) => !r.ig_media_id);
+  // 최근 미디어 permalink 로 매칭 (이미 매칭된 항목은 ig_media_id 캐시 사용)
+  const needMatch = items.filter((r) => !r.ig_media_id);
   const byShortcode = new Map<string, string>(); // shortcode → media id
   if (needMatch.length) {
     const media = await igJson<{ data: IgMedia[] }>(
@@ -159,8 +167,8 @@ export async function igSyncUser(userId: string): Promise<{ matched: number; upd
 
   let matched = 0;
   let updated = 0;
-  for (const reel of igReels) {
-    const mediaId = reel.ig_media_id || byShortcode.get(reel.shortcode!);
+  for (const item of items) {
+    const mediaId = item.ig_media_id || byShortcode.get(item.shortcode);
     if (!mediaId) continue;
     matched += 1;
     try {
@@ -171,14 +179,14 @@ export async function igSyncUser(userId: string): Promise<{ matched: number; upd
       const views = metric('views');
       const saves = metric('saved');
       await admin
-        .from('reels')
+        .from(item.table)
         .update({
           ig_media_id: mediaId,
           ...(views != null ? { views } : {}),
           ...(saves != null ? { saves } : {}),
           views_updated_at: new Date().toISOString(),
         })
-        .eq('id', reel.id);
+        .eq('id', item.id);
       updated += 1;
     } catch (e) {
       // 인사이트 미지원 미디어(오래된 글 등)는 건너뛴다

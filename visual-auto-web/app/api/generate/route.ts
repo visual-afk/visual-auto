@@ -49,10 +49,24 @@ export async function POST(request: Request) {
   if ('error' in resolved) return resolved.error;
   const { branchId, branchName } = resolved;
 
+  // 마지막 글쓰기 지점/브랜드 기억 — 다음 방문 때 프리셀렉트 (실패해도 생성은 계속)
+  void getAdminSupabase()
+    .from('branch_users')
+    .update({ last_write_branch_id: branchId })
+    .eq('user_id', member.userId)
+    .then(() => {});
+
   const topic: string = (body.recommended_topic || body.topic || '').trim();
   const chips: string[] = body.treatment_chips || [];
   const notes: string = (body.user_notes || '').trim();
   const postType: string = body.post_type || '정보형';
+  // 글쓰기에서 올린 사진 (post-photos 버킷 경로) — 카드뉴스 이미지형이 재사용
+  const rawPhotoPaths: unknown[] = Array.isArray(body.photo_paths) ? body.photo_paths : [];
+  const photos = rawPhotoPaths
+    .filter((p): p is { slot?: number; storage_path: string } =>
+      !!p && typeof (p as { storage_path?: unknown }).storage_path === 'string')
+    .slice(0, 4)
+    .map((p, i) => ({ slot: Number(p.slot ?? i + 1) || i + 1, storage_path: p.storage_path }));
   if (!topic) return NextResponse.json({ error: '주제를 골라주세요' }, { status: 400 });
 
   try {
@@ -163,6 +177,7 @@ export async function POST(request: Request) {
       tags: optimized.optimized_tags || draft.tags || [],
       content: finalBody,
       photo_guide: guide,
+      photos,
       seo_score: optimized.seo_score ?? null,
     };
 

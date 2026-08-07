@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireHq } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { fetchMemberBranchMap, countMembersByBranch } from '@/lib/memberBranches';
 
@@ -8,16 +8,6 @@ function numOrNull(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-/** 지점 관리는 본사 전용 */
-async function requireHq() {
-  const res = await requireMember();
-  if ('error' in res) return { error: res.error };
-  if (res.member.role !== 'hq_admin') {
-    return { error: NextResponse.json({ error: '본사만 지점을 관리할 수 있어요' }, { status: 403 }) };
-  }
-  return { member: res.member };
 }
 
 /** 지점 목록 + 멤버수·글수 (삭제 가능 여부 표시용) */

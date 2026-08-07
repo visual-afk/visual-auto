@@ -1,17 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireHq } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { buildCatalog, isValidTarget, readFileDefault } from '@/lib/generation/catalog';
-
-/** 본사(hq_admin) 전용 게이트. 통과하면 member 반환. */
-async function requireHq() {
-  const res = await requireMember();
-  if ('error' in res) return { error: res.error };
-  if (res.member.role !== 'hq_admin') {
-    return { error: NextResponse.json({ error: '본사만 접근할 수 있어요' }, { status: 403 }) };
-  }
-  return { member: res.member };
-}
 
 /** null/문자열 branch_id 를 정규화 ('' | 'null' | undefined → null) */
 function normBranch(v: unknown): string | null {

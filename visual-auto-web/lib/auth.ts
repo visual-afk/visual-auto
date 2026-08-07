@@ -104,6 +104,16 @@ export async function requireMember(): Promise<
   return { member };
 }
 
+/** 라우트 핸들러용: 본사만 — 그 외 403. (라우트마다 복사하지 말 것) */
+export async function requireHq(): Promise<{ member: MemberContext } | { error: NextResponse }> {
+  const res = await requireMember();
+  if ('error' in res) return res;
+  if (res.member.role !== 'hq_admin') {
+    return { error: NextResponse.json({ error: '본사만 접근할 수 있어요' }, { status: 403 }) };
+  }
+  return res;
+}
+
 /** 이 멤버가 해당 지점에서 행동할 수 있나? (본사 = 전 지점 / 그 외 = 소속 지점 집합) */
 export function canActOnBranch(member: MemberContext, branchId: string | null | undefined): boolean {
   if (!branchId) return false;

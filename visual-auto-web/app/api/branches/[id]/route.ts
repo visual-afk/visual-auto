@@ -1,15 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireMember } from '@/lib/auth';
+import { requireHq } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-
-async function requireHq() {
-  const res = await requireMember();
-  if ('error' in res) return { error: res.error };
-  if (res.member.role !== 'hq_admin') {
-    return { error: NextResponse.json({ error: '본사만 지점을 관리할 수 있어요' }, { status: 403 }) };
-  }
-  return { member: res.member };
-}
 
 /** 지점 정보 수정 (본사 전용) */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

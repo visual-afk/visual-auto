@@ -72,7 +72,7 @@ create table if not exists posts (
   photo_guide jsonb default '[]'::jsonb,   -- [{position,label,종류,구도,포인트,alt}]
   photos jsonb default '[]'::jsonb,         -- [{slot,storage_path}]
   seo_score int,
-  publish_target text check (publish_target in ('naver','imweb')),  -- (레거시) 단일 발행처. 신규는 아래 두 컬럼 사용
+  publish_target text check (publish_target in ('naver','imweb','manual')), -- manual = 브랜드 글 "발행용 복사". (레거시) 단일 발행처, 신규는 아래 두 컬럼 사용
   posted_imweb boolean not null default false,   -- 아임웹에 올렸는지
   posted_naver boolean not null default false,   -- 네이버에 올렸는지 (양쪽 동시 발행 가능)
   published_url text,

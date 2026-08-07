@@ -25,6 +25,8 @@ const PROMPTS: { slug: string; label: string }[] = [
   { slug: 'reels-structure', label: '릴스 구성' },
   { slug: 'recommend-topics', label: '주제 추천' },
   { slug: 'reels-analyze', label: '릴스 영상 분석' },
+  { slug: 'card-news-info', label: '카드뉴스 구성 (정보형)' },
+  { slug: 'card-news-image', label: '카드뉴스 문구·캡션 (이미지형)' },
 ];
 
 function collectMdSlugs(dir: string, base: string): string[] {

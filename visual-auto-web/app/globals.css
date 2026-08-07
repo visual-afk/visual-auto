@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 카드뉴스 미리보기 = 서버 PNG 렌더(satori otf)와 같은 Pretendard 웨이트 */
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Pretendard-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/Pretendard-ExtraBold.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
 }
