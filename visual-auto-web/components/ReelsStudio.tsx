@@ -38,6 +38,9 @@ export default function ReelsStudio({
 
   const [branchId, setBranchId] = useState(needsBranchPick ? '' : branches[0]?.id ?? '');
   const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState('');      // 분석 단계 표시
+  const [elapsed, setElapsed] = useState(0);          // 경과 초 (멈춘 것처럼 안 보이게)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 새로고침해도 안 날아가게 자동 임시저장 (영상 파일 자체는 제외)
   const [analysis, setAnalysis, clearAnalysis] = usePersistentState<Analysis | null>('va:reels:analysis', null);
   const [chips, setChips, clearChips] = usePersistentState<string[]>('va:reels:chips', []);
@@ -77,6 +80,9 @@ export default function ReelsStudio({
     }
     setAnalysis(null);
     setAnalyzing(true);
+    setElapsed(0);
+    setProgress('업로드 준비 중…');
+    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     try {
       // 1) 서명 업로드 URL 발급 (영상은 라우트로 프록시 금지 — Vercel 바디 한계)
       const prepRes = await fetch('/api/reels/analyze', {
@@ -91,6 +97,7 @@ export default function ReelsStudio({
       }
 
       // 2) 스토리지 직접 업로드
+      setProgress('영상 올리는 중…');
       const { error: upErr } = await getBrowserSupabase()
         .storage.from('reels-video')
         .uploadToSignedUrl(prep.upload.path, prep.upload.token, file, {
@@ -101,7 +108,8 @@ export default function ReelsStudio({
         return;
       }
 
-      // 3) 분석 실행
+      // 3) 분석 실행 (Gemini가 영상을 보는 단계 — 보통 30초~2분)
+      setProgress('AI가 영상 보는 중… (보통 30초~2분)');
       const res = await fetch('/api/reels/analyze/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,6 +122,11 @@ export default function ReelsStudio({
       setErr('영상 분석 중 문제가 생겼어요');
     } finally {
       setAnalyzing(false);
+      setProgress('');
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
   }
 
@@ -235,7 +248,13 @@ export default function ReelsStudio({
           </span>
         </button>
         <input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={onPickVideo} />
-        <p className="mt-1.5 text-xs text-ink-faint">짧은 클립(50MB 이하)이면 돼요.</p>
+        {analyzing ? (
+          <p className="mt-1.5 text-xs text-brand">
+            {progress}{elapsed > 0 ? ` · ${elapsed}초 경과` : ''}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-xs text-ink-faint">짧은 클립(50MB 이하)이면 돼요.</p>
+        )}
 
         {analysis && (
           <div className="mt-3 rounded-xl border border-brand-wash bg-brand-wash/40 p-3 text-sm">
