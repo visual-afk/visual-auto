@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { canMakeCardNews } from '@/lib/flags';
+import NewFromTopic from '@/components/cardnews/NewFromTopic';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +19,23 @@ export default async function CardNewsListPage() {
   const admin = getAdminSupabase();
   const { data } = await admin
     .from('card_news')
-    .select('id, mode, card_count, status, views, created_at, branches(name), posts(title)')
+    .select('id, mode, card_count, status, views, created_at, cards, branches(name), posts(title)')
     .eq('author_id', member.userId)
     .order('created_at', { ascending: false });
   const list = data ?? [];
 
+  // 주제로 만들기: 본사(또는 정보형 개방 플래그)만. 브랜드 계정 목록을 넘긴다.
+  const canCreate = canMakeCardNews(member.role, 'info');
+  const brands = canCreate
+    ? ((await admin.from('branches').select('id, name').eq('kind', 'brand').order('name')).data ?? [])
+    : [];
+
   return (
     <div className="py-6 md:py-0">
       <h1 className="mb-1 text-2xl font-bold">카드뉴스</h1>
-      <p className="mb-6 text-sm text-ink-soft">쓴 글에서 뽑은 인스타 카드예요. 새로 만들려면 글쓰기 초안에서 "카드뉴스로"를 눌러요.</p>
+      <p className="mb-6 text-sm text-ink-soft">쓴 글에서 뽑거나, 브랜드 주제로 바로 만드는 인스타 카드예요.</p>
+
+      {canCreate && <NewFromTopic brands={brands} />}
 
       {list.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-ink-faint">
@@ -41,11 +51,15 @@ export default async function CardNewsListPage() {
         {list.map((c) => {
           const post = c.posts as unknown as { title: string | null } | null;
           const branch = c.branches as unknown as { name: string } | null;
+          // 주제 기반 카드는 원본 글이 없으니 표지 훅을 제목처럼 보여준다.
+          const cardsArr = (Array.isArray(c.cards) ? c.cards : []) as { kind?: string; title?: string }[];
+          const cover = cardsArr.find((x) => x.kind === 'cover') ?? cardsArr[0];
+          const title = post?.title || cover?.title || '제목 없음';
           return (
             <li key={c.id}>
               <Link href={`/card-news/${c.id}`} className="block rounded-2xl border border-line bg-surface px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate font-semibold">{post?.title || '제목 없음'}</span>
+                  <span className="min-w-0 truncate font-semibold">{title}</span>
                   <span className="shrink-0 rounded-full bg-brand-wash px-2.5 py-0.5 text-[11px] font-semibold text-brand">
                     {MODE_LABEL[c.mode] ?? c.mode}
                   </span>
