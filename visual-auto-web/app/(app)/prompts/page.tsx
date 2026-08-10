@@ -4,6 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { buildCatalog, readFileDefault } from '@/lib/generation/catalog';
 import PromptManager, { type CatalogEntry } from '@/components/PromptManager';
 import CardFrameManager, { type FrameEntry } from '@/components/CardFrameManager';
+import ReferenceLearning from '@/components/cardnews/ReferenceLearning';
 import type { CardFrameTokens } from '@/lib/cardnews/frames';
 import type { CardNewsMode } from '@/lib/cardnews/cards';
 
@@ -65,6 +66,12 @@ export default async function PromptsPage() {
         브랜드별 카드 디자인(컬러·로고·모드)이에요. 저장하면 다음 카드뉴스부터 바로 적용돼요.
       </p>
       <CardFrameManager initialFrames={frames} />
+
+      <h2 className="mt-10 text-xl font-bold">레퍼런스 학습</h2>
+      <p className="mt-1 text-sm text-ink-soft">
+        브랜드 레퍼런스 이미지를 올리면 색·레이아웃·문구 스타일을 학습해요. 올릴수록 그 브랜드답게 카드가 나와요.
+      </p>
+      <ReferenceLearning brands={(branchesData ?? []).filter((b) => b.kind === 'brand').map((b) => ({ id: b.id, name: b.name }))} />
     </div>
   );
 }
