@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import { requireMember, canActOnBranch } from '@/lib/auth';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getAdminSupabase } from '@/lib/supabase/admin';
-import { callAIDelimited, friendlyAIError, loadPromptFor, loadBranchKnowledgeFor } from '@/lib/generation/ai-client';
+import {
+  callAIDelimited,
+  friendlyAIError,
+  loadPromptFor,
+  loadBranchKnowledgeFor,
+  loadFileSafeFor,
+} from '@/lib/generation/ai-client';
 import { getFrameFor } from '@/lib/cardnews/frames';
 import { canMakeCardNews } from '@/lib/flags';
 import {
@@ -17,8 +23,10 @@ import type { PostPhoto } from '@/lib/types';
 export const maxDuration = 120;
 
 /**
- * 카드뉴스 생성 — 글(post)에서 브랜드 모드에 따라 카드 구성.
- * body: { post_id, card_count?, card_news_id? }
+ * 카드뉴스 생성 — 두 가지 소스를 지원한다.
+ *   1) 글 기반: body { post_id, card_count?, card_news_id? } — 브랜드 프레임 모드(info/image)로 카드 구성.
+ *   2) 주제 기반: body { branch_id, topic, card_count?, card_news_id? } — 글 없이 주제만으로 정보형 카드 생성.
+ * 두 경로 모두 브랜드 카드뉴스 컨셉(knowledge/cardnews/concept-{브랜드}.md)을 system에 주입한다.
  * card_news_id 가 있으면 기존 초안을 새 구성으로 덮어쓴다 (장수 조절 "다시 뽑기").
  */
 export async function POST(request: Request) {
@@ -28,30 +36,56 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const postId: string = (body.post_id || '').trim();
-  if (!postId) return NextResponse.json({ error: '원본 글이 필요해요' }, { status: 400 });
+  const topic: string = (body.topic || '').trim();
 
   const admin = getAdminSupabase();
-  const { data: post } = await admin
-    .from('posts')
-    .select('id, branch_id, author_id, title, content, tags, photos, branches(name)')
-    .eq('id', postId)
-    .maybeSingle();
-  if (!post) return NextResponse.json({ error: '글을 찾지 못했어요' }, { status: 404 });
-  if (post.author_id !== member.userId && !canActOnBranch(member, post.branch_id)) {
-    return NextResponse.json({ error: '이 글에 접근할 수 없어요' }, { status: 403 });
+
+  // ── 소스 확정: 글(post) 또는 주제(topic) ──
+  let branchId: string;
+  let branchName: string;
+  let post: { id: string; title: string | null; content: string | null; photos: unknown } | null = null;
+
+  if (postId) {
+    const { data } = await admin
+      .from('posts')
+      .select('id, branch_id, author_id, title, content, tags, photos, branches(name)')
+      .eq('id', postId)
+      .maybeSingle();
+    if (!data) return NextResponse.json({ error: '글을 찾지 못했어요' }, { status: 404 });
+    if (data.author_id !== member.userId && !canActOnBranch(member, data.branch_id)) {
+      return NextResponse.json({ error: '이 글에 접근할 수 없어요' }, { status: 403 });
+    }
+    branchId = data.branch_id;
+    branchName = (data.branches as unknown as { name: string } | null)?.name ?? '';
+    post = { id: data.id, title: data.title, content: data.content, photos: data.photos };
+  } else if (topic) {
+    branchId = (body.branch_id || '').trim();
+    if (!branchId) return NextResponse.json({ error: '브랜드(지점)를 골라주세요' }, { status: 400 });
+    if (!canActOnBranch(member, branchId)) {
+      return NextResponse.json({ error: '이 브랜드에 접근할 수 없어요' }, { status: 403 });
+    }
+    const { data: br } = await admin.from('branches').select('name').eq('id', branchId).maybeSingle();
+    if (!br) return NextResponse.json({ error: '브랜드를 찾지 못했어요' }, { status: 404 });
+    branchName = br.name ?? '';
+  } else {
+    return NextResponse.json({ error: '원본 글이나 주제가 필요해요' }, { status: 400 });
   }
 
-  const branchName = (post.branches as unknown as { name: string } | null)?.name ?? '';
-  const frame = await getFrameFor(post.branch_id);
-  if (!canMakeCardNews(member.role, frame.mode)) {
+  const frame = await getFrameFor(branchId);
+  // 주제 기반은 사진이 없어 항상 정보형 카드로 만든다 (프레임이 image여도).
+  const mode: 'info' | 'image' = post ? frame.mode : 'info';
+  if (!canMakeCardNews(member.role, mode)) {
     return NextResponse.json({ error: '카드뉴스는 지금 본사만 만들 수 있어요' }, { status: 403 });
   }
 
   try {
-    const prompt = await loadPromptFor(frame.mode === 'image' ? 'card-news-image' : 'card-news-info', post.branch_id);
-    const knowledge = await loadBranchKnowledgeFor(branchName, post.branch_id);
+    const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
+    const prompt = await loadPromptFor(promptName, branchId);
+    const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+    const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
     const system = [
       prompt,
+      concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
       knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
     ].join('');
 
@@ -60,17 +94,18 @@ export async function POST(request: Request) {
     let hashtags: string[] = [];
     let cardCount: number;
 
-    if (frame.mode === 'info') {
+    if (mode === 'info') {
       cardCount = clampCardCount(body.card_count ?? 5);
       const pointCount = cardCount - 2;
+      const material = post
+        ? [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? '']
+        : [`주제: ${topic}`];
       const sections = await callAIDelimited(
         {
           system,
           userMessage: [
             `브랜드/지점: ${branchName}`,
-            `블로그 글 제목: ${post.title ?? ''}`,
-            '본문:',
-            post.content ?? '',
+            ...material,
             '',
             `포인트 카드는 정확히 ${pointCount}장.`,
           ].join('\n'),
@@ -92,16 +127,18 @@ export async function POST(request: Request) {
         sections.CTA_BODY?.trim() ?? '프로필 링크 ↓',
       );
     } else {
-      const photos = (Array.isArray(post.photos) ? (post.photos as PostPhoto[]) : []).slice(0, MAX_CARDS);
+      // image 모드는 post 기반에서만 도달한다 (주제 기반은 위에서 info로 강제).
+      const p = post!;
+      const photos = (Array.isArray(p.photos) ? (p.photos as PostPhoto[]) : []).slice(0, MAX_CARDS);
       const phraseCount = Math.max(photos.length, 3);
       const sections = await callAIDelimited(
         {
           system,
           userMessage: [
             `브랜드/지점: ${branchName}`,
-            `블로그 글 제목: ${post.title ?? ''}`,
+            `블로그 글 제목: ${p.title ?? ''}`,
             '본문:',
-            post.content ?? '',
+            p.content ?? '',
             '',
             `사진 수: ${phraseCount} — 한 줄 문구도 정확히 ${phraseCount}개.`,
           ].join('\n'),
@@ -135,7 +172,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = await getServerSupabase();
-    const fields = { mode: frame.mode, card_count: cardCount, cards, caption, hashtags };
+    const fields = { mode, card_count: cardCount, cards, caption, hashtags };
 
     const existingId: string = (body.card_news_id || '').trim();
     if (existingId) {
@@ -153,7 +190,7 @@ export async function POST(request: Request) {
 
     const { data: row, error } = await supabase
       .from('card_news')
-      .insert({ ...fields, post_id: post.id, branch_id: post.branch_id, author_id: member.userId, status: 'draft' })
+      .insert({ ...fields, post_id: post?.id ?? null, branch_id: branchId, author_id: member.userId, status: 'draft' })
       .select('*')
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
