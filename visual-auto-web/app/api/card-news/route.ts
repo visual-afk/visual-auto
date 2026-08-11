@@ -9,6 +9,7 @@ import {
   loadBranchKnowledgeFor,
   loadFileSafeFor,
 } from '@/lib/generation/ai-client';
+import { editorialToPromptText, type StyleEditorial } from '@/lib/cardnews/styleExtract';
 import { getFrameFor } from '@/lib/cardnews/frames';
 import { canMakeCardNews } from '@/lib/flags';
 import {
@@ -83,9 +84,17 @@ export async function POST(request: Request) {
     const prompt = await loadPromptFor(promptName, branchId);
     const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
     const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
+    // 레퍼런스 학습 에디토리얼 — 컨셉이 앵커, 학습 프로필은 보조(브랜드 이탈 방지).
+    const { data: styleRow } = await admin
+      .from('card_style_profiles')
+      .select('editorial')
+      .eq('branch_id', branchId)
+      .maybeSingle();
+    const learned = editorialToPromptText((styleRow?.editorial ?? null) as StyleEditorial | null);
     const system = [
       prompt,
       concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
+      learned ? `\n\n--- 레퍼런스에서 학습한 스타일 (${branchName}) — 컨셉을 해치지 않는 선에서 참고 ---\n${learned}` : '',
       knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
     ].join('');
 
