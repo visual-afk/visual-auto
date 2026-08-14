@@ -15,6 +15,34 @@ export const CARD_H = 1350;
 
 const FONT = 'Pretendard';
 
+/** #RRGGBB → 상대 휘도(0~1). 파싱 실패 시 null. */
+function luminance(hex: string): number | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+}
+
+/**
+ * 배경과 대비가 낮으면 검정/흰색으로 자동 보정한 글자색.
+ * 브랜드 프레임이 이미지형(ink=흰색)인데 정보형 카드(밝은 배경)로 쓰이면
+ * 흰 글자가 흰 배경에 묻히는 걸 막는다.
+ */
+function readable(bg: string | undefined, ink: string | undefined): string {
+  const lb = bg ? luminance(bg) : null;
+  const li = ink ? luminance(ink) : null;
+  if (lb === null) return ink || '#1C1C1E';
+  if (li !== null) {
+    const contrast = (Math.max(lb, li) + 0.05) / (Math.min(lb, li) + 0.05);
+    if (contrast >= 3) return ink!; // 충분히 대비됨 → 원래 색 유지
+  }
+  return lb > 0.5 ? '#1C1C1E' : '#FFFFFF'; // 밝은 배경엔 검정, 어두운 배경엔 흰색
+}
+
 function Dots({ index, count, color }: { index: number; count: number; color: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -76,8 +104,10 @@ function InfoCardView({
   };
 
   if (card.kind === 'cover') {
+    const bg = tokens.bg ?? '#FFFFFF';
+    const ink = readable(bg, tokens.ink);
     return (
-      <div style={{ ...base, backgroundColor: tokens.bg ?? '#FFFFFF' }}>
+      <div style={{ ...base, backgroundColor: bg }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', width: 96, height: 10, borderRadius: 5, backgroundColor: tokens.point, marginBottom: 32 }} />
           <Logo text={logo} color={tokens.point} />
@@ -88,23 +118,25 @@ function InfoCardView({
             fontSize: 100,
             fontWeight: 800,
             lineHeight: 1.28,
-            color: tokens.ink,
+            color: ink,
             whiteSpace: 'pre-wrap',
           }}
         >
           {card.title}
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', fontSize: 34, fontWeight: 600, color: tokens.ink, opacity: 0.55 }}>넘겨보기 →</div>
-          <Dots index={pageIndex} count={pageCount} color={tokens.ink} />
+          <div style={{ display: 'flex', fontSize: 34, fontWeight: 600, color: ink, opacity: 0.55 }}>넘겨보기 →</div>
+          <Dots index={pageIndex} count={pageCount} color={ink} />
         </div>
       </div>
     );
   }
 
   if (card.kind === 'cta') {
+    const bg = tokens.ctaBg ?? '#1C1C1E';
+    const ink = readable(bg, tokens.ctaInk ?? '#FFFFFF');
     return (
-      <div style={{ ...base, backgroundColor: tokens.ctaBg ?? '#1C1C1E' }}>
+      <div style={{ ...base, backgroundColor: bg }}>
         <Logo text={logo} color={tokens.point} />
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <div
@@ -113,7 +145,7 @@ function InfoCardView({
               fontSize: 88,
               fontWeight: 800,
               lineHeight: 1.3,
-              color: tokens.ctaInk ?? '#FFFFFF',
+              color: ink,
               whiteSpace: 'pre-wrap',
             }}
           >
@@ -137,15 +169,17 @@ function InfoCardView({
           ) : null}
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end' }}>
-          <Dots index={pageIndex} count={pageCount} color={tokens.ctaInk ?? '#FFFFFF'} />
+          <Dots index={pageIndex} count={pageCount} color={ink} />
         </div>
       </div>
     );
   }
 
   // point 카드
+  const bg = tokens.surface ?? tokens.bg ?? '#F7F4F0';
+  const ink = readable(bg, tokens.ink);
   return (
-    <div style={{ ...base, backgroundColor: tokens.surface ?? tokens.bg ?? '#F7F4F0' }}>
+    <div style={{ ...base, backgroundColor: bg }}>
       <div
         style={{
           display: 'flex',
@@ -164,7 +198,7 @@ function InfoCardView({
             fontSize: 76,
             fontWeight: 800,
             lineHeight: 1.3,
-            color: tokens.ink,
+            color: ink,
             whiteSpace: 'pre-wrap',
           }}
         >
@@ -178,7 +212,7 @@ function InfoCardView({
               fontSize: 44,
               fontWeight: 600,
               lineHeight: 1.5,
-              color: tokens.ink,
+              color: ink,
               opacity: 0.72,
               whiteSpace: 'pre-wrap',
             }}
@@ -188,7 +222,7 @@ function InfoCardView({
         ) : null}
       </div>
       <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end' }}>
-        <Dots index={pageIndex} count={pageCount} color={tokens.ink} />
+        <Dots index={pageIndex} count={pageCount} color={ink} />
       </div>
     </div>
   );
