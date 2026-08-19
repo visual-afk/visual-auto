@@ -63,6 +63,8 @@ export async function callAI(options: {
   userMessage: string;
   maxTokens?: number;
   temperature?: number;
+  /** true(기본): JSON 응답 강제 / false: 평문 반환 (긴 본문 다듬기용, JSON 파싱 깨짐 방지) */
+  jsonMode?: boolean;
 }): Promise<{ text: string; inputTokens: number; outputTokens: number; provider: Provider }> {
   const provider = getProvider();
 
@@ -78,6 +80,7 @@ async function callGemini(options: {
   userMessage: string;
   maxTokens?: number;
   temperature?: number;
+  jsonMode?: boolean;
 }): Promise<{ text: string; inputTokens: number; outputTokens: number; provider: Provider }> {
   const genAI = new GoogleGenerativeAI(config.gemini.apiKey!);
   const model = genAI.getGenerativeModel({
@@ -85,7 +88,8 @@ async function callGemini(options: {
     systemInstruction: options.system,
     generationConfig: {
       maxOutputTokens: options.maxTokens || 65536,
-      responseMimeType: 'application/json',
+      // jsonMode !== false 일 때만 JSON 강제. 평문 모드면 mime type 미지정.
+      ...(options.jsonMode === false ? {} : { responseMimeType: 'application/json' as const }),
       temperature: options.temperature ?? 0.7,
     },
   });

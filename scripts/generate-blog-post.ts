@@ -8,6 +8,10 @@ import type { GeneratedPost, SeoOptimizedPost, PipelineLogEntry, SheetRow } from
 
 const LOG_PATH = resolve(import.meta.dirname, '..', 'status', 'pipeline-log.jsonl');
 
+// 휴머나이즈(AI 티 제거) 단계 on/off. 기본 on. --no-humanize 또는 HUMANIZE_ENABLED=false 로 끔.
+const HUMANIZE_ENABLED =
+  !process.argv.includes('--no-humanize') && process.env.HUMANIZE_ENABLED !== 'false';
+
 function log(entry: PipelineLogEntry) {
   appendFileSync(LOG_PATH, JSON.stringify(entry) + '\n');
 }
@@ -116,6 +120,32 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
     const optimized = parseJsonResponse<SeoOptimizedPost>(seoResult.text);
     console.log(`  ✅ SEO 최적화 완료 (점수: ${optimized.seo_score}/100)`);
 
+    // 3-1. 휴머나이즈 (AI 티 제거) — 평문 반환 (긴 본문 JSON 파싱 깨짐 방지)
+    let humanizedContent = optimized.optimized_content;
+    if (HUMANIZE_ENABLED) {
+      console.log('🧑 휴머나이즈(AI 티 제거) 중...');
+      try {
+        const humanizePrompt = loadPrompt('humanize');
+        const humanizeResult = await callAI({
+          system: humanizePrompt,
+          userMessage: optimized.optimized_content,
+          temperature: 0.35,
+          jsonMode: false,
+        });
+        totalTokens += humanizeResult.inputTokens + humanizeResult.outputTokens;
+        const out = humanizeResult.text.trim();
+        // 결과가 원본의 50% 미만이면 다듬기 실패로 보고 원본 유지
+        if (out.length >= optimized.optimized_content.length * 0.5) {
+          humanizedContent = out;
+          console.log(`  ✅ 휴머나이즈 완료 (${humanizeResult.outputTokens} 토큰)`);
+        } else {
+          console.log('  ⚠️ 결과가 너무 짧아 원본 유지');
+        }
+      } catch (err) {
+        console.log(`  ⚠️ 휴머나이즈 스킵: ${(err as Error).message?.slice(0, 80)}`);
+      }
+    }
+
     // 4. 구글독스 생성
     console.log('📄 구글독스 생성 중...');
     const mainKeyword = (row.keywords || '').split(',')[0].trim();
@@ -128,7 +158,7 @@ async function generateForRow(row: SheetRow, isWashing = false): Promise<void> {
       '',
       `# ${optimized.optimized_title}`,
       '',
-      optimized.optimized_content,
+      humanizedContent,
       '\n\n---\n',
       `태그: ${(optimized.optimized_tags || []).join(', ')}`,
       `메타 설명: ${optimized.optimized_meta_description || ''}`,
