@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Table2 } from 'lucide-react';
-import type { CalendarDay, ScheduleItem, PublishedItem } from '@/lib/contentCalendar';
+import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
+import { EMPTY_DAY } from '@/lib/contentCalendar';
 import CalendarGrid from './CalendarGrid';
 import DayDetail from './DayDetail';
 import ScheduleEditor, { type AssigneeOpt, type BranchOpt } from './ScheduleEditor';
 import ContentDetailModal from './ContentDetailModal';
 import BulkPlanner from './BulkPlanner';
+import TopicEditor from '@/components/cardnews/TopicEditor';
 
 function shiftMonth(month: string, diff: number): string {
   const [y, m] = month.split('-').map(Number);
@@ -50,6 +52,7 @@ export default function ContentCalendar({
     item: null,
   });
   const [detail, setDetail] = useState<PublishedItem | null>(null);
+  const [topicEdit, setTopicEdit] = useState<TopicItem | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
 
   const canEdit = editableBranches.length > 0;
@@ -131,21 +134,25 @@ export default function ContentCalendar({
         selectedDate={selectedDate}
         onSelect={(d) => setSelectedDate(d === selectedDate ? null : d)}
         onOpenPublished={setDetail}
+        onOpenTopic={canEdit ? setTopicEdit : undefined}
         showBranch={showBranch}
       />
 
       {selectedDate && (
         <DayDetail
           date={selectedDate}
-          day={days[selectedDate] ?? { schedule: [], published: [] }}
+          day={days[selectedDate] ?? EMPTY_DAY}
           todayStr={todayStr}
           canEdit={canEdit}
           showBranch={showBranch}
           onAdd={() => setEditor({ open: true, item: null })}
           onEdit={(item) => setEditor({ open: true, item })}
           onOpenPublished={setDetail}
+          onEditTopic={canEdit ? setTopicEdit : undefined}
         />
       )}
+
+      {topicEdit && <TopicEditor topic={topicEdit} onClose={() => setTopicEdit(null)} />}
 
       {editor.open && (
         <ScheduleEditor

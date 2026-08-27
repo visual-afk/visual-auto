@@ -22,11 +22,28 @@ import type { PostPhoto } from '@/lib/types';
 
 export const maxDuration = 120;
 
+/** 캘린더 주제 편성 행 (cardnews_topics) — 생성 재료로 쓰는 필드만 */
+interface TopicRow {
+  id: string;
+  branch_id: string;
+  material: string;
+  section: string;
+  frame: string;
+  fact_seed: string | null;
+  hint: string | null;
+  headline_draft: string | null;
+  bubble: string | null;
+  status: string;
+  card_news_id: string | null;
+}
+
 /**
- * 카드뉴스 생성 — 두 가지 소스를 지원한다.
+ * 카드뉴스 생성 — 세 가지 소스를 지원한다.
  *   1) 글 기반: body { post_id, card_count?, card_news_id? } — 브랜드 프레임 모드(info/image)로 카드 구성.
- *   2) 주제 기반: body { branch_id, topic, card_count?, card_news_id? } — 글 없이 주제만으로 정보형 카드 생성.
- * 두 경로 모두 브랜드 카드뉴스 컨셉(knowledge/cardnews/concept-{브랜드}.md)을 system에 주입한다.
+ *   2) 편성 기반: body { topic_id, card_count?, card_news_id? } — 캘린더 주제 편성(cardnews_topics)에서
+ *      소재·프레임·팩트시드를 재료로 정보형 카드 생성. 성공 시 편성 행에 역링크 + status='done'.
+ *   3) 주제 기반: body { branch_id, topic, card_count?, card_news_id? } — 자유 입력 주제만으로 정보형 카드 생성.
+ * 모든 경로가 브랜드 카드뉴스 컨셉(knowledge/cardnews/concept-{브랜드}.md)을 system에 주입한다.
  * card_news_id 가 있으면 기존 초안을 새 구성으로 덮어쓴다 (장수 조절 "다시 뽑기").
  */
 export async function POST(request: Request) {
@@ -36,14 +53,16 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const postId: string = (body.post_id || '').trim();
-  const topic: string = (body.topic || '').trim();
+  const topicId: string = (body.topic_id || '').trim();
+  let topic: string = (body.topic || '').trim();
 
   const admin = getAdminSupabase();
 
-  // ── 소스 확정: 글(post) 또는 주제(topic) ──
+  // ── 소스 확정: 글(post), 편성(topic_id), 또는 자유 주제(topic) ──
   let branchId: string;
   let branchName: string;
   let post: { id: string; title: string | null; content: string | null; photos: unknown } | null = null;
+  let topicRow: TopicRow | null = null;
 
   if (postId) {
     const { data } = await admin
@@ -58,6 +77,20 @@ export async function POST(request: Request) {
     branchId = data.branch_id;
     branchName = (data.branches as unknown as { name: string } | null)?.name ?? '';
     post = { id: data.id, title: data.title, content: data.content, photos: data.photos };
+  } else if (topicId) {
+    const { data } = await admin
+      .from('cardnews_topics')
+      .select('id, branch_id, material, section, frame, fact_seed, hint, headline_draft, bubble, status, card_news_id, branches(name)')
+      .eq('id', topicId)
+      .maybeSingle();
+    if (!data) return NextResponse.json({ error: '편성된 주제를 찾지 못했어요' }, { status: 404 });
+    if (!canActOnBranch(member, data.branch_id)) {
+      return NextResponse.json({ error: '이 브랜드에 접근할 수 없어요' }, { status: 403 });
+    }
+    branchId = data.branch_id;
+    branchName = (data.branches as unknown as { name: string } | null)?.name ?? '';
+    topicRow = data as unknown as TopicRow;
+    topic = topicRow.headline_draft?.trim() || topicRow.material;
   } else if (topic) {
     branchId = (body.branch_id || '').trim();
     if (!branchId) return NextResponse.json({ error: '브랜드(지점)를 골라주세요' }, { status: 400 });
@@ -99,7 +132,16 @@ export async function POST(request: Request) {
       const pointCount = cardCount - 2;
       const material = post
         ? [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? '']
-        : [`주제: ${topic}`];
+        : topicRow
+          ? ([
+              `주제: ${topic}`,
+              topicRow.section && `편성 면(섹션): ${topicRow.section}`,
+              topicRow.frame && `뉴스 프레임: ${topicRow.frame}`,
+              topicRow.fact_seed && `팩트 시드(이 근거 밖의 수치·단정 금지): ${topicRow.fact_seed}`,
+              topicRow.hint && `표지 훅 힌트: ${topicRow.hint}`,
+              topicRow.bubble && `말풍선 아이디어: ${topicRow.bubble}`,
+            ].filter(Boolean) as string[])
+          : [`주제: ${topic}`];
       const sections = await callAIDelimited(
         {
           system,
@@ -194,6 +236,15 @@ export async function POST(request: Request) {
       .select('*')
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // 편성 기반이면 주제 행에 역링크 + 완료 표시 (best-effort — 실패해도 카드뉴스는 유효)
+    if (topicRow) {
+      await admin
+        .from('cardnews_topics')
+        .update({ card_news_id: row.id, status: 'done', updated_at: new Date().toISOString() })
+        .eq('id', topicRow.id);
+    }
+
     return NextResponse.json({ cardNews: row });
   } catch (e) {
     console.error('[card-news]', (e as Error).message);

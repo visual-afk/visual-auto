@@ -38,10 +38,36 @@ export interface PublishedItem {
   authorName: string | null;
 }
 
+/** 카드뉴스 주제 편성 (cardnews_topics — kind='brand' 지점 전용 셋째 레이어) */
+export interface TopicItem {
+  id: string;
+  branch_id: string;
+  branchName: string;
+  topic_date: string; // YYYY-MM-DD
+  entry_id: string | null;
+  section: string;
+  pool_label: string | null;
+  material: string;
+  frame: string;
+  fact_seed: string | null;
+  hint: string | null;
+  headline_draft: string | null;
+  bubble: string | null;
+  verify_needed: boolean;
+  fact_confirmed: boolean;
+  live_slot: boolean;
+  status: 'planned' | 'done' | 'skipped';
+  memo: string | null;
+  card_news_id: string | null;
+}
+
 export interface CalendarDay {
   schedule: ScheduleItem[];
   published: PublishedItem[];
+  topics: TopicItem[];
 }
+
+export const EMPTY_DAY: CalendarDay = { schedule: [], published: [], topics: [] };
 
 export interface CalendarMonthData {
   days: Record<string, CalendarDay>;
@@ -176,20 +202,39 @@ async function fetchPublished(
   return [...postRows.map(toItem('post')), ...reelRows.map(toItem('reel'))];
 }
 
-/** 캘린더 한 달치: 날짜별 계획 + 발행물. branchIds=null 이면 전사. */
+/** 카드뉴스 주제 편성 한 달치. 스코프가 지점 목록이면 그중 브랜드 지점만 해당된다.
+ *  테이블이 아직 없으면(마이그레이션 전) 조용히 빈 배열 — 캘린더 자체는 계속 떠야 한다. */
+async function fetchTopics(branchIds: string[] | null, month: string): Promise<TopicItem[]> {
+  const admin = getAdminSupabase();
+  let q = admin
+    .from('cardnews_topics')
+    .select(
+      'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, card_news_id',
+    )
+    .gte('topic_date', `${month}-01`)
+    .lt('topic_date', nextMonthStart(month))
+    .order('topic_date');
+  if (branchIds) q = q.in('branch_id', branchIds);
+  const { data, error } = await q;
+  if (error) return [];
+  return ((data ?? []) as Omit<TopicItem, 'branchName'>[]).map((t) => ({ ...t, branchName: '' }));
+}
+
+/** 캘린더 한 달치: 날짜별 계획 + 발행물 + 카드뉴스 주제. branchIds=null 이면 전사. */
 export async function fetchCalendarMonth(
   branchIds: string[] | null,
   month?: string,
 ): Promise<CalendarMonthData> {
   const m = month ?? kstThisMonth();
-  const [names, schedule, published] = await Promise.all([
+  const [names, schedule, published, topics] = await Promise.all([
     fetchBranchNames(),
     fetchSchedule(branchIds, m),
     fetchPublished(branchIds, m, true), // 캘린더 표시용은 작성자 포함
+    fetchTopics(branchIds, m),
   ]);
 
   const days: Record<string, CalendarDay> = {};
-  const dayOf = (date: string) => (days[date] ??= { schedule: [], published: [] });
+  const dayOf = (date: string) => (days[date] ??= { schedule: [], published: [], topics: [] });
   for (const s of schedule) {
     s.branchName = names.get(s.branch_id) ?? '';
     dayOf(s.scheduled_date).schedule.push(s);
@@ -197,6 +242,10 @@ export async function fetchCalendarMonth(
   for (const p of published) {
     p.branchName = names.get(p.branch_id) ?? '';
     dayOf(p.date).published.push(p);
+  }
+  for (const t of topics) {
+    t.branchName = names.get(t.branch_id) ?? '';
+    dayOf(t.topic_date).topics.push(t);
   }
   return { days };
 }
