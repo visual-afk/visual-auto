@@ -1,12 +1,14 @@
 /**
  * 카드뉴스 주제 편성 시드 — append-only.
- * 앵커(DB의 최초 편성일, 없으면 오늘)부터 결정론 재생성해서 "오늘 이후 + 아직 없는 날짜"만 넣는다.
- * 기존 행은 절대 갱신·삭제하지 않는다 — 사용자 수정이 항상 이긴다.
- * (미래 날짜를 지우면 다음 크론 때 재시드됨. 비우려면 status='skipped' 사용 — UI에 안내됨.)
+ * 결정론 앵커(이 브랜드의 최초 편성일, 없으면 오늘)부터 재생성해서
+ * **마지막 편성일 이후의 날짜만** 추가한다. 기존 행은 절대 갱신·삭제하지 않는다.
+ * → 사용자가 지운 날짜는 빈 채로 유지된다 (삭제가 영구적). 전체 삭제 후 재편성하면
+ *   오늘이 새 앵커가 되어 현재 은행 기준으로 처음부터 다시 짜진다.
  */
 
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { kstTodayStr } from '@/lib/kst';
+import { upsertTopicEvent, type GcalTopicItem } from '@/lib/gcal';
 import { generateTopics, getTopicBank } from './topic-engine';
 
 export interface SeededTopicRow {
@@ -45,28 +47,22 @@ export async function extendTopicSchedule(
   const admin = getAdminSupabase();
   const today = kstTodayStr();
 
-  // 앵커 = 이 브랜드의 최초 편성일 (결정론 시퀀스의 기준점). 비어 있으면 오늘부터 시작.
-  const { data: first } = await admin
+  // 앵커 = 이 브랜드의 최초 편성일 (결정론 시퀀스의 기준점) / 마지막 편성일 이후만 추가
+  const { data: bounds } = await admin
     .from('cardnews_topics')
     .select('topic_date')
     .eq('branch_id', branchId)
-    .order('topic_date', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const anchor = (first?.topic_date as string | undefined) ?? today;
+    .order('topic_date', { ascending: true });
+  const dates = ((bounds ?? []) as { topic_date: string }[]).map((r) => r.topic_date);
+  const anchor = dates[0] ?? today;
+  const lastDate = dates[dates.length - 1] ?? null;
 
-  const totalDays = Math.max(0, daysBetween(anchor, today)) + horizonDays;
-  const generated = generateTopics(bank, anchor, totalDays);
+  const targetEnd = daysBetween(anchor, today) + horizonDays; // 앵커 기준 오늘+horizon 까지
+  const generated = generateTopics(bank, anchor, Math.max(0, targetEnd));
 
-  const { data: existing } = await admin
-    .from('cardnews_topics')
-    .select('topic_date')
-    .eq('branch_id', branchId)
-    .gte('topic_date', today);
-  const have = new Set(((existing ?? []) as { topic_date: string }[]).map((r) => r.topic_date));
-
+  // 삭제된 중간 날짜는 되살리지 않는다 — 마지막 편성일 이후이면서 오늘 이후인 날짜만
   const rows = generated
-    .filter((g) => g.date >= today && !have.has(g.date))
+    .filter((g) => g.date >= today && (!lastDate || g.date > lastDate))
     .map((g) => ({
       branch_id: branchId,
       topic_date: g.date,
@@ -89,4 +85,39 @@ export async function extendTopicSchedule(
     .select(SELECT);
   if (error) throw new Error(`주제 시드 실패(${brandName}): ${error.message}`);
   return (inserted ?? []) as SeededTopicRow[];
+}
+
+/**
+ * 은행 있는 모든 브랜드를 시드하고 새 행을 구글캘린더로 내보낸다.
+ * 크론(/api/cron/extend-cardnews-topics)과 "지금 다시 편성"(/api/cardnews-topics/reseed)이 공유.
+ */
+export async function extendAllBrands(horizonDays = 90): Promise<{
+  inserted: number;
+  exported: number;
+  perBrand: Record<string, number>;
+}> {
+  const admin = getAdminSupabase();
+  const { data: brands, error } = await admin.from('branches').select('id, name').eq('kind', 'brand');
+  if (error) throw new Error(error.message);
+
+  let inserted = 0;
+  let exported = 0;
+  const perBrand: Record<string, number> = {};
+
+  for (const b of (brands ?? []) as { id: string; name: string }[]) {
+    if (!getTopicBank(b.name)) continue; // 은행 없는 브랜드는 편성 대상 아님
+    const rows = await extendTopicSchedule(b.id, b.name, horizonDays);
+    inserted += rows.length;
+    perBrand[b.name] = rows.length;
+
+    // 새 행 구글캘린더 내보내기 (best-effort — 실패해도 시드는 유효)
+    for (const row of rows) {
+      const eventId = await upsertTopicEvent(row as GcalTopicItem, b.name);
+      if (eventId) {
+        exported += 1;
+        await admin.from('cardnews_topics').update({ gcal_event_id: eventId }).eq('id', row.id);
+      }
+    }
+  }
+  return { inserted, exported, perBrand };
 }

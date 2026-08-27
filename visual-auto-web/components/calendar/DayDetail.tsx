@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PenLine, Film, Plus, Check, RotateCcw, Bell, Clapperboard } from 'lucide-react';
 import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
-import { isOverdue } from '@/lib/contentCalendar';
+import { isOverdue, TOPIC_STATUS_LABEL } from '@/lib/contentCalendar';
 import { scheduleChipClass, topicChipClass, TYPE_LABEL } from './CalendarGrid';
 
 /** YYYY-MM-DD 간 경과 일수 (b - a) */
@@ -104,7 +104,7 @@ export default function DayDetail({
                 {t.material}
                 <span className="ml-1.5 text-xs font-normal text-ink-faint">
                   {t.branchName ? `${t.branchName} · ` : ''}
-                  {t.frame}
+                  {t.frame} · {TOPIC_STATUS_LABEL[t.status]}
                 </span>
                 {t.verify_needed && !t.fact_confirmed && t.status !== 'skipped' && (
                   <span className="ml-1.5 rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-semibold text-warn">

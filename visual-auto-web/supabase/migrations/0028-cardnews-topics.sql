@@ -22,7 +22,8 @@ create table if not exists cardnews_topics (
   verify_needed boolean not null default false,  -- 은행에서 팩트 확정 필요 표시
   fact_confirmed boolean not null default false, -- 사용자가 확인 완료 체크
   live_slot boolean not null default false, -- 라이브 슬롯 (신제품·트렌드로 교체 가능)
-  status text not null default 'planned' check (status in ('planned','done','skipped')),
+  -- 제작 파이프라인 상태: 기획중 → 레퍼런스 → 촬영완료 → 업로드완료 (+건너뜀)
+  status text not null default 'planning' check (status in ('planning','reference','filmed','uploaded','skipped')),
   memo text,
   reference_url text,                       -- 릴스 등 레퍼런스 영상 링크 (기획 참고용)
   card_news_id uuid references card_news(id) on delete set null, -- 이 주제로 만든 카드뉴스
@@ -47,3 +48,13 @@ create policy cardnews_topics_write on cardnews_topics for all
 
 -- 콘텐츠 일정(계획)에도 레퍼런스 영상 링크 — 기획할 때 릴스 레퍼런스를 함께 저장
 alter table content_schedule add column if not exists reference_url text;
+
+-- ── 방어 블록: 이 파일의 이전 버전(status planned/done/skipped)을 이미 실행했던 경우 ──
+-- 새로 실행하는 경우엔 위 create table 이 이미 새 상태값을 쓰므로 아래는 사실상 no-op (idempotent)
+alter table cardnews_topics add column if not exists reference_url text;
+alter table cardnews_topics drop constraint if exists cardnews_topics_status_check;
+update cardnews_topics set status = 'planning' where status = 'planned';
+update cardnews_topics set status = 'uploaded' where status = 'done';
+alter table cardnews_topics alter column status set default 'planning';
+alter table cardnews_topics add constraint cardnews_topics_status_check
+  check (status in ('planning','reference','filmed','uploaded','skipped'));

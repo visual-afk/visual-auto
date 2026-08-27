@@ -10,6 +10,7 @@ import DayDetail from './DayDetail';
 import ScheduleEditor, { type AssigneeOpt, type BranchOpt } from './ScheduleEditor';
 import ContentDetailModal from './ContentDetailModal';
 import BulkPlanner from './BulkPlanner';
+import TopicBoard from './TopicBoard';
 import TopicEditor from '@/components/cardnews/TopicEditor';
 
 function shiftMonth(month: string, diff: number): string {
@@ -54,6 +55,7 @@ export default function ContentCalendar({
   const [detail, setDetail] = useState<PublishedItem | null>(null);
   const [topicEdit, setTopicEdit] = useState<TopicItem | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [view, setView] = useState<'calendar' | 'board'>('calendar');
 
   const canEdit = editableBranches.length > 0;
   const showBranch = branchParam === 'all';
@@ -92,6 +94,20 @@ export default function ContentCalendar({
           </button>
         </div>
 
+        <div className="flex overflow-hidden rounded-xl border border-line">
+          {(['calendar', 'board'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-3 py-2 text-sm font-semibold transition ${
+                view === v ? 'bg-brand text-brand-ink' : 'bg-surface text-ink-soft hover:bg-canvas'
+              }`}
+            >
+              {v === 'calendar' ? '달력' : '보드'}
+            </button>
+          ))}
+        </div>
+
         {canPickBranch && (
           <select
             value={branchParam}
@@ -127,29 +143,35 @@ export default function ContentCalendar({
         </div>
       </div>
 
-      <CalendarGrid
-        month={month}
-        days={days}
-        todayStr={todayStr}
-        selectedDate={selectedDate}
-        onSelect={(d) => setSelectedDate(d === selectedDate ? null : d)}
-        onOpenPublished={setDetail}
-        onOpenTopic={canEdit ? setTopicEdit : undefined}
-        showBranch={showBranch}
-      />
+      {view === 'board' ? (
+        <TopicBoard days={days} canEdit={canEdit} showBranch={showBranch} onOpen={setTopicEdit} />
+      ) : (
+        <>
+          <CalendarGrid
+            month={month}
+            days={days}
+            todayStr={todayStr}
+            selectedDate={selectedDate}
+            onSelect={(d) => setSelectedDate(d === selectedDate ? null : d)}
+            onOpenPublished={setDetail}
+            onOpenTopic={canEdit ? setTopicEdit : undefined}
+            showBranch={showBranch}
+          />
 
-      {selectedDate && (
-        <DayDetail
-          date={selectedDate}
-          day={days[selectedDate] ?? EMPTY_DAY}
-          todayStr={todayStr}
-          canEdit={canEdit}
-          showBranch={showBranch}
-          onAdd={() => setEditor({ open: true, item: null })}
-          onEdit={(item) => setEditor({ open: true, item })}
-          onOpenPublished={setDetail}
-          onEditTopic={canEdit ? setTopicEdit : undefined}
-        />
+          {selectedDate && (
+            <DayDetail
+              date={selectedDate}
+              day={days[selectedDate] ?? EMPTY_DAY}
+              todayStr={todayStr}
+              canEdit={canEdit}
+              showBranch={showBranch}
+              onAdd={() => setEditor({ open: true, item: null })}
+              onEdit={(item) => setEditor({ open: true, item })}
+              onOpenPublished={setDetail}
+              onEditTopic={canEdit ? setTopicEdit : undefined}
+            />
+          )}
+        </>
       )}
 
       {topicEdit && <TopicEditor topic={topicEdit} onClose={() => setTopicEdit(null)} />}

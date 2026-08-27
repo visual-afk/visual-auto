@@ -22,7 +22,7 @@ function TopicChip({ item, onOpen }: { item: TopicItem; onOpen?: (item: TopicIte
       }}
       className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium ${topicChipClass(item)}`}
     >
-      {item.status === 'done' && <Check size={11} className="shrink-0" />}
+      {item.status === 'uploaded' && <Check size={11} className="shrink-0" />}
       <span className="truncate">카드 · {item.material}</span>
     </button>
   );

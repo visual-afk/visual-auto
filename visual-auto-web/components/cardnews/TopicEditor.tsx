@@ -65,7 +65,7 @@ export default function TopicEditor({ topic, onClose }: { topic: TopicItem; onCl
   }
 
   async function remove() {
-    if (!confirm('이 주제를 삭제할까요?\n(미래 날짜는 다음 날 자동 편성이 다시 채워요 — 비워두려면 "건너뜀"으로 저장하세요)')) return;
+    if (!confirm('이 주제를 삭제할까요? (삭제는 영구예요 — 자동 편성이 되살리지 않아요)')) return;
     setBusy('delete');
     const res = await fetch(`/api/cardnews-topics/${topic.id}`, { method: 'DELETE' });
     setBusy(null);
@@ -141,8 +141,10 @@ export default function TopicEditor({ topic, onClose }: { topic: TopicItem; onCl
               ))}
             </select>
             <select className={field} value={status} onChange={(e) => setStatus(e.target.value as TopicItem['status'])}>
-              <option value="planned">예정</option>
-              <option value="done">완료</option>
+              <option value="planning">기획중</option>
+              <option value="reference">레퍼런스</option>
+              <option value="filmed">촬영완료</option>
+              <option value="uploaded">업로드완료</option>
               <option value="skipped">건너뜀 (발행 안 함)</option>
             </select>
           </div>

@@ -6,7 +6,7 @@ import { upsertTopicEvent, deleteScheduleEvent, type GcalTopicItem } from '@/lib
 /** 카드뉴스 주제 수정/삭제 — 본사·해당 브랜드 원장만. 구글 캘린더 동기화는 best-effort. */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const STATUSES = ['planned', 'done', 'skipped'] as const;
+const STATUSES = ['planning', 'reference', 'filmed', 'uploaded', 'skipped'] as const;
 
 const TOPIC_SELECT =
   'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, reference_url, card_news_id, gcal_event_id';
