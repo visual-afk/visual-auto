@@ -76,11 +76,12 @@
 [편성 테이블] Supabase cardnews_topics ★SSOT — 90일 앞까지 append-only 시드
    ↓  앱 /calendar 에 초록 칩으로 표시                    ↓  best-effort 내보내기
 [콘텐츠 캘린더] 클릭 → 주제 수정 모달(TopicEditor)      [구글캘린더] 초록 이벤트 (보기 전용)
-   ↓  "이 주제로 만들기" (POST /api/card-news { topic_id })
-[카피 생성] prompts/card-news-topic.md + concept-트리필드.md → 카드뉴스 스튜디오 초안
+   ↓  크론이 앞으로 7일치 초안 자동 생성 (헤드라인·카드 5장·캡션·해시태그 — 회당 5개)
+[카드뉴스 초안] card_news(draft, 자동) — 주제 모달 "만든 카드뉴스 열기"로 진입. 수동 "이 주제로 만들기"도 동일 코어(lib/cardnews/draft-topic.ts)
 ```
 
 - 편성 엔진은 AI를 안 쓴다 (결정론적 로테이션). AI가 개입하는 건 카피 생성부터.
+- **사람의 일은 두 가지뿐**: ⚠️ 수치 검증(팩트 확정 체크) + 스튜디오에서 다듬고 발행. 헤드라인·카드·캡션은 자동으로 준비된다.
 - `verify: true` 소재는 캘린더에 "팩트 확인 필요" 배지 — **팩트 확정(체크) 전 발행 금지** (01 §4).
 - 은행 소재를 추가하면 다음 크론부터 미래 편성에 반영된다. 이미 테이블에 있는 날짜는 시드가 건드리지 않는다.
 - 최초 시드: 0028 마이그레이션 실행 → 배포 → `curl -H "Authorization: Bearer $CRON_SECRET" https://…/api/cron/extend-cardnews-topics` 1회.

@@ -10,6 +10,7 @@ import {
   loadFileSafeFor,
 } from '@/lib/generation/ai-client';
 import { getFrameFor } from '@/lib/cardnews/frames';
+import { generateTopicDraft } from '@/lib/cardnews/draft-topic';
 import { canMakeCardNews } from '@/lib/flags';
 import {
   buildInfoCards,
@@ -112,37 +113,32 @@ export async function POST(request: Request) {
   }
 
   try {
-    const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
-    const prompt = await loadPromptFor(promptName, branchId);
-    // 주제 기반은 정보 콘텐츠 — 마케팅 지식(branch-*.md)을 주입하면 홍보 톤이 새므로 컨셉 파일만 쓴다.
-    const knowledge = post ? await loadBranchKnowledgeFor(branchName, branchId) : '';
-    const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
-    const system = [
-      prompt,
-      concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
-      knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
-    ].join('');
-
     let cards;
     let caption: string | null = null;
     let hashtags: string[] = [];
     let cardCount: number;
+    let coverHook = '';
 
-    if (mode === 'info') {
+    if (!post) {
+      // 주제 기반 — 공용 코어(draft-topic)로 생성. 정보 콘텐츠라 마케팅 지식은 주입하지 않는다 (07 §5-2).
+      const draft = await generateTopicDraft(topicRow ?? { material: topic }, branchName, branchId, body.card_count ?? 5);
+      cards = draft.cards;
+      cardCount = draft.cardCount;
+      caption = draft.caption;
+      hashtags = draft.hashtags;
+      coverHook = draft.coverHook;
+    } else if (mode === 'info') {
+      const prompt = await loadPromptFor('card-news-info', branchId);
+      const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+      const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
+      const system = [
+        prompt,
+        concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
+        knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
+      ].join('');
       cardCount = clampCardCount(body.card_count ?? 5);
       const pointCount = cardCount - 2;
-      const material = post
-        ? [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? '']
-        : topicRow
-          ? ([
-              `주제: ${topic}`,
-              topicRow.section && `편성 면(섹션): ${topicRow.section}`,
-              topicRow.frame && `뉴스 프레임: ${topicRow.frame}`,
-              topicRow.fact_seed && `팩트 시드(이 근거 밖의 수치·단정 금지): ${topicRow.fact_seed}`,
-              topicRow.hint && `표지 훅 힌트: ${topicRow.hint}`,
-              topicRow.bubble && `말풍선 아이디어: ${topicRow.bubble}`,
-            ].filter(Boolean) as string[])
-          : [`주제: ${topic}`];
+      const material = [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? ''];
       const sections = await callAIDelimited(
         {
           system,
@@ -171,6 +167,14 @@ export async function POST(request: Request) {
       );
     } else {
       // image 모드는 post 기반에서만 도달한다 (주제 기반은 위에서 info로 강제).
+      const prompt = await loadPromptFor('card-news-image', branchId);
+      const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+      const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
+      const system = [
+        prompt,
+        concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
+        knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
+      ].join('');
       const p = post!;
       const photos = (Array.isArray(p.photos) ? (p.photos as PostPhoto[]) : []).slice(0, MAX_CARDS);
       const phraseCount = Math.max(photos.length, 3);
@@ -238,11 +242,15 @@ export async function POST(request: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // 편성 기반이면 주제 행에 역링크 (상태는 안 바꾼다 — 촬영·업로드는 보드에서 사람이 옮김)
+    // 편성 기반이면 주제 행에 역링크 + 빈 헤드라인은 생성된 표지 훅으로 채움 (상태는 사람이 옮김)
     if (topicRow) {
       await admin
         .from('cardnews_topics')
-        .update({ card_news_id: row.id, updated_at: new Date().toISOString() })
+        .update({
+          card_news_id: row.id,
+          ...(topicRow.headline_draft?.trim() || !coverHook ? {} : { headline_draft: coverHook }),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', topicRow.id);
     }
 

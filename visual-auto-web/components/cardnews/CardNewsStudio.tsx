@@ -202,6 +202,20 @@ export default function CardNewsStudio({
         {mode === 'info' ? (
           <>
             <InfoCardsEditor cards={cards as InfoCard[]} onChange={updateCards} />
+            {(caption || hashtags.length > 0) && (
+              <CaptionPanel
+                caption={caption}
+                hashtags={hashtags}
+                onCaptionChange={(v) => {
+                  setCaption(v);
+                  setDirty(true);
+                }}
+                onHashtagsChange={(v) => {
+                  setHashtags(v);
+                  setDirty(true);
+                }}
+              />
+            )}
             {initial.post_id && (
               <button
                 onClick={regenerate}
