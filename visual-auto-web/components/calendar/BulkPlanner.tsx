@@ -13,6 +13,7 @@ interface Row {
   title: string;
   scheduled_date: string;
   assignee_id: string;
+  reference_url: string;
   memo?: string; // 자동 기획의 추천 이유
 }
 
@@ -48,6 +49,7 @@ export default function BulkPlanner({
     title: '',
     scheduled_date: base?.scheduled_date ?? defaultDate,
     assignee_id: '',
+    reference_url: '',
   });
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [errors, setErrors] = useState<Record<number, string>>({}); // rows 배열 index 기준
@@ -87,6 +89,7 @@ export default function BulkPlanner({
         title: it.title,
         scheduled_date: it.scheduled_date,
         assignee_id: '',
+        reference_url: '',
         memo: it.reason || '',
       }));
       return [...kept, ...generated].slice(0, 50); // bulk API 상한
@@ -114,6 +117,7 @@ export default function BulkPlanner({
           title: r.title.trim(),
           scheduled_date: r.scheduled_date,
           assignee_id: r.assignee_id || null,
+          reference_url: r.reference_url.trim() || null,
           memo: r.memo || null,
         })),
       }),
@@ -256,6 +260,13 @@ export default function BulkPlanner({
                   >
                     <Trash2 size={15} />
                   </button>
+                  <input
+                    type="url"
+                    className={`${field} col-span-2 md:col-span-6`}
+                    placeholder="레퍼런스 영상 링크 (인스타 릴스 URL 등, 선택)"
+                    value={r.reference_url}
+                    onChange={(e) => update(r.key, { reference_url: e.target.value })}
+                  />
                 </div>
                 {r.memo && <p className="mt-1 truncate px-1 text-xs text-ink-faint">{r.memo}</p>}
                 {err && <p className="mt-1 px-1 text-xs text-warn">{err}</p>}

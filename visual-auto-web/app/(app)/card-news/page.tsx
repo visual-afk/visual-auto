@@ -35,6 +35,15 @@ export default async function CardNewsListPage() {
       <h1 className="mb-1 text-2xl font-bold">카드뉴스</h1>
       <p className="mb-6 text-sm text-ink-soft">쓴 글에서 뽑거나, 브랜드 주제로 바로 만드는 인스타 카드예요.</p>
 
+      {canCreate && (
+        <p className="mb-3 text-xs text-ink-faint">
+          매일 편성되는 브랜드 주제는{' '}
+          <Link href="/calendar" className="font-semibold text-brand">
+            콘텐츠 캘린더
+          </Link>
+          의 초록 칩에서 바로 만들 수 있어요.
+        </p>
+      )}
       {canCreate && <NewFromTopic brands={brands} />}
 
       {list.length === 0 && (

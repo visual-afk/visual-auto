@@ -2,8 +2,31 @@
 
 import { useState } from 'react';
 import { PenLine, Film, Check } from 'lucide-react';
-import type { CalendarDay, ScheduleItem, PublishedItem } from '@/lib/contentCalendar';
-import { isOverdue } from '@/lib/contentCalendar';
+import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
+import { isOverdue, EMPTY_DAY } from '@/lib/contentCalendar';
+
+/** 카드뉴스 주제 칩 색: 초록 계열 (계획 파랑/노랑, 실적 테두리와 구분) */
+export function topicChipClass(t: TopicItem): string {
+  if (t.status === 'skipped') return 'bg-ink-faint/10 text-ink-faint line-through';
+  if (t.verify_needed && !t.fact_confirmed) return 'bg-ok/10 text-ok ring-1 ring-warn/40';
+  return 'bg-ok/15 text-ok';
+}
+
+function TopicChip({ item, onOpen }: { item: TopicItem; onOpen?: (item: TopicItem) => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        if (!onOpen) return;
+        e.stopPropagation();
+        onOpen(item);
+      }}
+      className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium ${topicChipClass(item)}`}
+    >
+      {item.status === 'done' && <Check size={11} className="shrink-0" />}
+      <span className="truncate">카드 · {item.material}</span>
+    </button>
+  );
+}
 
 /** 계획 칩 색: 유형별. todayStr 가 있으면 기한 경과(planned)에 warn 강조. */
 export function scheduleChipClass(item: ScheduleItem, todayStr?: string): string {
@@ -95,6 +118,7 @@ export default function CalendarGrid({
   selectedDate,
   onSelect,
   onOpenPublished,
+  onOpenTopic,
   showBranch,
 }: {
   month: string;
@@ -103,6 +127,7 @@ export default function CalendarGrid({
   selectedDate: string | null;
   onSelect: (date: string) => void;
   onOpenPublished: (item: PublishedItem) => void;
+  onOpenTopic?: (item: TopicItem) => void;
   showBranch: boolean;
 }) {
   const cells = buildCells(month);
@@ -139,8 +164,10 @@ export default function CalendarGrid({
           {cells.map((date, i) => {
             if (!date) return <div key={`pad-${i}`} className="min-h-[6.5rem] border-b border-r border-line/60 bg-canvas/40" />;
             const day = days[date];
-            const total = (day?.schedule.length ?? 0) + (day?.published.length ?? 0);
+            const topics = day?.topics ?? [];
+            const total = (day?.schedule.length ?? 0) + (day?.published.length ?? 0) + topics.length;
             const shown = [
+              ...topics.slice(0, 1).map((t) => ({ kind: 'topic' as const, t })),
               ...(day?.schedule.slice(0, 2) ?? []).map((s) => ({ kind: 'schedule' as const, s })),
               ...(day?.published.slice(0, 1) ?? []).map((p) => ({ kind: 'published' as const, p })),
             ].slice(0, 3);
@@ -166,7 +193,9 @@ export default function CalendarGrid({
                 </span>
                 <div className="mt-1 space-y-0.5">
                   {shown.map((c, j) =>
-                    c.kind === 'schedule' ? (
+                    c.kind === 'topic' ? (
+                      <TopicChip key={`t-${j}`} item={c.t} onOpen={onOpenTopic} />
+                    ) : c.kind === 'schedule' ? (
                       <ScheduleChip key={`s-${j}`} item={c.s} showBranch={showBranch} todayStr={todayStr} />
                     ) : (
                       <PublishedChip
@@ -216,7 +245,7 @@ export default function CalendarGrid({
         {cells
           .filter((d): d is string => !!d && (!!days[d] || d === todayStr))
           .map((date) => {
-            const day = days[date] ?? { schedule: [], published: [] };
+            const day = days[date] ?? EMPTY_DAY;
             const isToday = date === todayStr;
             const dow = WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()];
             return (
@@ -234,13 +263,16 @@ export default function CalendarGrid({
                   {Number(date.slice(5, 7))}.{Number(date.slice(8))} ({dow}){isToday ? ' · 오늘' : ''}
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1">
+                  {day.topics.map((t) => (
+                    <TopicChip key={t.id} item={t} onOpen={onOpenTopic} />
+                  ))}
                   {day.schedule.map((s) => (
                     <ScheduleChip key={s.id} item={s} showBranch={showBranch} todayStr={todayStr} />
                   ))}
                   {day.published.map((p) => (
                     <PublishedChip key={`${p.kind}-${p.id}`} item={p} showBranch={showBranch} onOpen={onOpenPublished} />
                   ))}
-                  {day.schedule.length === 0 && day.published.length === 0 && (
+                  {day.schedule.length === 0 && day.published.length === 0 && day.topics.length === 0 && (
                     <span className="text-xs text-ink-faint">일정 없음</span>
                   )}
                 </div>
