@@ -13,6 +13,7 @@ export interface GcalScheduleItem {
   scheduled_date: string; // YYYY-MM-DD
   status: 'planned' | 'done' | 'canceled';
   memo?: string | null;
+  reference_url?: string | null;
   gcal_event_id?: string | null;
 }
 
@@ -55,6 +56,7 @@ function buildEventBody(item: GcalScheduleItem, branchName: string | null) {
       `APP:${item.id}`, // 웹앱 일정 고유 마커
       branchName ? `지점: ${branchName}` : '',
       `상태: ${statusLabel}`,
+      item.reference_url ? `레퍼런스: ${item.reference_url}` : '',
       item.memo ? `메모: ${item.memo}` : '',
     ]
       .filter(Boolean)
@@ -93,6 +95,91 @@ export async function upsertScheduleEvent(
     return res.data.id ?? null;
   } catch (e) {
     console.warn('[gcal] 이벤트 내보내기 실패:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// ── 카드뉴스 주제 편성 이벤트 ───────────────────────────────────────────
+
+export interface GcalTopicItem {
+  id: string;
+  topic_date: string; // YYYY-MM-DD
+  material: string;
+  section?: string | null;
+  frame?: string | null;
+  fact_seed?: string | null;
+  status: 'planned' | 'done' | 'skipped';
+  memo?: string | null;
+  reference_url?: string | null;
+  gcal_event_id?: string | null;
+}
+
+const TOPIC_COLOR = '2'; // 세이지(초록) — 콘텐츠 일정 색과 구분
+
+function buildTopicEventBody(item: GcalTopicItem, brandName: string | null) {
+  const statusLabel = item.status === 'done' ? '완료' : item.status === 'skipped' ? '건너뜀' : '예정';
+  return {
+    summary: `[${brandName ?? '카드뉴스'}] ${item.material}`,
+    description: [
+      `CNTOPIC:${item.id}`, // 웹앱 주제 고유 마커
+      item.section ? `면: ${item.section}` : '',
+      item.frame ? `프레임: ${item.frame}` : '',
+      item.fact_seed ? `팩트 시드: ${item.fact_seed}` : '',
+      `상태: ${statusLabel}`,
+      item.reference_url ? `레퍼런스: ${item.reference_url}` : '',
+      item.memo ? `메모: ${item.memo}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    start: { date: item.topic_date },
+    end: { date: item.topic_date },
+    colorId: TOPIC_COLOR,
+  };
+}
+
+/**
+ * gcal_event_id 가 없을 때, 예전 스크립트가 만든 같은 날짜 이벤트(TFTOPIC:날짜 태그)를 찾아 승계한다.
+ * (앱 이관 전에 이미 내보내진 트리필드 이벤트 중복 생성 방지 — 못 찾으면 null)
+ */
+async function findLegacyTopicEvent(date: string): Promise<string | null> {
+  try {
+    const res = await getCalendar().events.list({
+      calendarId: process.env.GOOGLE_CALENDAR_ID!,
+      q: 'TFTOPIC',
+      timeMin: `${date}T00:00:00Z`,
+      timeMax: `${date}T23:59:59Z`,
+      singleEvents: true,
+      maxResults: 10,
+    });
+    const match = (res.data.items ?? []).find((e) => e.description?.includes(`TFTOPIC:${date}`));
+    return match?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 주제 이벤트 upsert. 성공 시 이벤트 id, 미설정·실패 시 null. */
+export async function upsertTopicEvent(item: GcalTopicItem, brandName: string | null): Promise<string | null> {
+  if (!isGcalConfigured()) return null;
+  const calendar = getCalendar();
+  const calendarId = process.env.GOOGLE_CALENDAR_ID!;
+  const requestBody = buildTopicEventBody(item, brandName);
+
+  try {
+    const eventId = item.gcal_event_id || (brandName === '트리필드' ? await findLegacyTopicEvent(item.topic_date) : null);
+    if (eventId) {
+      try {
+        await calendar.events.patch({ calendarId, eventId, requestBody });
+        return eventId;
+      } catch (e) {
+        const status = (e as { code?: number; status?: number }).code ?? (e as { status?: number }).status;
+        if (status !== 404 && status !== 410) throw e;
+      }
+    }
+    const res = await calendar.events.insert({ calendarId, requestBody });
+    return res.data.id ?? null;
+  } catch (e) {
+    console.warn('[gcal] 주제 이벤트 내보내기 실패:', e instanceof Error ? e.message : e);
     return null;
   }
 }

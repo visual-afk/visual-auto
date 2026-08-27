@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PenLine, Film, Plus, Check, RotateCcw, Bell } from 'lucide-react';
-import type { CalendarDay, ScheduleItem, PublishedItem } from '@/lib/contentCalendar';
+import { PenLine, Film, Plus, Check, RotateCcw, Bell, Clapperboard } from 'lucide-react';
+import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
 import { isOverdue } from '@/lib/contentCalendar';
-import { scheduleChipClass, TYPE_LABEL } from './CalendarGrid';
+import { scheduleChipClass, topicChipClass, TYPE_LABEL } from './CalendarGrid';
 
 /** YYYY-MM-DD 간 경과 일수 (b - a) */
 function daysBetween(a: string, b: string): number {
@@ -22,6 +22,7 @@ export default function DayDetail({
   onAdd,
   onEdit,
   onOpenPublished,
+  onEditTopic,
 }: {
   date: string;
   day: CalendarDay;
@@ -31,6 +32,7 @@ export default function DayDetail({
   onAdd: () => void;
   onEdit: (item: ScheduleItem) => void;
   onOpenPublished: (item: PublishedItem) => void;
+  onEditTopic?: (item: TopicItem) => void;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -82,8 +84,50 @@ export default function DayDetail({
         )}
       </div>
 
-      {day.schedule.length === 0 && day.published.length === 0 && (
+      {day.schedule.length === 0 && day.published.length === 0 && day.topics.length === 0 && (
         <p className="mt-3 text-sm text-ink-faint">이 날은 등록된 일정과 발행물이 없어요.</p>
+      )}
+
+      {day.topics.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {day.topics.map((t) => (
+            <li key={t.id} className="flex items-center gap-2">
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${topicChipClass(t)}`}>
+                카드뉴스
+              </span>
+              <button
+                onClick={() => onEditTopic?.(t)}
+                className={`min-w-0 flex-1 truncate text-left text-sm font-medium ${
+                  t.status === 'skipped' ? 'text-ink-faint line-through' : ''
+                }`}
+              >
+                {t.material}
+                <span className="ml-1.5 text-xs font-normal text-ink-faint">
+                  {t.branchName ? `${t.branchName} · ` : ''}
+                  {t.frame}
+                </span>
+                {t.verify_needed && !t.fact_confirmed && t.status !== 'skipped' && (
+                  <span className="ml-1.5 rounded-full bg-warn/15 px-2 py-0.5 text-[11px] font-semibold text-warn">
+                    팩트 확인 필요
+                  </span>
+                )}
+                {t.card_news_id && (
+                  <span className="ml-1.5 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-semibold text-ok">만듦</span>
+                )}
+              </button>
+              {t.reference_url && (
+                <a
+                  href={t.reference_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-soft hover:border-brand hover:text-brand"
+                >
+                  <Clapperboard size={12} /> 레퍼런스
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {day.schedule.length > 0 && (
@@ -114,6 +158,16 @@ export default function DayDetail({
                     </span>
                   )}
                 </button>
+                {s.reference_url && (
+                  <a
+                    href={s.reference_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-soft hover:border-brand hover:text-brand"
+                  >
+                    <Clapperboard size={12} /> 레퍼런스
+                  </a>
+                )}
                 {canEdit && overdue && (
                   <button
                     onClick={() => sendReminder(s)}

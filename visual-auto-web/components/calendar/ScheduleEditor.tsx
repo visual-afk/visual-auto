@@ -38,6 +38,7 @@ export default function ScheduleEditor({
   const [date, setDate] = useState(item?.scheduled_date ?? defaultDate);
   const [branchId, setBranchId] = useState(item?.branch_id ?? defaultBranchId);
   const [assigneeId, setAssigneeId] = useState(item?.assignee_id ?? '');
+  const [referenceUrl, setReferenceUrl] = useState(item?.reference_url ?? '');
   const [memo, setMemo] = useState(item?.memo ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export default function ScheduleEditor({
       title: title.trim(),
       scheduled_date: date,
       assignee_id: assigneeId || null,
+      reference_url: referenceUrl.trim() || null,
       memo: memo.trim() || null,
     };
     const res = await fetch(item ? `/api/schedule/${item.id}` : '/api/schedule', {
@@ -155,6 +157,14 @@ export default function ScheduleEditor({
               </option>
             ))}
           </select>
+
+          <input
+            type="url"
+            className={field}
+            placeholder="레퍼런스 영상 링크 (인스타 릴스 URL 등, 선택)"
+            value={referenceUrl}
+            onChange={(e) => setReferenceUrl(e.target.value)}
+          />
 
           <textarea
             className={`${field} min-h-[4.5rem] resize-none`}

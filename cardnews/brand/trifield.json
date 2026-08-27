@@ -1,0 +1,99 @@
+{
+  "$comment": "SSOT는 docs/cardnews/01-brand-trifield.md — 내용이 갈라지면 문서가 정답. 디자인 값 금지(P3): 이 파일에 컬러/폰트/px가 들어오면 안 된다.",
+  "brand": "trifield",
+  "one_liner": "머리카락에 관한 정말 재미있는 정보를, 키치하게 풀어내는 모발 지식 브랜드",
+  "audience": {
+    "primary": "머리카락을 정말 잘 관리하고 싶은 미용인 (헤어디자이너·살롱 종사자)",
+    "secondary": "모발에 진심인 일반 소비자 (확산층)",
+    "readability_rule": "일반 소비자가 봐도 100% 이해되는 난이도 유지"
+  },
+  "personas": [
+    { "id": "T-P1", "name": "3년차 디자이너", "hook_point": "내일 고객한테 바로 써먹는 한 마디" },
+    { "id": "T-P2", "name": "케어 덕후 원장", "hook_point": "이 성분이 진짜 하는 일" },
+    { "id": "T-P3", "name": "모발에 진심인 일반인", "hook_point": "나만 몰랐던 머리카락 상식" }
+  ],
+  "info_domain": {
+    "boundary_question": "이 콘텐츠의 중심 질문이 '머리카락(두피)에서 무슨 일이 일어나는가'인가?",
+    "in": ["모발 구조", "시술 화학(펌·염색·탈색 원리)", "손상 메커니즘과 비가역성", "성분학", "두피 생리(비의학)", "미신 팩트체크"],
+    "out": [
+      { "signal": "스타일·트렌드·심미", "action": "handoff", "to": "salon" },
+      { "signal": "운영·매출·마케팅·상권", "action": "handoff", "to": "academy" },
+      { "signal": "탈모 치료·약물·의학 효능", "action": "reject", "reason": "medical" },
+      { "signal": "제품 자랑이 콘텐츠 중심", "action": "reject", "reason": "ad_not_knowledge" }
+    ]
+  },
+  "pillars": [
+    { "id": "PIL-1", "name": "모발 구조의 세계", "ratio": 0.2 },
+    { "id": "PIL-2", "name": "시술의 화학", "ratio": 0.25 },
+    { "id": "PIL-3", "name": "손상과 보수", "ratio": 0.25 },
+    { "id": "PIL-4", "name": "성분 돋보기", "ratio": 0.15 },
+    { "id": "PIL-5", "name": "미신 팩트체크", "ratio": 0.15 },
+    { "$comment": "큐에서 같은 필라 3연속 금지" }
+  ],
+  "hooks": [
+    { "code": "H1", "name": "충격 팩트형", "formula": "믿기 힘든 수치 하나만 크게", "example": "머리카락 1가닥, 100g을 버팁니다" },
+    { "code": "H2", "name": "미신 격파형", "formula": "다들 믿는 것 + 반은 틀림", "example": "기름진 머리, 매일 감으면 더 기름져진다?" },
+    { "code": "H3", "name": "비유 치환형", "formula": "타 업종 개념으로 모발 설명", "example": "당신의 머리카락은 지금 복리로 손상 중" },
+    { "code": "H4", "name": "1인칭 고백형", "formula": "머리카락·성분의 의인화 고백", "example": "안녕, 나는 오늘 죽은 네 머리카락이야" },
+    { "code": "H5", "name": "과학·미신 재판형", "formula": "통설을 법정에 세움", "example": "펌 후 3일 머리 감지 마라 — 과학일까 미신일까" },
+    { "code": "H6", "name": "짜치는 궁금증형", "formula": "검색은 안 해도 다들 궁금한 것을 대놓고 질문", "example": "정수리만 왜 이렇게 떡져요?", "flagship": true },
+    { "code": "H7", "name": "근황체", "formula": "{대상} 근황: + 팩트", "example": "탈색 3번 한 시스틴 결합 근황: 퇴사함", "stolen_from": "trifield-ref-001" }
+  ],
+  "cover_grammar": {
+    "stolen_from": "trifield-ref-001",
+    "slots": {
+      "headline": "팩트 담당, 2~3줄, 줄당 8~14자, 슬랭 어미 허용",
+      "bubble": "유머 담당, 팩트 당사자(머리카락·모낭·성분·도구)의 1인칭 대사 8~14자",
+      "cutout": "의인화 대상 지시 (렌더링 소재 메모)",
+      "evidence": "과학 증거 위젯: 온도계/pH미터/성분표/현미경 컷 (선택)"
+    },
+    "rules": ["커버 1장 = 팩트 1 + 유머 1, 2팩트 금지", "낙차는 순차가 아니라 병렬 (헤드라인↔말풍선 동시)"],
+    "renderer_status": "bubble/cutout/evidence 슬롯은 cards.ts 미지원 — plan에 선탑재, 렌더러 확장 대기"
+  },
+  "tone": {
+    "required": [
+      "1편당 검증 가능한 팩트 3개 이상 (fact_basis 필수)",
+      "전문용어는 같은 카드에서 일상 비유로 즉시 번역",
+      "숫자로 말할 수 있으면 숫자로"
+    ],
+    "allowed": [
+      "과장 비유·의인화",
+      "밈 문법·구어체 (표지 반말 임팩트 허용, 본문 해요체)",
+      "음슴체·슬랭 어미 — 커버 헤드라인·포인트 제목·말풍선 한정 (~함 ㅎ, ~드림, ㅋㅋ). 본문 2줄 금지",
+      "낙차 리듬: 웃긴 비유 → 진지한 수치",
+      "리듬 장치: 사실은요… / 반전: / 결론부터:"
+    ],
+    "forbidden": [
+      "재미를 위한 팩트 왜곡",
+      "공포 단정 (이러면 대머리 됩니다 류)",
+      "의학적 효능 단정 (치료·재생)",
+      "타사·타제품 비방",
+      "외모 비하·혐오 표현",
+      "이모지·픽토그램 (말맛으로 대신한다)",
+      "디자인 값 언급 (hex·폰트명·px)"
+    ]
+  },
+  "sequence_preset": {
+    "renderer_constraint": "cards.ts — cover 1 + point (N-2) + cta 1, N은 3~8",
+    "default_count": 7,
+    "roles": ["HOOK", "FACT", "WHY", "MYTH", "HOW", "RECAP", "CTA"],
+    "drop_order_when_shorter": ["RECAP", "HOW", "MYTH"],
+    "never_drop": ["FACT", "WHY"]
+  },
+  "cta": {
+    "strength": "medium",
+    "default": "다음 궁금증 예고 + 시리즈 팔로우",
+    "badge_example": "머리카락 궁금증 → 팔로우 ↓",
+    "product_link_ratio_max": 0.3,
+    "product_rule": "브랜드명 한 줄까지만, 가격·구매 재촉 금지. 라인업 상세는 입력 대기"
+  },
+  "qc": {
+    "output_format": "delimited",
+    "json_mode": false,
+    "banned_phrases": ["치료", "재생", "탈모 됩니다", "탈모됩니다", "부작용 없", "100% 효과", "의학적으로 증명"],
+    "char_limits": { "cover_max_lines": 2, "cover_line_max": 20, "point_title_max": 14, "point_body_max_lines": 2, "point_body_line_max": 24 },
+    "min_facts": 3
+  },
+  "conversion_routing_doc": "docs/cardnews/02-conversion-trifield.md",
+  "prompt_qc_doc": "docs/cardnews/06-prompt-qc-trifield.md"
+}
