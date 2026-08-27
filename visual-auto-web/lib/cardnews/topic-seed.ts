@@ -78,11 +78,19 @@ export async function extendTopicSchedule(
     }));
   if (rows.length === 0) return [];
 
-  // 동시 실행 대비: unique(branch_id, topic_date) 충돌은 조용히 무시 (기존 행 보존)
-  const { data: inserted, error } = await admin
+  // 하루 여러 주제 허용(0029에서 unique 제거) — 동시 실행 대비는 (topic_date, entry_id) 중복 필터로 막는다
+  const { data: existing } = await admin
     .from('cardnews_topics')
-    .upsert(rows, { onConflict: 'branch_id,topic_date', ignoreDuplicates: true })
-    .select(SELECT);
+    .select('topic_date, entry_id')
+    .eq('branch_id', branchId)
+    .gte('topic_date', rows[0].topic_date);
+  const seen = new Set(
+    ((existing ?? []) as { topic_date: string; entry_id: string | null }[]).map((r) => `${r.topic_date}|${r.entry_id}`),
+  );
+  const fresh = rows.filter((r) => !seen.has(`${r.topic_date}|${r.entry_id}`));
+  if (fresh.length === 0) return [];
+
+  const { data: inserted, error } = await admin.from('cardnews_topics').insert(fresh).select(SELECT);
   if (error) throw new Error(`주제 시드 실패(${brandName}): ${error.message}`);
   return (inserted ?? []) as SeededTopicRow[];
 }
