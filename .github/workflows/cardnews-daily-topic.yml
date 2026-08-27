@@ -1,0 +1,20 @@
+name: cardnews-daily-topic
+
+on:
+  schedule:
+    - cron: '0 23 * * *' # 매일 08:00 KST (23:00 UTC)
+  workflow_dispatch:
+
+jobs:
+  today:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: 오늘의 트리필드 주제 → Google Chat
+        run: npx tsx scripts/cardnews-topic-schedule.ts --today
+        env:
+          GOOGLE_CHAT_WEBHOOK_URL: ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
