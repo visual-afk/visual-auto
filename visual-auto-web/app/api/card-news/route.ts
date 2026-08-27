@@ -114,7 +114,8 @@ export async function POST(request: Request) {
   try {
     const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
     const prompt = await loadPromptFor(promptName, branchId);
-    const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+    // 주제 기반은 정보 콘텐츠 — 마케팅 지식(branch-*.md)을 주입하면 홍보 톤이 새므로 컨셉 파일만 쓴다.
+    const knowledge = post ? await loadBranchKnowledgeFor(branchName, branchId) : '';
     const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
     const system = [
       prompt,
