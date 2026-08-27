@@ -5,28 +5,8 @@ import { PenLine, Film, Check } from 'lucide-react';
 import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
 import { isOverdue, EMPTY_DAY } from '@/lib/contentCalendar';
 
-/** 카드뉴스 주제 칩 색: 초록 계열 (계획 파랑/노랑, 실적 테두리와 구분) */
-export function topicChipClass(t: TopicItem): string {
-  if (t.status === 'skipped') return 'bg-ink-faint/10 text-ink-faint line-through';
-  if (t.verify_needed && !t.fact_confirmed) return 'bg-ok/10 text-ok ring-1 ring-warn/40';
-  return 'bg-ok/15 text-ok';
-}
-
-function TopicChip({ item, onOpen }: { item: TopicItem; onOpen?: (item: TopicItem) => void }) {
-  return (
-    <button
-      onClick={(e) => {
-        if (!onOpen) return;
-        e.stopPropagation();
-        onOpen(item);
-      }}
-      className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium ${topicChipClass(item)}`}
-    >
-      {item.status === 'uploaded' && <Check size={11} className="shrink-0" />}
-      <span className="truncate">카드 · {item.material}</span>
-    </button>
-  );
-}
+/** 달력에서 옮기고 지울 수 있는 계획 항목 종류 (발행물 제외) */
+export type PlanKind = 'schedule' | 'topic';
 
 /** 계획 칩 색: 유형별. todayStr 가 있으면 기한 경과(planned)에 warn 강조. */
 export function scheduleChipClass(item: ScheduleItem, todayStr?: string): string {
@@ -45,17 +25,94 @@ export const TYPE_LABEL: Record<ScheduleItem['content_type'], string> = {
   etc: '기타',
 };
 
-function ScheduleChip({ item, showBranch, todayStr }: { item: ScheduleItem; showBranch: boolean; todayStr: string }) {
+/** 카드뉴스 주제 칩 색: 초록 계열 (계획 파랑/노랑, 실적 테두리와 구분) */
+export function topicChipClass(t: TopicItem): string {
+  if (t.status === 'skipped') return 'bg-ink-faint/10 text-ink-faint line-through';
+  if (t.verify_needed && !t.fact_confirmed) return 'bg-ok/10 text-ok ring-1 ring-warn/40';
+  return 'bg-ok/15 text-ok';
+}
+
+const selectedRing = 'ring-2 ring-brand';
+
+function ScheduleChip({
+  item,
+  showBranch,
+  todayStr,
+  draggable,
+  onDragStart,
+  selectMode,
+  selected,
+  onToggle,
+}: {
+  item: ScheduleItem;
+  showBranch: boolean;
+  todayStr: string;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
+}) {
   return (
     <span
-      className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${scheduleChipClass(item, todayStr)}`}
+      draggable={draggable && !selectMode}
+      onDragStart={onDragStart}
+      onClick={(e) => {
+        if (!selectMode || !onToggle) return;
+        e.stopPropagation();
+        onToggle();
+      }}
+      className={`flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px] font-medium ${scheduleChipClass(item, todayStr)} ${
+        selected ? selectedRing : ''
+      } ${selectMode ? 'cursor-pointer' : draggable ? 'cursor-grab' : ''}`}
     >
-      {item.status === 'done' && <Check size={11} className="shrink-0 text-ok" />}
+      {selectMode && selected && <Check size={11} className="shrink-0" />}
+      {!selectMode && item.status === 'done' && <Check size={11} className="shrink-0 text-ok" />}
       <span className="truncate">
         {showBranch && item.branchName ? `${item.branchName.replace('점', '')}·` : ''}
         {item.title}
       </span>
     </span>
+  );
+}
+
+function TopicChip({
+  item,
+  onOpen,
+  draggable,
+  onDragStart,
+  selectMode,
+  selected,
+  onToggle,
+}: {
+  item: TopicItem;
+  onOpen?: (item: TopicItem) => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  selectMode?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <button
+      draggable={draggable && !selectMode}
+      onDragStart={onDragStart}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (selectMode) {
+          onToggle?.();
+          return;
+        }
+        onOpen?.(item);
+      }}
+      className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium ${topicChipClass(item)} ${
+        selected ? selectedRing : ''
+      } ${selectMode ? 'cursor-pointer' : draggable ? 'cursor-grab' : ''}`}
+    >
+      {selectMode && selected && <Check size={11} className="shrink-0" />}
+      {!selectMode && item.status === 'uploaded' && <Check size={11} className="shrink-0" />}
+      <span className="truncate">카드 · {item.material}</span>
+    </button>
   );
 }
 
@@ -122,6 +179,12 @@ export default function CalendarGrid({
   onOpenPublished,
   onOpenTopic,
   showBranch,
+  canEdit,
+  onMove,
+  selectMode = false,
+  selSchedule,
+  selTopics,
+  onToggleSelect,
 }: {
   month: string;
   days: Record<string, CalendarDay>;
@@ -131,9 +194,18 @@ export default function CalendarGrid({
   onOpenPublished: (item: PublishedItem) => void;
   onOpenTopic?: (item: TopicItem) => void;
   showBranch: boolean;
+  canEdit?: boolean;
+  /** 칩을 다른 날짜로 드래그해서 놓으면 호출 (PC 전용) */
+  onMove?: (kind: PlanKind, id: string, date: string) => void;
+  selectMode?: boolean;
+  selSchedule?: Set<string>;
+  selTopics?: Set<string>;
+  onToggleSelect?: (kind: PlanKind, id: string) => void;
 }) {
   const cells = buildCells(month);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [drag, setDrag] = useState<{ kind: PlanKind; id: string; from: string } | null>(null);
+  const [dropDate, setDropDate] = useState<string | null>(null);
 
   const showTooltip = (item: PublishedItem, rect: DOMRect) => {
     const x = Math.max(8, Math.min(rect.left, window.innerWidth - TOOLTIP_W - 8));
@@ -147,6 +219,24 @@ export default function CalendarGrid({
       onSelect(date);
     }
   };
+
+  const draggableChips = !!canEdit && !!onMove && !selectMode;
+
+  const handleDrop = (date: string) => {
+    const d = drag;
+    setDrag(null);
+    setDropDate(null);
+    if (!d || !onMove || d.from === date) return;
+    onMove(d.kind, d.id, date);
+  };
+
+  const chipProps = (kind: PlanKind, id: string, from: string) => ({
+    draggable: draggableChips,
+    onDragStart: () => setDrag({ kind, id, from }),
+    selectMode,
+    selected: kind === 'schedule' ? selSchedule?.has(id) : selTopics?.has(id),
+    onToggle: onToggleSelect ? () => onToggleSelect(kind, id) : undefined,
+  });
 
   return (
     <>
@@ -165,16 +255,17 @@ export default function CalendarGrid({
         <div className="grid grid-cols-7">
           {cells.map((date, i) => {
             if (!date) return <div key={`pad-${i}`} className="min-h-[6.5rem] border-b border-r border-line/60 bg-canvas/40" />;
-            const day = days[date];
-            const topics = day?.topics ?? [];
-            const total = (day?.schedule.length ?? 0) + (day?.published.length ?? 0) + topics.length;
+            const day = days[date] ?? EMPTY_DAY;
+            const topics = day.topics;
+            const total = day.schedule.length + day.published.length + topics.length;
             const shown = [
               ...topics.slice(0, 1).map((t) => ({ kind: 'topic' as const, t })),
-              ...(day?.schedule.slice(0, 2) ?? []).map((s) => ({ kind: 'schedule' as const, s })),
-              ...(day?.published.slice(0, 1) ?? []).map((p) => ({ kind: 'published' as const, p })),
+              ...day.schedule.slice(0, 2).map((s) => ({ kind: 'schedule' as const, s })),
+              ...day.published.slice(0, 1).map((p) => ({ kind: 'published' as const, p })),
             ].slice(0, 3);
             const isToday = date === todayStr;
             const isSelected = date === selectedDate;
+            const isDropTarget = drag !== null && dropDate === date && drag.from !== date;
             return (
               <div
                 key={date}
@@ -182,8 +273,15 @@ export default function CalendarGrid({
                 tabIndex={0}
                 onClick={() => onSelect(date)}
                 onKeyDown={selectKeyDown(date)}
+                onDragOver={(e) => {
+                  if (!drag) return;
+                  e.preventDefault();
+                  setDropDate(date);
+                }}
+                onDragLeave={() => setDropDate((d) => (d === date ? null : d))}
+                onDrop={() => handleDrop(date)}
                 className={`min-h-[6.5rem] cursor-pointer border-b border-r border-line/60 p-1.5 text-left align-top transition ${
-                  isSelected ? 'bg-brand-wash' : 'hover:bg-canvas'
+                  isDropTarget ? 'bg-brand-wash ring-2 ring-inset ring-brand' : isSelected ? 'bg-brand-wash' : 'hover:bg-canvas'
                 }`}
               >
                 <span
@@ -196,9 +294,15 @@ export default function CalendarGrid({
                 <div className="mt-1 space-y-0.5">
                   {shown.map((c, j) =>
                     c.kind === 'topic' ? (
-                      <TopicChip key={`t-${j}`} item={c.t} onOpen={onOpenTopic} />
+                      <TopicChip key={`t-${j}`} item={c.t} onOpen={onOpenTopic} {...chipProps('topic', c.t.id, date)} />
                     ) : c.kind === 'schedule' ? (
-                      <ScheduleChip key={`s-${j}`} item={c.s} showBranch={showBranch} todayStr={todayStr} />
+                      <ScheduleChip
+                        key={`s-${j}`}
+                        item={c.s}
+                        showBranch={showBranch}
+                        todayStr={todayStr}
+                        {...chipProps('schedule', c.s.id, date)}
+                      />
                     ) : (
                       <PublishedChip
                         key={`p-${j}`}
@@ -218,6 +322,11 @@ export default function CalendarGrid({
             );
           })}
         </div>
+        {draggableChips && (
+          <p className="border-t border-line/60 px-3 py-1.5 text-[11px] text-ink-faint">
+            칩을 끌어서 다른 날짜에 놓으면 일정이 옮겨져요.
+          </p>
+        )}
       </div>
 
       {/* hover 툴팁 — fixed 라 그리드 overflow 에 안 잘림 */}
@@ -242,7 +351,7 @@ export default function CalendarGrid({
         </div>
       )}
 
-      {/* 모바일: 항목 있는 날짜 리스트 (오늘 포함) — 칩 탭 = 상세 팝업 */}
+      {/* 모바일: 항목 있는 날짜 리스트 (오늘 포함) — 칩 탭 = 상세 팝업 (날짜 이동은 수정 창에서) */}
       <div className="space-y-2 md:hidden">
         {cells
           .filter((d): d is string => !!d && (!!days[d] || d === todayStr))
@@ -266,10 +375,16 @@ export default function CalendarGrid({
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {day.topics.map((t) => (
-                    <TopicChip key={t.id} item={t} onOpen={onOpenTopic} />
+                    <TopicChip key={t.id} item={t} onOpen={onOpenTopic} {...chipProps('topic', t.id, date)} />
                   ))}
                   {day.schedule.map((s) => (
-                    <ScheduleChip key={s.id} item={s} showBranch={showBranch} todayStr={todayStr} />
+                    <ScheduleChip
+                      key={s.id}
+                      item={s}
+                      showBranch={showBranch}
+                      todayStr={todayStr}
+                      {...chipProps('schedule', s.id, date)}
+                    />
                   ))}
                   {day.published.map((p) => (
                     <PublishedChip key={`${p.kind}-${p.id}`} item={p} showBranch={showBranch} onOpen={onOpenPublished} />

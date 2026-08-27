@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PenLine, Film, Plus, Check, RotateCcw, Bell, Clapperboard } from 'lucide-react';
 import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
 import { isOverdue, TOPIC_STATUS_LABEL } from '@/lib/contentCalendar';
-import { scheduleChipClass, topicChipClass, TYPE_LABEL } from './CalendarGrid';
+import { scheduleChipClass, topicChipClass, TYPE_LABEL, type PlanKind } from './CalendarGrid';
 
 /** YYYY-MM-DD 간 경과 일수 (b - a) */
 function daysBetween(a: string, b: string): number {
@@ -23,6 +23,10 @@ export default function DayDetail({
   onEdit,
   onOpenPublished,
   onEditTopic,
+  selectMode = false,
+  selSchedule,
+  selTopics,
+  onToggleSelect,
 }: {
   date: string;
   day: CalendarDay;
@@ -33,6 +37,10 @@ export default function DayDetail({
   onEdit: (item: ScheduleItem) => void;
   onOpenPublished: (item: PublishedItem) => void;
   onEditTopic?: (item: TopicItem) => void;
+  selectMode?: boolean;
+  selSchedule?: Set<string>;
+  selTopics?: Set<string>;
+  onToggleSelect?: (kind: PlanKind, id: string) => void;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -92,11 +100,19 @@ export default function DayDetail({
         <ul className="mt-3 space-y-2">
           {day.topics.map((t) => (
             <li key={t.id} className="flex items-center gap-2">
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  checked={selTopics?.has(t.id) ?? false}
+                  onChange={() => onToggleSelect?.('topic', t.id)}
+                  className="h-4 w-4 shrink-0 accent-brand"
+                />
+              )}
               <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${topicChipClass(t)}`}>
                 카드뉴스
               </span>
               <button
-                onClick={() => onEditTopic?.(t)}
+                onClick={() => (selectMode ? onToggleSelect?.('topic', t.id) : onEditTopic?.(t))}
                 className={`min-w-0 flex-1 truncate text-left text-sm font-medium ${
                   t.status === 'skipped' ? 'text-ink-faint line-through' : ''
                 }`}
@@ -136,13 +152,21 @@ export default function DayDetail({
             const overdue = isOverdue(s, todayStr);
             return (
               <li key={s.id} className="flex items-center gap-2">
+                {selectMode && (
+                  <input
+                    type="checkbox"
+                    checked={selSchedule?.has(s.id) ?? false}
+                    onChange={() => onToggleSelect?.('schedule', s.id)}
+                    className="h-4 w-4 shrink-0 accent-brand"
+                  />
+                )}
                 <span
                   className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold ${scheduleChipClass(s, todayStr)}`}
                 >
                   {TYPE_LABEL[s.content_type]}
                 </span>
                 <button
-                  onClick={() => canEdit && onEdit(s)}
+                  onClick={() => (selectMode ? onToggleSelect?.('schedule', s.id) : canEdit && onEdit(s))}
                   className={`min-w-0 flex-1 truncate text-left text-sm font-medium ${
                     s.status === 'canceled' ? 'text-ink-faint line-through' : ''
                   }`}
