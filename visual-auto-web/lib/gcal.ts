@@ -8,7 +8,7 @@ import { google } from 'googleapis';
 
 export interface GcalScheduleItem {
   id: string;
-  content_type: 'blog' | 'reels' | 'etc';
+  content_type: 'blog' | 'reels' | 'cardnews' | 'etc';
   title: string;
   scheduled_date: string; // YYYY-MM-DD
   status: 'planned' | 'done' | 'canceled';
@@ -20,13 +20,15 @@ export interface GcalScheduleItem {
 const TYPE_LABEL: Record<GcalScheduleItem['content_type'], string> = {
   blog: '블로그',
   reels: '릴스',
+  cardnews: '카드뉴스',
   etc: '콘텐츠',
 };
 
-// 구글 캘린더 colorId: 블로그=블루베리(9), 릴스=토마토(11), 기타=바나나(5)
+// 구글 캘린더 colorId: 블로그=블루베리(9), 릴스=토마토(11), 카드뉴스=세이지(2), 기타=바나나(5)
 const TYPE_COLOR: Record<GcalScheduleItem['content_type'], string> = {
   blog: '9',
   reels: '11',
+  cardnews: '2',
   etc: '5',
 };
 

@@ -49,6 +49,11 @@ create policy cardnews_topics_write on cardnews_topics for all
 -- 콘텐츠 일정(계획)에도 레퍼런스 영상 링크 — 기획할 때 릴스 레퍼런스를 함께 저장
 alter table content_schedule add column if not exists reference_url text;
 
+-- 콘텐츠 일정 유형에 '카드뉴스' 추가 (기획 짜기·일정 추가에서 선택 가능)
+alter table content_schedule drop constraint if exists content_schedule_content_type_check;
+alter table content_schedule add constraint content_schedule_content_type_check
+  check (content_type in ('blog','reels','cardnews','etc'));
+
 -- ── 방어 블록: 이 파일의 이전 버전(status planned/done/skipped)을 이미 실행했던 경우 ──
 -- 새로 실행하는 경우엔 위 create table 이 이미 새 상태값을 쓰므로 아래는 사실상 no-op (idempotent)
 alter table cardnews_topics add column if not exists reference_url text;

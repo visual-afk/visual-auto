@@ -11,7 +11,7 @@ import { upsertScheduleEvent, type GcalScheduleItem } from '@/lib/gcal';
  */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TYPES: ContentType[] = ['blog', 'reels', 'etc'];
+const TYPES: ContentType[] = ['blog', 'reels', 'cardnews', 'etc'];
 
 /** GET ?month=YYYY-MM&branch_id=<uuid|all> — 해당 월 일정 목록 (클라이언트 갱신용) */
 export async function GET(request: Request) {

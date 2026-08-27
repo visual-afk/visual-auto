@@ -34,12 +34,14 @@ export function scheduleChipClass(item: ScheduleItem, todayStr?: string): string
   if (todayStr && isOverdue(item, todayStr)) return 'bg-warn/15 text-warn ring-1 ring-warn/40';
   if (item.content_type === 'blog') return 'bg-brand-wash text-brand';
   if (item.content_type === 'reels') return 'bg-warn/15 text-warn';
+  if (item.content_type === 'cardnews') return 'bg-ok/15 text-ok';
   return 'bg-ink-faint/15 text-ink-soft';
 }
 
 export const TYPE_LABEL: Record<ScheduleItem['content_type'], string> = {
   blog: '블로그',
   reels: '릴스',
+  cardnews: '카드뉴스',
   etc: '기타',
 };
 

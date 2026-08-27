@@ -8,7 +8,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { kstMonthRangeUtc, kstThisMonth } from '@/lib/kst';
 
 export type ScheduleStatus = 'planned' | 'done' | 'canceled';
-export type ContentType = 'blog' | 'reels' | 'etc';
+export type ContentType = 'blog' | 'reels' | 'cardnews' | 'etc';
 
 export interface ScheduleItem {
   id: string;

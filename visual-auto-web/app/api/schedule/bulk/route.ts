@@ -10,7 +10,7 @@ import { upsertScheduleEvent, type GcalScheduleItem } from '@/lib/gcal';
  */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TYPES: ContentType[] = ['blog', 'reels', 'etc'];
+const TYPES: ContentType[] = ['blog', 'reels', 'cardnews', 'etc'];
 const MAX_ROWS = 50;
 
 interface BulkItem {
