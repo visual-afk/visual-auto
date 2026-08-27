@@ -22,7 +22,7 @@ function TopicChip({ item, onOpen }: { item: TopicItem; onOpen?: (item: TopicIte
       }}
       className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium ${topicChipClass(item)}`}
     >
-      {item.status === 'done' && <Check size={11} className="shrink-0" />}
+      {item.status === 'uploaded' && <Check size={11} className="shrink-0" />}
       <span className="truncate">카드 · {item.material}</span>
     </button>
   );
@@ -34,12 +34,14 @@ export function scheduleChipClass(item: ScheduleItem, todayStr?: string): string
   if (todayStr && isOverdue(item, todayStr)) return 'bg-warn/15 text-warn ring-1 ring-warn/40';
   if (item.content_type === 'blog') return 'bg-brand-wash text-brand';
   if (item.content_type === 'reels') return 'bg-warn/15 text-warn';
+  if (item.content_type === 'cardnews') return 'bg-ok/15 text-ok';
   return 'bg-ink-faint/15 text-ink-soft';
 }
 
 export const TYPE_LABEL: Record<ScheduleItem['content_type'], string> = {
   blog: '블로그',
   reels: '릴스',
+  cardnews: '카드뉴스',
   etc: '기타',
 };
 

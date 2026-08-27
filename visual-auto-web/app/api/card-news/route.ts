@@ -237,11 +237,11 @@ export async function POST(request: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // 편성 기반이면 주제 행에 역링크 + 완료 표시 (best-effort — 실패해도 카드뉴스는 유효)
+    // 편성 기반이면 주제 행에 역링크 (상태는 안 바꾼다 — 촬영·업로드는 보드에서 사람이 옮김)
     if (topicRow) {
       await admin
         .from('cardnews_topics')
-        .update({ card_news_id: row.id, status: 'done', updated_at: new Date().toISOString() })
+        .update({ card_news_id: row.id, updated_at: new Date().toISOString() })
         .eq('id', topicRow.id);
     }
 

@@ -183,6 +183,7 @@ export default function BulkPlanner({
             <select className={field} value={autoType} onChange={(e) => setAutoType(e.target.value as ContentType)}>
               <option value="blog">블로그</option>
               <option value="reels">릴스</option>
+              <option value="cardnews">카드뉴스</option>
               <option value="etc">기타</option>
             </select>
             <button
@@ -236,6 +237,7 @@ export default function BulkPlanner({
                   >
                     <option value="blog">블로그</option>
                     <option value="reels">릴스</option>
+                    <option value="cardnews">카드뉴스</option>
                     <option value="etc">기타</option>
                   </select>
                   <input

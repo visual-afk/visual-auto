@@ -107,7 +107,7 @@ export default function ScheduleEditor({
 
         <div className="mt-4 space-y-3">
           <div className="flex gap-2">
-            {(['blog', 'reels', 'etc'] as const).map((t) => (
+            {(['blog', 'reels', 'cardnews', 'etc'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setContentType(t)}
@@ -115,7 +115,7 @@ export default function ScheduleEditor({
                   contentType === t ? 'bg-brand text-brand-ink' : 'border border-line bg-surface text-ink-soft'
                 }`}
               >
-                {t === 'blog' ? '블로그' : t === 'reels' ? '릴스' : '기타'}
+                {t === 'blog' ? '블로그' : t === 'reels' ? '릴스' : t === 'cardnews' ? '카드뉴스' : '기타'}
               </button>
             ))}
           </div>

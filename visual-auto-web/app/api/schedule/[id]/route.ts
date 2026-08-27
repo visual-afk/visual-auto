@@ -7,7 +7,7 @@ import { upsertScheduleEvent, deleteScheduleEvent, type GcalScheduleItem } from 
 /** 콘텐츠 일정 수정/삭제 — 본사·해당 지점 원장만. 구글 캘린더 동기화는 best-effort. */
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TYPES: ContentType[] = ['blog', 'reels', 'etc'];
+const TYPES: ContentType[] = ['blog', 'reels', 'cardnews', 'etc'];
 const STATUSES: ScheduleStatus[] = ['planned', 'done', 'canceled'];
 
 const SELECT =

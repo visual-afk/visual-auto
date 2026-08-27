@@ -8,7 +8,7 @@ import { getAdminSupabase } from '@/lib/supabase/admin';
 import { kstMonthRangeUtc, kstThisMonth } from '@/lib/kst';
 
 export type ScheduleStatus = 'planned' | 'done' | 'canceled';
-export type ContentType = 'blog' | 'reels' | 'etc';
+export type ContentType = 'blog' | 'reels' | 'cardnews' | 'etc';
 
 export interface ScheduleItem {
   id: string;
@@ -57,11 +57,22 @@ export interface TopicItem {
   verify_needed: boolean;
   fact_confirmed: boolean;
   live_slot: boolean;
-  status: 'planned' | 'done' | 'skipped';
+  status: TopicStatus;
   memo: string | null;
   reference_url: string | null; // 릴스 등 레퍼런스 영상 링크
   card_news_id: string | null;
 }
+
+/** 제작 파이프라인: 기획중 → 레퍼런스 → 촬영완료 → 업로드완료 (+건너뜀) */
+export type TopicStatus = 'planning' | 'reference' | 'filmed' | 'uploaded' | 'skipped';
+
+export const TOPIC_STATUS_LABEL: Record<TopicStatus, string> = {
+  planning: '기획중',
+  reference: '레퍼런스',
+  filmed: '촬영완료',
+  uploaded: '업로드완료',
+  skipped: '건너뜀',
+};
 
 export interface CalendarDay {
   schedule: ScheduleItem[];

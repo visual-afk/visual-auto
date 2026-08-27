@@ -8,7 +8,7 @@ import { google } from 'googleapis';
 
 export interface GcalScheduleItem {
   id: string;
-  content_type: 'blog' | 'reels' | 'etc';
+  content_type: 'blog' | 'reels' | 'cardnews' | 'etc';
   title: string;
   scheduled_date: string; // YYYY-MM-DD
   status: 'planned' | 'done' | 'canceled';
@@ -20,13 +20,15 @@ export interface GcalScheduleItem {
 const TYPE_LABEL: Record<GcalScheduleItem['content_type'], string> = {
   blog: '블로그',
   reels: '릴스',
+  cardnews: '카드뉴스',
   etc: '콘텐츠',
 };
 
-// 구글 캘린더 colorId: 블로그=블루베리(9), 릴스=토마토(11), 기타=바나나(5)
+// 구글 캘린더 colorId: 블로그=블루베리(9), 릴스=토마토(11), 카드뉴스=세이지(2), 기타=바나나(5)
 const TYPE_COLOR: Record<GcalScheduleItem['content_type'], string> = {
   blog: '9',
   reels: '11',
+  cardnews: '2',
   etc: '5',
 };
 
@@ -108,16 +110,24 @@ export interface GcalTopicItem {
   section?: string | null;
   frame?: string | null;
   fact_seed?: string | null;
-  status: 'planned' | 'done' | 'skipped';
+  status: 'planning' | 'reference' | 'filmed' | 'uploaded' | 'skipped';
   memo?: string | null;
   reference_url?: string | null;
   gcal_event_id?: string | null;
 }
 
+const TOPIC_STATUS_LABEL: Record<GcalTopicItem['status'], string> = {
+  planning: '기획중',
+  reference: '레퍼런스',
+  filmed: '촬영완료',
+  uploaded: '업로드완료',
+  skipped: '건너뜀',
+};
+
 const TOPIC_COLOR = '2'; // 세이지(초록) — 콘텐츠 일정 색과 구분
 
 function buildTopicEventBody(item: GcalTopicItem, brandName: string | null) {
-  const statusLabel = item.status === 'done' ? '완료' : item.status === 'skipped' ? '건너뜀' : '예정';
+  const statusLabel = TOPIC_STATUS_LABEL[item.status] ?? '기획중';
   return {
     summary: `[${brandName ?? '카드뉴스'}] ${item.material}`,
     description: [
