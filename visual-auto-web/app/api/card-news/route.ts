@@ -71,15 +71,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '원본 글이나 주제가 필요해요' }, { status: 400 });
   }
 
+  // 주제 기반 사진형: 업로드된 사진 경로(post-photos 버킷) 배열
+  const providedPhotos: string[] = Array.isArray(body.photos)
+    ? body.photos.filter((p: unknown): p is string => typeof p === 'string' && p.length > 0).slice(0, MAX_CARDS)
+    : [];
+  if (!post && body.mode === 'image' && providedPhotos.length === 0) {
+    return NextResponse.json({ error: '사진을 한 장 이상 올려주세요' }, { status: 400 });
+  }
+
   const frame = await getFrameFor(branchId);
-  // 주제 기반은 사진이 없어 항상 정보형 카드로 만든다 (프레임이 image여도).
-  const mode: 'info' | 'image' = post ? frame.mode : 'info';
+  // 글 기반은 프레임 모드를 따른다. 주제 기반은 사진형 요청(+사진 있음)이면 image, 아니면 info.
+  const mode: 'info' | 'image' = post
+    ? frame.mode
+    : body.mode === 'image' && providedPhotos.length > 0
+      ? 'image'
+      : 'info';
   if (!canMakeCardNews(member.role, mode)) {
     return NextResponse.json({ error: '카드뉴스는 지금 본사만 만들 수 있어요' }, { status: 403 });
   }
 
   try {
-    const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
+    const promptName =
+      mode === 'image'
+        ? post
+          ? 'card-news-image'
+          : 'card-news-image-topic'
+        : post
+          ? 'card-news-info'
+          : 'card-news-topic';
     const prompt = await loadPromptFor(promptName, branchId);
     const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
     const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
@@ -127,27 +146,29 @@ export async function POST(request: Request) {
         sections.CTA_BODY?.trim() ?? '프로필 링크 ↓',
       );
     } else {
-      // image 모드는 post 기반에서만 도달한다 (주제 기반은 위에서 info로 강제).
-      const p = post!;
-      const photos = (Array.isArray(p.photos) ? (p.photos as PostPhoto[]) : []).slice(0, MAX_CARDS);
-      const phraseCount = Math.max(photos.length, 3);
+      // image: 글 기반이면 post.photos, 주제 기반이면 업로드된 photos 경로.
+      const photoPaths: string[] = post
+        ? (Array.isArray(post.photos) ? (post.photos as PostPhoto[]).map((ph) => ph.storage_path) : []).slice(0, MAX_CARDS)
+        : providedPhotos;
+      const phraseCount = Math.max(photoPaths.length, post ? 3 : 1);
+      const material = post
+        ? [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? '']
+        : [`주제: ${topic}`];
       const sections = await callAIDelimited(
         {
           system,
           userMessage: [
             `브랜드/지점: ${branchName}`,
-            `블로그 글 제목: ${p.title ?? ''}`,
-            '본문:',
-            p.content ?? '',
+            ...material,
             '',
-            `사진 수: ${phraseCount} — 한 줄 문구도 정확히 ${phraseCount}개.`,
+            `사진 수: ${phraseCount} — 한 줄 문구(헤드라인)도 정확히 ${phraseCount}개.`,
           ].join('\n'),
           temperature: 0.6,
           maxTokens: 3000,
         },
         [
-          { name: 'PHRASES', description: `한 줄 문구 ${phraseCount}개, 한 줄에 하나씩` },
-          { name: 'CAPTION', description: '인스타 캡션 (지역+시술/고민/결과/예약 유도 4줄)' },
+          { name: 'PHRASES', description: `한 줄 문구(헤드라인) ${phraseCount}개, 한 줄에 하나씩` },
+          { name: 'CAPTION', description: '인스타 캡션' },
           { name: 'HASHTAGS', description: '해시태그 8~10개 한 줄' },
         ],
       );
@@ -155,11 +176,13 @@ export async function POST(request: Request) {
         .split('\n')
         .map((l) => l.replace(/^[-*\d.)\s]+/, '').trim())
         .filter(Boolean);
-      const slots: ImageCard[] = (photos.length ? photos : Array.from({ length: 3 }, () => null)).map((p, i, arr) => ({
+      const basis: string[] = photoPaths.length ? photoPaths : Array.from({ length: phraseCount }, () => '');
+      const slots: ImageCard[] = basis.map((path, i, arr) => ({
         idx: i,
-        photo_path: p ? p.storage_path : '',
+        photo_path: path,
         phrase: phrases[i] ?? '',
-        is_cta: i === arr.length - 1,
+        // 살롱(글 기반)만 마지막 카드에 예약 배지. 주제형(뉴스·매거진)은 헤드라인만.
+        is_cta: post ? i === arr.length - 1 : false,
       }));
       cards = slots;
       cardCount = slots.length;

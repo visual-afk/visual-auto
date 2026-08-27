@@ -243,7 +243,8 @@ function ImageCardView({
   pageIndex: number;
   pageCount: number;
 }) {
-  const ink = tokens.ink || '#FFFFFF';
+  // 자막은 하단 어두운 그라데이션 위에 얹히므로 항상 밝게 (브랜드 ink가 어두워도 흰색으로).
+  const ink = readable('#111111', tokens.ink || '#FFFFFF');
   return (
     <div
       style={{
