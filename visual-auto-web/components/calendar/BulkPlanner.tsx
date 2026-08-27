@@ -13,6 +13,7 @@ interface Row {
   title: string;
   scheduled_date: string;
   assignee_id: string;
+  reference_url: string;
 }
 
 /** 월 기획 일괄 등록 모달 — 표 형태로 여러 행을 채우고 한 번에 저장 (/api/schedule/bulk) */
@@ -39,6 +40,7 @@ export default function BulkPlanner({
     title: '',
     scheduled_date: base?.scheduled_date ?? defaultDate,
     assignee_id: '',
+    reference_url: '',
   });
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [errors, setErrors] = useState<Record<number, string>>({}); // rows 배열 index 기준
@@ -65,6 +67,7 @@ export default function BulkPlanner({
           title: r.title.trim(),
           scheduled_date: r.scheduled_date,
           assignee_id: r.assignee_id || null,
+          reference_url: r.reference_url.trim() || null,
         })),
       }),
     });
@@ -165,6 +168,13 @@ export default function BulkPlanner({
                   >
                     <Trash2 size={15} />
                   </button>
+                  <input
+                    type="url"
+                    className={`${field} col-span-2 md:col-span-6`}
+                    placeholder="레퍼런스 영상 링크 (인스타 릴스 URL 등, 선택)"
+                    value={r.reference_url}
+                    onChange={(e) => update(r.key, { reference_url: e.target.value })}
+                  />
                 </div>
                 {err && <p className="mt-1 px-1 text-xs text-warn">{err}</p>}
               </div>

@@ -20,6 +20,7 @@ interface BulkItem {
   scheduled_date?: string;
   assignee_id?: string | null;
   memo?: string | null;
+  reference_url?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
     scheduled_date: it.scheduled_date!,
     assignee_id: it.assignee_id || null,
     memo: it.memo ? String(it.memo) : null,
+    reference_url: it.reference_url ? String(it.reference_url).trim() : null,
     created_by: member.userId,
   }));
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
   const { data, error } = await admin
     .from('content_schedule')
     .insert(rows)
-    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, post_id, reel_id');
+    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, reference_url, post_id, reel_id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const saved = data ?? [];
 

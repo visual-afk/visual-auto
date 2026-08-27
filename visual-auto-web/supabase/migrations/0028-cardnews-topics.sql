@@ -24,6 +24,7 @@ create table if not exists cardnews_topics (
   live_slot boolean not null default false, -- 라이브 슬롯 (신제품·트렌드로 교체 가능)
   status text not null default 'planned' check (status in ('planned','done','skipped')),
   memo text,
+  reference_url text,                       -- 릴스 등 레퍼런스 영상 링크 (기획 참고용)
   card_news_id uuid references card_news(id) on delete set null, -- 이 주제로 만든 카드뉴스
   gcal_event_id text,                       -- 구글캘린더 내보내기 결과 (없으면 미전송)
   created_by uuid references auth.users(id) on delete set null,
@@ -43,3 +44,6 @@ drop policy if exists cardnews_topics_write on cardnews_topics;
 create policy cardnews_topics_write on cardnews_topics for all
   using (is_hq() or (my_role() = 'branch_owner' and branch_id in (select my_branch_ids())))
   with check (is_hq() or (my_role() = 'branch_owner' and branch_id in (select my_branch_ids())));
+
+-- 콘텐츠 일정(계획)에도 레퍼런스 영상 링크 — 기획할 때 릴스 레퍼런스를 함께 저장
+alter table content_schedule add column if not exists reference_url text;

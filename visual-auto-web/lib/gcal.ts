@@ -13,6 +13,7 @@ export interface GcalScheduleItem {
   scheduled_date: string; // YYYY-MM-DD
   status: 'planned' | 'done' | 'canceled';
   memo?: string | null;
+  reference_url?: string | null;
   gcal_event_id?: string | null;
 }
 
@@ -55,6 +56,7 @@ function buildEventBody(item: GcalScheduleItem, branchName: string | null) {
       `APP:${item.id}`, // 웹앱 일정 고유 마커
       branchName ? `지점: ${branchName}` : '',
       `상태: ${statusLabel}`,
+      item.reference_url ? `레퍼런스: ${item.reference_url}` : '',
       item.memo ? `메모: ${item.memo}` : '',
     ]
       .filter(Boolean)
@@ -108,6 +110,7 @@ export interface GcalTopicItem {
   fact_seed?: string | null;
   status: 'planned' | 'done' | 'skipped';
   memo?: string | null;
+  reference_url?: string | null;
   gcal_event_id?: string | null;
 }
 
@@ -123,6 +126,7 @@ function buildTopicEventBody(item: GcalTopicItem, brandName: string | null) {
       item.frame ? `프레임: ${item.frame}` : '',
       item.fact_seed ? `팩트 시드: ${item.fact_seed}` : '',
       `상태: ${statusLabel}`,
+      item.reference_url ? `레퍼런스: ${item.reference_url}` : '',
       item.memo ? `메모: ${item.memo}` : '',
     ]
       .filter(Boolean)

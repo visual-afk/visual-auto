@@ -23,6 +23,7 @@ export default function TopicEditor({ topic, onClose }: { topic: TopicItem; onCl
   const [bubble, setBubble] = useState(topic.bubble ?? '');
   const [factConfirmed, setFactConfirmed] = useState(topic.fact_confirmed);
   const [status, setStatus] = useState<TopicItem['status']>(topic.status);
+  const [referenceUrl, setReferenceUrl] = useState(topic.reference_url ?? '');
   const [memo, setMemo] = useState(topic.memo ?? '');
   const [busy, setBusy] = useState<'save' | 'delete' | 'create' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +50,7 @@ export default function TopicEditor({ topic, onClose }: { topic: TopicItem; onCl
         bubble: bubble.trim(),
         fact_confirmed: factConfirmed,
         status,
+        reference_url: referenceUrl.trim(),
         memo: memo.trim(),
       }),
     });
@@ -154,6 +156,27 @@ export default function TopicEditor({ topic, onClose }: { topic: TopicItem; onCl
 
           <input className={field} placeholder="헤드라인 초안 (선택 — 생성 시 표지 훅 후보로)" value={headline} onChange={(e) => setHeadline(e.target.value)} />
           <input className={field} placeholder="말풍선 대사 (선택 — 팩트 당사자의 1인칭 유머)" value={bubble} onChange={(e) => setBubble(e.target.value)} />
+
+          <div className="flex items-center gap-2">
+            <input
+              type="url"
+              className={field}
+              placeholder="레퍼런스 영상 링크 (인스타 릴스 URL 등, 선택)"
+              value={referenceUrl}
+              onChange={(e) => setReferenceUrl(e.target.value)}
+            />
+            {topic.reference_url && (
+              <a
+                href={topic.reference_url}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-xl border border-line p-2.5 text-ink-soft hover:border-brand hover:text-brand"
+                aria-label="레퍼런스 영상 열기"
+              >
+                <ExternalLink size={15} />
+              </a>
+            )}
+          </div>
 
           <label className={`flex items-center gap-2 text-sm ${factWarn ? 'text-warn' : 'text-ink-soft'}`}>
             <input type="checkbox" checked={factConfirmed} onChange={(e) => setFactConfirmed(e.target.checked)} className="h-4 w-4 accent-brand" />

@@ -9,7 +9,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES = ['planned', 'done', 'skipped'] as const;
 
 const TOPIC_SELECT =
-  'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, card_news_id, gcal_event_id';
+  'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, reference_url, card_news_id, gcal_event_id';
 
 async function loadAndAuthorize(id: string, member: MemberContext) {
   if (!canManage(member.role)) {
@@ -23,7 +23,7 @@ async function loadAndAuthorize(id: string, member: MemberContext) {
   return { row };
 }
 
-const TEXT_FIELDS = ['material', 'frame', 'section', 'fact_seed', 'hint', 'headline_draft', 'bubble', 'memo'] as const;
+const TEXT_FIELDS = ['material', 'frame', 'section', 'fact_seed', 'hint', 'headline_draft', 'bubble', 'memo', 'reference_url'] as const;
 
 /** PATCH — 소재/프레임/팩트시드/헤드라인/말풍선/팩트확정/상태/메모/날짜 부분 수정 */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

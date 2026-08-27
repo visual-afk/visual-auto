@@ -11,7 +11,7 @@ const TYPES: ContentType[] = ['blog', 'reels', 'etc'];
 const STATUSES: ScheduleStatus[] = ['planned', 'done', 'canceled'];
 
 const SELECT =
-  'id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, post_id, reel_id, gcal_event_id';
+  'id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, reference_url, post_id, reel_id, gcal_event_id';
 
 async function loadAndAuthorize(id: string, member: MemberContext) {
   if (!canManage(member.role)) {
@@ -61,6 +61,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if ('assignee_id' in body) patch.assignee_id = body.assignee_id || null;
   if ('memo' in body) patch.memo = body.memo ? String(body.memo) : null;
+  if ('reference_url' in body) patch.reference_url = body.reference_url ? String(body.reference_url).trim() : null;
   if ('post_id' in body) patch.post_id = body.post_id || null;
   if ('reel_id' in body) patch.reel_id = body.reel_id || null;
 

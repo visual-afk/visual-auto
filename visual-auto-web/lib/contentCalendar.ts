@@ -21,6 +21,7 @@ export interface ScheduleItem {
   assigneeName: string | null;
   status: ScheduleStatus;
   memo: string | null;
+  reference_url: string | null; // 릴스 등 레퍼런스 영상 링크
   post_id: string | null;
   reel_id: string | null;
 }
@@ -58,6 +59,7 @@ export interface TopicItem {
   live_slot: boolean;
   status: 'planned' | 'done' | 'skipped';
   memo: string | null;
+  reference_url: string | null; // 릴스 등 레퍼런스 영상 링크
   card_news_id: string | null;
 }
 
@@ -119,7 +121,7 @@ async function fetchSchedule(branchIds: string[] | null, month: string): Promise
   const admin = getAdminSupabase();
   let q = admin
     .from('content_schedule')
-    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, post_id, reel_id')
+    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, reference_url, post_id, reel_id')
     .gte('scheduled_date', `${month}-01`)
     .lt('scheduled_date', nextMonthStart(month))
     .order('scheduled_date');
@@ -209,7 +211,7 @@ async function fetchTopics(branchIds: string[] | null, month: string): Promise<T
   let q = admin
     .from('cardnews_topics')
     .select(
-      'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, card_news_id',
+      'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, reference_url, card_news_id',
     )
     .gte('topic_date', `${month}-01`)
     .lt('topic_date', nextMonthStart(month))

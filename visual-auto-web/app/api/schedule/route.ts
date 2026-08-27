@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   let q = getAdminSupabase()
     .from('content_schedule')
-    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, post_id, reel_id')
+    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, reference_url, post_id, reel_id')
     .gte('scheduled_date', `${month}-01`)
     .lt('scheduled_date', nextMonthStart(month))
     .order('scheduled_date');
@@ -78,9 +78,10 @@ export async function POST(request: Request) {
       scheduled_date: body.scheduled_date,
       assignee_id: body.assignee_id || null,
       memo: body.memo ? String(body.memo) : null,
+      reference_url: body.reference_url ? String(body.reference_url).trim() : null,
       created_by: member.userId,
     })
-    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, post_id, reel_id')
+    .select('id, branch_id, content_type, title, scheduled_date, assignee_id, status, memo, reference_url, post_id, reel_id')
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

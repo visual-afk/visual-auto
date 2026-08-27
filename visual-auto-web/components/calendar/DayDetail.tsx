@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PenLine, Film, Plus, Check, RotateCcw, Bell } from 'lucide-react';
+import { PenLine, Film, Plus, Check, RotateCcw, Bell, Clapperboard } from 'lucide-react';
 import type { CalendarDay, ScheduleItem, PublishedItem, TopicItem } from '@/lib/contentCalendar';
 import { isOverdue } from '@/lib/contentCalendar';
 import { scheduleChipClass, topicChipClass, TYPE_LABEL } from './CalendarGrid';
@@ -115,6 +115,16 @@ export default function DayDetail({
                   <span className="ml-1.5 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-semibold text-ok">만듦</span>
                 )}
               </button>
+              {t.reference_url && (
+                <a
+                  href={t.reference_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-soft hover:border-brand hover:text-brand"
+                >
+                  <Clapperboard size={12} /> 레퍼런스
+                </a>
+              )}
             </li>
           ))}
         </ul>
@@ -148,6 +158,16 @@ export default function DayDetail({
                     </span>
                   )}
                 </button>
+                {s.reference_url && (
+                  <a
+                    href={s.reference_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2.5 py-1 text-xs text-ink-soft hover:border-brand hover:text-brand"
+                  >
+                    <Clapperboard size={12} /> 레퍼런스
+                  </a>
+                )}
                 {canEdit && overdue && (
                   <button
                     onClick={() => sendReminder(s)}

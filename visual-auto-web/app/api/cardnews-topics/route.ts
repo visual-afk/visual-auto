@@ -9,7 +9,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 const TOPIC_SELECT =
-  'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, card_news_id, gcal_event_id';
+  'id, branch_id, topic_date, entry_id, section, pool_label, material, frame, fact_seed, hint, headline_draft, bubble, verify_needed, fact_confirmed, live_slot, status, memo, reference_url, card_news_id, gcal_event_id';
 
 /** GET ?month=YYYY-MM&branch_id= — 한 달치 주제 (branch_id 없으면 볼 수 있는 브랜드 전체) */
 export async function GET(request: Request) {
