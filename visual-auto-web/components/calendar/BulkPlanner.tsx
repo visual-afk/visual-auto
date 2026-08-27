@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, Sparkles } from 'lucide-react';
 import type { ContentType } from '@/lib/contentCalendar';
 import type { AssigneeOpt, BranchOpt } from './ScheduleEditor';
 
@@ -14,7 +14,16 @@ interface Row {
   scheduled_date: string;
   assignee_id: string;
   reference_url: string;
+  memo?: string; // 자동 기획의 추천 이유
 }
+
+const CADENCE_OPTS = [
+  { value: 'daily', label: '매일' },
+  { value: 'weekdays', label: '평일 (주 5일)' },
+  { value: '3x', label: '주 3일 (월·수·금)' },
+  { value: '2x', label: '주 2일 (화·금)' },
+  { value: '1x', label: '주 1일 (수)' },
+] as const;
 
 /** 월 기획 일괄 등록 모달 — 표 형태로 여러 행을 채우고 한 번에 저장 (/api/schedule/bulk) */
 export default function BulkPlanner({
@@ -47,6 +56,47 @@ export default function BulkPlanner({
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // ── 자동으로 기획하기 ──
+  const [autoBranch, setAutoBranch] = useState(defaultBranchId);
+  const [cadence, setCadence] = useState<(typeof CADENCE_OPTS)[number]['value']>('3x');
+  const [autoType, setAutoType] = useState<ContentType>('blog');
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
+
+  async function autoFill() {
+    setAutoBusy(true);
+    setAutoNote(null);
+    setFormError(null);
+    const res = await fetch('/api/schedule/auto-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branch_id: autoBranch, month, cadence }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setAutoBusy(false);
+    if (!res.ok) {
+      setAutoNote(body.error || '자동 기획에 실패했어요');
+      return;
+    }
+    const items: { scheduled_date: string; title: string; reason?: string }[] = body.items ?? [];
+    setRows((rs) => {
+      const kept = rs.filter((r) => r.title.trim()); // 이미 입력한 행은 보존
+      let key = rs.length ? Math.max(...rs.map((r) => r.key)) + 1 : 0;
+      const generated = items.map((it) => ({
+        key: key++,
+        branch_id: autoBranch,
+        content_type: autoType,
+        title: it.title,
+        scheduled_date: it.scheduled_date,
+        assignee_id: '',
+        reference_url: '',
+        memo: it.reason || '',
+      }));
+      return [...kept, ...generated].slice(0, 50); // bulk API 상한
+    });
+    setAutoNote(body.note ?? `${items.length}일 채웠어요 — 주제를 다듬고 저장하세요`);
+  }
+
   const update = (key: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
@@ -68,6 +118,7 @@ export default function BulkPlanner({
           scheduled_date: r.scheduled_date,
           assignee_id: r.assignee_id || null,
           reference_url: r.reference_url.trim() || null,
+          memo: r.memo || null,
         })),
       }),
     });
@@ -105,6 +156,47 @@ export default function BulkPlanner({
           </button>
         </div>
         <p className="mt-0.5 text-xs text-ink-faint">행마다 날짜·지점·유형·주제·담당자를 채우고 한 번에 저장해요 (최대 50행).</p>
+
+        <div className="mt-3 rounded-xl border border-brand/30 bg-brand/5 p-3">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-brand">
+            <Sparkles size={14} /> 자동으로 기획하기
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-[1fr_1fr_5.5rem_auto] md:items-center">
+            {branchOpts.length > 1 ? (
+              <select className={field} value={autoBranch} onChange={(e) => setAutoBranch(e.target.value)}>
+                {branchOpts.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className={`${field} truncate text-ink-soft`}>{branchOpts[0]?.name ?? '지점'}</div>
+            )}
+            <select className={field} value={cadence} onChange={(e) => setCadence(e.target.value as typeof cadence)}>
+              {CADENCE_OPTS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <select className={field} value={autoType} onChange={(e) => setAutoType(e.target.value as ContentType)}>
+              <option value="blog">블로그</option>
+              <option value="reels">릴스</option>
+              <option value="etc">기타</option>
+            </select>
+            <button
+              onClick={autoFill}
+              disabled={autoBusy || !autoBranch}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-sm font-semibold text-brand-ink disabled:opacity-50"
+            >
+              {autoBusy ? '주제 뽑는 중…' : 'AI로 주제 채우기'}
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs text-ink-faint">
+            {autoNote ?? '주기를 고르면 이번 달 남은 날짜에 AI가 주제를 채워줘요. 이미 계획된 날짜는 건너뛰어요.'}
+          </p>
+        </div>
 
         <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {rows.map((r, i) => {
@@ -176,6 +268,7 @@ export default function BulkPlanner({
                     onChange={(e) => update(r.key, { reference_url: e.target.value })}
                   />
                 </div>
+                {r.memo && <p className="mt-1 truncate px-1 text-xs text-ink-faint">{r.memo}</p>}
                 {err && <p className="mt-1 px-1 text-xs text-warn">{err}</p>}
               </div>
             );
