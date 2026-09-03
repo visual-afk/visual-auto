@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { CardNewsMode, InfoCard, ImageCard } from '@/lib/cardnews/cards';
+import { clampLetterSpacing } from '@/lib/cardnews/cards';
 import type { CardFrameTokens } from '@/lib/cardnews/frames';
 
 /**
@@ -80,12 +81,15 @@ function Logo({ text, color }: { text: string; color: string }) {
   );
 }
 
+/** 흰 글씨가 어떤 사진 위에서도 읽히게 하는 그림자 (satori textShadow 지원 확인됨) */
+const TEXT_SHADOW = '0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.55)';
+
 /**
- * 사진 표지 (tokens.coverStyle === 'photo') — 밈뉴스 커버 문법.
- * 실사 배경(없으면 "사진 자리" placeholder) + 말풍선 + 하단 흰 헤드라인(검정 그림자).
+ * 사진 카드 (tokens.cardStyle === 'photo') — 밈뉴스 문법. 표지·포인트·CTA 모두 같은 문법으로 그린다.
+ * 실사 배경(없으면 "사진 자리" placeholder) + 하단 배지 + 흰 글씨(검정 그림자), 표지엔 말풍선.
  * satori 제약: 인라인 스타일 · flex만 · pseudo 요소 금지(말풍선 꼬리는 rotate 한 div).
  */
-function PhotoCoverView({
+function PhotoCardView({
   card,
   tokens,
   logo,
@@ -101,6 +105,11 @@ function PhotoCoverView({
   pageCount: number;
 }) {
   const point = tokens.point || '#B8865B';
+  const isCover = card.kind === 'cover';
+  const ls = clampLetterSpacing(card.letter_spacing);
+  // 하단 배지: 표지=브랜드, 포인트=번호, CTA=배지 문구
+  const badge = isCover ? logo : card.kind === 'cta' ? card.body || logo : `POINT ${String(card.idx).padStart(2, '0')}`;
+  const titleSize = isCover ? 84 : card.kind === 'cta' ? 80 : 72;
   return (
     <div
       style={{
@@ -153,7 +162,7 @@ function PhotoCoverView({
               whiteSpace: 'pre-wrap',
             }}
           >
-            {card.photo_hint || '표지 사진을 넣어주세요'}
+            {card.photo_hint || (isCover ? '표지 사진을 넣어주세요' : '이 카드에 넣을 사진')}
           </div>
         </div>
       )}
@@ -171,8 +180,8 @@ function PhotoCoverView({
         }}
       />
 
-      {/* 말풍선 — 컷아웃의 1인칭 대사 */}
-      {card.bubble ? (
+      {/* 말풍선 — 컷아웃의 1인칭 대사 (표지 전용) */}
+      {isCover && card.bubble ? (
         <div
           style={{
             display: 'flex',
@@ -226,35 +235,55 @@ function PhotoCoverView({
           alignItems: 'flex-start',
         }}
       >
+        {badge ? (
+          <div
+            style={{
+              display: 'flex',
+              marginBottom: 26,
+              padding: '14px 32px',
+              borderRadius: 14,
+              backgroundColor: point,
+              fontSize: 32,
+              fontWeight: 800,
+              letterSpacing: 5,
+              color: '#FFFFFF',
+            }}
+          >
+            {badge}
+          </div>
+        ) : null}
         <div
           style={{
             display: 'flex',
-            marginBottom: 28,
-            padding: '14px 32px',
-            borderRadius: 14,
-            backgroundColor: point,
-            fontSize: 34,
+            fontSize: titleSize,
             fontWeight: 800,
-            letterSpacing: 6,
-            color: '#FFFFFF',
-          }}
-        >
-          {logo}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            fontSize: 84,
-            fontWeight: 800,
+            letterSpacing: ls,
             lineHeight: 1.26,
             color: '#FFFFFF',
-            // 밝은 사진 위에서도 흰 글씨가 살도록 3겹 (satori textShadow 지원 확인됨)
-            textShadow: '0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.55)',
+            textShadow: TEXT_SHADOW,
             whiteSpace: 'pre-wrap',
           }}
         >
           {card.title}
         </div>
+        {card.kind === 'point' && card.body ? (
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 26,
+              fontSize: 42,
+              fontWeight: 600,
+              letterSpacing: ls,
+              lineHeight: 1.45,
+              color: '#FFFFFF',
+              opacity: 0.94,
+              textShadow: TEXT_SHADOW,
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.body}
+          </div>
+        ) : null}
         <div style={{ display: 'flex', marginTop: 36 }}>
           <Dots index={pageIndex} count={pageCount} color="#FFFFFF" />
         </div>
@@ -278,6 +307,7 @@ function InfoCardView({
   pageIndex: number;
   pageCount: number;
 }) {
+  const ls = clampLetterSpacing(card.letter_spacing);
   const base: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -288,19 +318,21 @@ function InfoCardView({
     fontFamily: FONT,
   };
 
+  // 사진 스타일 브랜드는 표지·포인트·CTA 전부 사진 카드로 (coverStyle 은 초기 이름 호환)
+  if (tokens.cardStyle === 'photo' || tokens.coverStyle === 'photo') {
+    return (
+      <PhotoCardView
+        card={card}
+        tokens={tokens}
+        logo={logo}
+        photoSrc={photoSrc}
+        pageIndex={pageIndex}
+        pageCount={pageCount}
+      />
+    );
+  }
+
   if (card.kind === 'cover') {
-    if (tokens.coverStyle === 'photo') {
-      return (
-        <PhotoCoverView
-          card={card}
-          tokens={tokens}
-          logo={logo}
-          photoSrc={photoSrc}
-          pageIndex={pageIndex}
-          pageCount={pageCount}
-        />
-      );
-    }
     const bg = tokens.bg ?? '#FFFFFF';
     const ink = readable(bg, tokens.ink);
     return (
@@ -314,6 +346,7 @@ function InfoCardView({
             display: 'flex',
             fontSize: 100,
             fontWeight: 800,
+            letterSpacing: ls,
             lineHeight: 1.28,
             color: ink,
             whiteSpace: 'pre-wrap',
@@ -341,6 +374,7 @@ function InfoCardView({
               display: 'flex',
               fontSize: 88,
               fontWeight: 800,
+              letterSpacing: ls,
               lineHeight: 1.3,
               color: ink,
               whiteSpace: 'pre-wrap',
@@ -394,6 +428,7 @@ function InfoCardView({
             display: 'flex',
             fontSize: 76,
             fontWeight: 800,
+            letterSpacing: ls,
             lineHeight: 1.3,
             color: ink,
             whiteSpace: 'pre-wrap',
@@ -408,6 +443,7 @@ function InfoCardView({
               marginTop: 40,
               fontSize: 44,
               fontWeight: 600,
+              letterSpacing: ls,
               lineHeight: 1.5,
               color: ink,
               opacity: 0.72,

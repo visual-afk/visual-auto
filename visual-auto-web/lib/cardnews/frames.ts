@@ -11,8 +11,10 @@ export interface CardFrameTokens {
   logoText: string; // 좌상단 로고 텍스트, 비우면 지점명 사용
   ctaBg?: string; // CTA 카드 배경 (정보형)
   ctaInk?: string; // CTA 카드 텍스트 (정보형)
-  // 'photo' = 표지를 실사 배경 + 하단 흰 글씨(그림자) + 말풍선으로 (트리필드 밈뉴스 문법).
-  // 없거나 'solid'면 기존 단색 표지. 브랜드별로 card_frames.tokens 에서 켠다.
+  // 'photo' = 모든 카드를 실사 배경 + 하단 흰 글씨(그림자)로, 표지엔 말풍선까지 (트리필드 밈뉴스 문법).
+  // 없거나 'solid'면 기존 단색 카드. 브랜드별로 card_frames.tokens 에서 켠다.
+  cardStyle?: 'photo' | 'solid';
+  /** @deprecated 초기 이름 — cardStyle 로 대체. 기존 토큰 호환용으로만 읽는다. */
   coverStyle?: 'photo' | 'solid';
 }
 

@@ -76,8 +76,8 @@ export async function generateTopicDraft(
           description: '말풍선 대사 한 줄 — 팩트 당사자의 1인칭, 8~14자',
         },
         {
-          name: 'COVER_PHOTO',
-          description: '표지 사진 지시 한 줄 — 피사체 + 구도',
+          name: 'PHOTO_HINTS',
+          description: `카드별 사진 지시 — 정확히 ${count}줄(표지→포인트→CTA 순), 한 줄에 하나, 피사체 + 구도`,
         },
         {
           name: 'POINT_CARDS',
@@ -108,7 +108,12 @@ export async function generateTopicDraft(
   const coverHook = sections.COVER_HOOK?.trim() ?? '';
   // 편성에 미리 적어둔 말풍선이 있으면 그게 우선 (사람 수정이 항상 이긴다)
   const bubble = source.bubble?.trim() || sections.COVER_BUBBLE?.trim().replace(/^["']|["']$/g, '') || '';
-  const photoHint = sections.COVER_PHOTO?.trim() ?? '';
+  // 카드마다 한 줄씩 (표지 → 포인트 → CTA 순). 모자라면 그 카드는 지시문 없이 간다.
+  const photoHints = (sections.PHOTO_HINTS ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^[-*\d.)\s]+/, '').trim())
+    .filter(Boolean);
+  const photoHint = photoHints[0] ?? '';
   const cards = buildInfoCards(
     count,
     coverHook,
@@ -116,7 +121,7 @@ export async function generateTopicDraft(
     sections.CTA_TITLE?.trim() ?? '',
     sections.CTA_BODY?.trim() ?? '프로필 링크 ↓',
     { bubble, photo_hint: photoHint },
-  );
+  ).map((c, i) => (photoHints[i] ? { ...c, photo_hint: photoHints[i] } : c));
   const hashtags = (sections.HASHTAGS ?? '')
     .split(/\s+/)
     .map((t) => (t.startsWith('#') ? t : t ? `#${t}` : ''))

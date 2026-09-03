@@ -33,12 +33,20 @@ export default async function CardNewsEditorPage({ params }: { params: Promise<{
     }
   }
 
+  // 캘린더 편성 주제로 만든 초안이면 스튜디오에서 "다시 뽑기"를 쓸 수 있다
+  const { data: linkedTopic } = await admin
+    .from('cardnews_topics')
+    .select('id')
+    .eq('card_news_id', id)
+    .maybeSingle();
+
   return (
     <CardNewsStudio
       initial={row as unknown as CardNews}
       frame={frame}
       branchName={branchName}
       photoUrls={photoUrls}
+      topicLinked={!!linkedTopic}
     />
   );
 }

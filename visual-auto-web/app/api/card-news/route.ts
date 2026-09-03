@@ -54,10 +54,23 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const postId: string = (body.post_id || '').trim();
-  const topicId: string = (body.topic_id || '').trim();
+  let topicId: string = (body.topic_id || '').trim();
   let topic: string = (body.topic || '').trim();
 
   const admin = getAdminSupabase();
+
+  // "다시 뽑기": 편성에서 만든 초안은 card_news_id 만 오므로 역링크로 주제를 찾는다
+  if (!postId && !topicId && !topic && body.card_news_id) {
+    const { data: linked } = await admin
+      .from('cardnews_topics')
+      .select('id')
+      .eq('card_news_id', String(body.card_news_id).trim())
+      .maybeSingle();
+    if (!linked) {
+      return NextResponse.json({ error: '이 카드뉴스와 연결된 주제를 찾지 못했어요' }, { status: 400 });
+    }
+    topicId = linked.id;
+  }
 
   // ── 소스 확정: 글(post), 편성(topic_id), 또는 자유 주제(topic) ──
   let branchId: string;

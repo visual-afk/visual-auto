@@ -19,11 +19,13 @@ export default function CardNewsStudio({
   frame,
   branchName,
   photoUrls: initialPhotoUrls,
+  topicLinked = false,
 }: {
   initial: CardNews;
   frame: CardFrame;
   branchName: string;
   photoUrls: Record<string, string>; // storage_path → 공개 URL
+  topicLinked?: boolean; // 캘린더 편성 주제로 만든 초안이면 "다시 뽑기" 가능
 }) {
   const router = useRouter();
   const mode = initial.mode;
@@ -69,9 +71,9 @@ export default function CardNewsStudio({
     }
   }
 
-  /** AI로 현재 장수 기준 다시 구성 (정보형) */
+  /** AI로 현재 장수 기준 다시 구성 (글 기반 + 편성 주제 기반) */
   async function regenerate() {
-    if (!initial.post_id) return;
+    if (!initial.post_id && !topicLinked) return;
     if (!window.confirm('지금 카드 내용을 버리고 AI가 다시 구성할까요?')) return;
     setRegenerating(true);
     setError('');
@@ -79,7 +81,11 @@ export default function CardNewsStudio({
       const res = await fetch('/api/card-news', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post_id: initial.post_id, card_count: cards.length, card_news_id: initial.id }),
+        body: JSON.stringify({
+          ...(initial.post_id ? { post_id: initial.post_id } : {}),
+          card_count: cards.length,
+          card_news_id: initial.id,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '다시 구성 실패');
@@ -163,8 +169,9 @@ export default function CardNewsStudio({
     if (res.ok) router.push('/card-news');
   }
 
-  // 이미지형 슬라이드와 정보형 사진 표지 모두 photo_path 로 사진을 찾는다
+  // 이미지형 슬라이드와 정보형 사진 카드 모두 photo_path 로 사진을 찾는다
   const photoSrcOf = (c: InfoCard | ImageCard) => (c.photo_path ? (photoUrls[c.photo_path] ?? null) : null);
+  const photoCards = frame.tokens.cardStyle === 'photo' || frame.tokens.coverStyle === 'photo';
 
   return (
     <div className="py-6 md:py-0">
@@ -204,6 +211,7 @@ export default function CardNewsStudio({
             <InfoCardsEditor
               cards={cards as InfoCard[]}
               photoUrls={photoUrls}
+              photoCards={photoCards}
               onChange={updateCards}
               onPhotoAdded={(path, url) => setPhotoUrls((prev) => ({ ...prev, [path]: url }))}
             />
@@ -221,7 +229,7 @@ export default function CardNewsStudio({
                 }}
               />
             )}
-            {initial.post_id && (
+            {(initial.post_id || topicLinked) && (
               <button
                 onClick={regenerate}
                 disabled={regenerating}

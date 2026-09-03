@@ -12,6 +12,18 @@ export interface InfoCard {
   photo_path?: string; // post-photos 버킷 경로. 비면 "사진 자리" placeholder로 렌더
   bubble?: string; // 말풍선 대사 (팩트 당사자의 1인칭, 8~14자)
   photo_hint?: string; // 어떤 사진을 넣어야 하는지 AI가 적어주는 지시문
+  letter_spacing?: number; // 자간(px). 없으면 0 — 스튜디오 슬라이더로 조절
+}
+
+/** 자간 조절 범위 (px) — 스튜디오 슬라이더와 렌더러가 공유 */
+export const LETTER_SPACING_MIN = -6;
+export const LETTER_SPACING_MAX = 6;
+
+/** 저장된 자간을 안전한 범위로 자른다 (렌더 깨짐 방지) */
+export function clampLetterSpacing(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(LETTER_SPACING_MAX, Math.max(LETTER_SPACING_MIN, Math.round(n * 10) / 10));
 }
 
 /** 이미지형: 사진이 슬라이드, 카드엔 로고 + 한 줄 문구만 */
