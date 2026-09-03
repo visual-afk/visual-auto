@@ -6,6 +6,7 @@
     { "path": "/api/cron/rank-check", "schedule": "0 22 * * 0" },
     { "path": "/api/cron/cleanup-interview-audio", "schedule": "0 20 * * 1" },
     { "path": "/api/cron/overdue-notify", "schedule": "0 0 * * *" },
-    { "path": "/api/cron/extend-cardnews-topics", "schedule": "50 23 * * *" }
+    { "path": "/api/cron/extend-cardnews-topics", "schedule": "50 23 * * *" },
+    { "path": "/api/cron/salon-trend-topic", "schedule": "50 23 * * 0" }
   ]
 }
