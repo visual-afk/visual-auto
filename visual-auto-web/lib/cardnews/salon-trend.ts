@@ -56,7 +56,7 @@ export async function seedSalonTrendTopic(topicDate?: string): Promise<SalonTren
     '규칙:',
     '- 급상승 목록·뉴스 제목에서 여자 연예인을 우선 선정한다. 목록에 없으면 최근 화제인 여성 셀럽을 지식으로 고르되, TREND_BASIS에 "트렌드 목록에 없음 — 지식 기반 선정"이라고 명시한다.',
     '- 논란·사건·사생활로 급상승한 인물은 피한다. 작품·무대·스타일로 화제인 인물만. 비방·외모 평가 금지 — 인물은 무드의 예시일 뿐이다.',
-    '- 주제는 인물 소식이 아니라 그 인물의 고급스러운 무드를 해부하는 각도여야 한다. (예: "OO의 그 단정함, 머리가 만드는 공통점")',
+    '- 주제는 인물 소식이 아니라 **그 인물이 왜 고급스러워 보이는지를 연구**하는 각도여야 한다. 인물이 연구 대상이고, 카드 전부가 그 인물 관찰로 채워질 각도를 잡는다. (예: "염혜란은 왜 고급스러워 보일까 — 관찰되는 공통점 3")',
     concept ? `\n--- 브랜드 카드뉴스 컨셉 — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
   ].join('\n');
 
@@ -74,10 +74,10 @@ export async function seedSalonTrendTopic(topicDate?: string): Promise<SalonTren
     [
       { name: 'CELEB', description: '선정한 여자 연예인 이름 한 줄' },
       { name: 'TREND_BASIS', description: '선정 근거 한 줄 (트렌드 목록의 어떤 항목/뉴스인지, 목록에 없으면 그 사실 명시)' },
-      { name: 'MATERIAL', description: '카드뉴스 주제 소재 한 줄 — 인물의 고급스러운 무드를 해부하는 각도' },
+      { name: 'MATERIAL', description: '카드뉴스 주제 소재 한 줄 — "그 인물이 왜 고급스러워 보이는가"를 연구하는 각도 (인물이 연구 대상)' },
       { name: 'HOOK_TYPE', description: '공통점 해부형 | 무드 명명형 | 아카이브형 중 하나' },
       { name: 'HEADLINE_DRAFT', description: '표지 훅 초안 (15자 안팎, 최대 2줄)' },
-      { name: 'HINT', description: '표지 방향 힌트 한 줄' },
+      { name: 'HINT', description: '표지 방향 힌트 한 줄 — 포인트 카드 전부가 인물 관찰 기반이어야 함을 포함' },
       { name: 'FACT_SEED', description: '근거의 경계 — 참고한 트렌드 검색어·뉴스 제목·수집일. 이 밖의 사실 단정 금지용' },
       { name: 'MEMO', description: '예진 매니저에게 남길 확인 요청 한 줄', required: false },
     ],
