@@ -40,7 +40,17 @@ export async function jarFetch(jar: CookieJar, url: string, init: RequestInit = 
   for (const [k, v] of Object.entries(HTTP_HEADERS)) if (!headers.has(k)) headers.set(k, v);
   const cookie = jar.header();
   if (cookie) headers.set('Cookie', cookie);
-  const res = await fetch(url, { ...init, headers, redirect: 'manual' });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers, redirect: 'manual' });
+  } catch (e) {
+    // undici 는 네트워크 실패를 죄다 'fetch failed' 로 뭉갠다 → 원인 코드까지 남긴다.
+    // (HandSOS 가 서버 IP를 차단하면 여기서 ECONNRESET/ETIMEDOUT 으로 떨어진다)
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+    throw new Error(
+      `HandSOS 접속 실패 (${new URL(url).host}) — ${cause?.code || cause?.message || (e as Error).message}`,
+    );
+  }
   jar.store(res);
   // 수동 리다이렉트 추적 (쿠키 누적 위해)
   if ([301, 302, 303, 307, 308].includes(res.status)) {

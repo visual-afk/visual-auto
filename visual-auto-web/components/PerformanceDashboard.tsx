@@ -32,6 +32,8 @@ export default function PerformanceDashboard({
   isHq,
   canPickBranch,
   syncedLabel,
+  latestDate,
+  staleDays,
   refDate,
   prevRef,
   nextRef,
@@ -47,6 +49,10 @@ export default function PerformanceDashboard({
   /** 지점 선택 드롭다운 노출 (본사 or 여러 지점 소속). 기본값 = isHq */
   canPickBranch?: boolean;
   syncedLabel: string;
+  /** 수집된 가장 최근 날짜(YYYY-MM-DD). 데이터가 아예 없으면 null */
+  latestDate: string | null;
+  /** 그 날짜가 오늘로부터 며칠 전인지. 1일은 정상(어제치 수집) */
+  staleDays: number | null;
   /** 기준일(YYYY-MM-DD) — 월간이면 그 달, 주간이면 그 월~일 주 */
   refDate: string;
   prevRef: string;
@@ -123,7 +129,18 @@ export default function PerformanceDashboard({
         showPicker={showPicker}
       />
 
-      {msg && <p className="mt-3 text-sm text-ink-soft">{msg}</p>}
+      {/* 수집이 멈추면 옛날 숫자를 진짜처럼 보게 되므로 눈에 띄게 알린다 */}
+      {staleDays != null && staleDays >= 2 && (
+        <div className="mt-3 rounded-xl2 border border-warn/40 bg-warn/10 p-3 text-sm">
+          <b>수집이 멈춰 있어요</b> — 마지막 데이터가 {latestDate} ({staleDays}일 전)예요.
+          <br />
+          <span className="text-ink-soft">
+            아래 숫자는 그때까지의 값입니다. {isHq ? '크롤 상태를 확인해주세요.' : '본사에 알려주세요.'}
+          </span>
+        </div>
+      )}
+
+      {msg && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{msg}</p>}
 
       {!data.hasData ? (
         <div className="mt-8 rounded-xl2 border border-line bg-canvas p-8 text-center text-sm text-ink-faint">
