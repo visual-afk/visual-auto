@@ -10,6 +10,7 @@ import {
   loadFileSafeFor,
 } from '@/lib/generation/ai-client';
 import { getFrameFor } from '@/lib/cardnews/frames';
+import { generateTopicDraft } from '@/lib/cardnews/draft-topic';
 import { canMakeCardNews } from '@/lib/flags';
 import {
   buildInfoCards,
@@ -53,10 +54,23 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const postId: string = (body.post_id || '').trim();
-  const topicId: string = (body.topic_id || '').trim();
+  let topicId: string = (body.topic_id || '').trim();
   let topic: string = (body.topic || '').trim();
 
   const admin = getAdminSupabase();
+
+  // "다시 뽑기": 편성에서 만든 초안은 card_news_id 만 오므로 역링크로 주제를 찾는다
+  if (!postId && !topicId && !topic && body.card_news_id) {
+    const { data: linked } = await admin
+      .from('cardnews_topics')
+      .select('id')
+      .eq('card_news_id', String(body.card_news_id).trim())
+      .maybeSingle();
+    if (!linked) {
+      return NextResponse.json({ error: '이 카드뉴스와 연결된 주제를 찾지 못했어요' }, { status: 400 });
+    }
+    topicId = linked.id;
+  }
 
   // ── 소스 확정: 글(post), 편성(topic_id), 또는 자유 주제(topic) ──
   let branchId: string;
@@ -112,37 +126,34 @@ export async function POST(request: Request) {
   }
 
   try {
-    const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
-    const prompt = await loadPromptFor(promptName, branchId);
-    // 지점 지식(blog용 CTA 사다리·SEO 키워드)은 글 기반 카드에만 — 주제 기반 브랜드 카드에 넣으면 홍보 톤이 샌다.
-    const knowledge = post ? await loadBranchKnowledgeFor(branchName, branchId) : '';
-    const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
-    const system = [
-      prompt,
-      concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
-      knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
-    ].join('');
-
     let cards;
     let caption: string | null = null;
     let hashtags: string[] = [];
     let cardCount: number;
+    let coverHook = '';
+    let coverBubble = '';
 
-    if (mode === 'info') {
+    if (!post) {
+      // 주제 기반 — 공용 코어(draft-topic)로 생성. 정보 콘텐츠라 마케팅 지식은 주입하지 않는다 (07 §5-2).
+      const draft = await generateTopicDraft(topicRow ?? { material: topic }, branchName, branchId, body.card_count ?? 5);
+      cards = draft.cards;
+      cardCount = draft.cardCount;
+      caption = draft.caption;
+      hashtags = draft.hashtags;
+      coverHook = draft.coverHook;
+      coverBubble = draft.bubble;
+    } else if (mode === 'info') {
+      const prompt = await loadPromptFor('card-news-info', branchId);
+      const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+      const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
+      const system = [
+        prompt,
+        concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
+        knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
+      ].join('');
       cardCount = clampCardCount(body.card_count ?? 5);
       const pointCount = cardCount - 2;
-      const material = post
-        ? [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? '']
-        : topicRow
-          ? ([
-              `주제: ${topic}`,
-              topicRow.section && `편성 면(섹션): ${topicRow.section}`,
-              topicRow.frame && `뉴스 프레임: ${topicRow.frame}`,
-              topicRow.fact_seed && `팩트 시드(이 근거 밖의 수치·단정 금지): ${topicRow.fact_seed}`,
-              topicRow.hint && `표지 훅 힌트: ${topicRow.hint}`,
-              topicRow.bubble && `말풍선 아이디어: ${topicRow.bubble}`,
-            ].filter(Boolean) as string[])
-          : [`주제: ${topic}`];
+      const material = [`블로그 글 제목: ${post.title ?? ''}`, '본문:', post.content ?? ''];
       const sections = await callAIDelimited(
         {
           system,
@@ -171,6 +182,14 @@ export async function POST(request: Request) {
       );
     } else {
       // image 모드는 post 기반에서만 도달한다 (주제 기반은 위에서 info로 강제).
+      const prompt = await loadPromptFor('card-news-image', branchId);
+      const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+      const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
+      const system = [
+        prompt,
+        concept ? `\n\n--- 브랜드 카드뉴스 컨셉 (${branchName}) — 반드시 이 컨셉을 따를 것 ---\n${concept}` : '',
+        knowledge ? `\n\n--- 브랜드/지점 지식 (${branchName}) — 이 톤을 따를 것 ---\n${knowledge}` : '',
+      ].join('');
       const p = post!;
       const photos = (Array.isArray(p.photos) ? (p.photos as PostPhoto[]) : []).slice(0, MAX_CARDS);
       const phraseCount = Math.max(photos.length, 3);
@@ -238,11 +257,16 @@ export async function POST(request: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // 편성 기반이면 주제 행에 역링크 (상태는 안 바꾼다 — 촬영·업로드는 보드에서 사람이 옮김)
+    // 편성 기반이면 주제 행에 역링크 + 빈 헤드라인은 생성된 표지 훅으로 채움 (상태는 사람이 옮김)
     if (topicRow) {
       await admin
         .from('cardnews_topics')
-        .update({ card_news_id: row.id, updated_at: new Date().toISOString() })
+        .update({
+          card_news_id: row.id,
+          ...(topicRow.headline_draft?.trim() || !coverHook ? {} : { headline_draft: coverHook }),
+          ...(topicRow.bubble?.trim() || !coverBubble ? {} : { bubble: coverBubble }),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', topicRow.id);
     }
 

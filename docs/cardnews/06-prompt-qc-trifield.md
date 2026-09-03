@@ -61,7 +61,8 @@ FACT_MAP: 포인트 카드 순서대로, 각 카드가 근거한 팩트 번호�
 ````
 
 - `{{hook_type_desc}}`는 `cardnews/brand/trifield.json`의 `hooks[]`에서 코드로 조회해 주입.
-- `FACT_MAP`·`COVER_BUBBLE`·`COVER_CUTOUT`·`COVER_EVIDENCE`는 기존 파서가 모르는 추가 섹션이다 — 섹션 추출은 통과하고 현 렌더러는 무시한다 (말풍선·위젯 렌더링은 렌더러 확장 대기, ref-001 참조). QC와 예진 매니저 검토 화면은 읽는다.
+- **구현 상태 (2026-08-29)**: `COVER_BUBBLE`은 렌더러·편집기에 구현 완료 — 표지 카드의 `bubble` 필드로 저장되고 사진 표지에 말풍선으로 그려진다. `COVER_CUTOUT`+`COVER_EVIDENCE`는 앱에서 **`COVER_PHOTO` 한 줄(사진 지시문)** 로 통합돼 표지 카드의 `photo_hint`에 저장된다 (예진 매니저가 그 지시대로 사진을 넣는다). 앱 프롬프트 실물: `visual-auto-web/prompts/card-news-topic.md`.
+- `FACT_MAP`은 아직 미구현 추가 섹션이다 — 섹션 추출은 통과하고 렌더러는 무시한다. QC와 검토 화면용.
 
 ## 3. 자동 QC 룰 (통과 못 하면 `/output/rejected/`)
 

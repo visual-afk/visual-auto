@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { CardNewsMode, InfoCard, ImageCard } from '@/lib/cardnews/cards';
+import { clampLetterSpacing } from '@/lib/cardnews/cards';
 import type { CardFrameTokens } from '@/lib/cardnews/frames';
 
 /**
@@ -80,19 +81,233 @@ function Logo({ text, color }: { text: string; color: string }) {
   );
 }
 
-function InfoCardView({
+/** 흰 글씨가 어떤 사진 위에서도 읽히게 하는 그림자 (satori textShadow 지원 확인됨) */
+const TEXT_SHADOW = '0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.55)';
+
+/**
+ * 사진 카드 (tokens.cardStyle === 'photo') — 밈뉴스 문법. 표지·포인트·CTA 모두 같은 문법으로 그린다.
+ * 실사 배경(없으면 "사진 자리" placeholder) + 하단 배지 + 흰 글씨(검정 그림자), 표지엔 말풍선.
+ * satori 제약: 인라인 스타일 · flex만 · pseudo 요소 금지(말풍선 꼬리는 rotate 한 div).
+ */
+function PhotoCardView({
   card,
   tokens,
   logo,
+  photoSrc,
   pageIndex,
   pageCount,
 }: {
   card: InfoCard;
   tokens: CardFrameTokens;
   logo: string;
+  photoSrc?: string | null;
   pageIndex: number;
   pageCount: number;
 }) {
+  const point = tokens.point || '#B8865B';
+  const isCover = card.kind === 'cover';
+  const ls = clampLetterSpacing(card.letter_spacing);
+  // 하단 배지: 표지=브랜드, 포인트=번호, CTA=배지 문구
+  const badge = isCover ? logo : card.kind === 'cta' ? card.body || logo : `POINT ${String(card.idx).padStart(2, '0')}`;
+  const titleSize = isCover ? 84 : card.kind === 'cta' ? 80 : 72;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        position: 'relative',
+        width: CARD_W,
+        height: CARD_H,
+        backgroundColor: '#2A2A2E',
+        fontFamily: FONT,
+        overflow: 'hidden',
+      }}
+    >
+      {photoSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoSrc}
+          alt=""
+          width={CARD_W}
+          height={CARD_H}
+          style={{ position: 'absolute', top: 0, left: 0, width: CARD_W, height: CARD_H, objectFit: 'cover' }}
+        />
+      ) : (
+        // 사진 자리 — 예진매니저가 스튜디오에서 교체한다
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: CARD_W,
+            height: CARD_H,
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 120,
+            background: 'linear-gradient(160deg, #3A3A40 0%, #232327 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, letterSpacing: 6, color: point }}>사진 자리</div>
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 24,
+              fontSize: 38,
+              fontWeight: 600,
+              lineHeight: 1.45,
+              color: '#FFFFFF',
+              opacity: 0.62,
+              textAlign: 'center',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.photo_hint || (isCover ? '표지 사진을 넣어주세요' : '이 카드에 넣을 사진')}
+          </div>
+        </div>
+      )}
+
+      {/* 하단 헤드라인 가독용 스크림 */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          width: CARD_W,
+          height: 680,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.78) 100%)',
+        }}
+      />
+
+      {/* 말풍선 — 컷아웃의 1인칭 대사 (표지 전용) */}
+      {isCover && card.bubble ? (
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 150,
+            right: 72,
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            maxWidth: 640,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              padding: '26px 40px',
+              borderRadius: 40,
+              backgroundColor: '#FFFFFF',
+              fontSize: 42,
+              fontWeight: 800,
+              lineHeight: 1.3,
+              color: '#1C1C1E',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.bubble}
+          </div>
+          {/* 꼬리 (pseudo 대신 회전 사각형) */}
+          <div
+            style={{
+              display: 'flex',
+              width: 40,
+              height: 40,
+              marginTop: -18,
+              marginRight: 64,
+              backgroundColor: '#FFFFFF',
+              transform: 'rotate(45deg)',
+            }}
+          />
+        </div>
+      ) : null}
+
+      {/* 하단: 로고 배지 + 헤드라인 */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          left: 72,
+          right: 72,
+          bottom: 96,
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+        }}
+      >
+        {badge ? (
+          <div
+            style={{
+              display: 'flex',
+              marginBottom: 26,
+              padding: '14px 32px',
+              borderRadius: 14,
+              backgroundColor: point,
+              fontSize: 32,
+              fontWeight: 800,
+              letterSpacing: 5,
+              color: '#FFFFFF',
+            }}
+          >
+            {badge}
+          </div>
+        ) : null}
+        <div
+          style={{
+            display: 'flex',
+            fontSize: titleSize,
+            fontWeight: 800,
+            letterSpacing: ls,
+            lineHeight: 1.26,
+            color: '#FFFFFF',
+            textShadow: TEXT_SHADOW,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {card.title}
+        </div>
+        {card.kind === 'point' && card.body ? (
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 26,
+              fontSize: 42,
+              fontWeight: 600,
+              letterSpacing: ls,
+              lineHeight: 1.45,
+              color: '#FFFFFF',
+              opacity: 0.94,
+              textShadow: TEXT_SHADOW,
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.body}
+          </div>
+        ) : null}
+        <div style={{ display: 'flex', marginTop: 36 }}>
+          <Dots index={pageIndex} count={pageCount} color="#FFFFFF" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoCardView({
+  card,
+  tokens,
+  logo,
+  photoSrc,
+  pageIndex,
+  pageCount,
+}: {
+  card: InfoCard;
+  tokens: CardFrameTokens;
+  logo: string;
+  photoSrc?: string | null;
+  pageIndex: number;
+  pageCount: number;
+}) {
+  const ls = clampLetterSpacing(card.letter_spacing);
   const base: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -102,6 +317,20 @@ function InfoCardView({
     padding: 96,
     fontFamily: FONT,
   };
+
+  // 사진 스타일 브랜드는 표지·포인트·CTA 전부 사진 카드로 (coverStyle 은 초기 이름 호환)
+  if (tokens.cardStyle === 'photo' || tokens.coverStyle === 'photo') {
+    return (
+      <PhotoCardView
+        card={card}
+        tokens={tokens}
+        logo={logo}
+        photoSrc={photoSrc}
+        pageIndex={pageIndex}
+        pageCount={pageCount}
+      />
+    );
+  }
 
   if (card.kind === 'cover') {
     const bg = tokens.bg ?? '#FFFFFF';
@@ -117,6 +346,7 @@ function InfoCardView({
             display: 'flex',
             fontSize: 100,
             fontWeight: 800,
+            letterSpacing: ls,
             lineHeight: 1.28,
             color: ink,
             whiteSpace: 'pre-wrap',
@@ -144,6 +374,7 @@ function InfoCardView({
               display: 'flex',
               fontSize: 88,
               fontWeight: 800,
+              letterSpacing: ls,
               lineHeight: 1.3,
               color: ink,
               whiteSpace: 'pre-wrap',
@@ -197,6 +428,7 @@ function InfoCardView({
             display: 'flex',
             fontSize: 76,
             fontWeight: 800,
+            letterSpacing: ls,
             lineHeight: 1.3,
             color: ink,
             whiteSpace: 'pre-wrap',
@@ -211,6 +443,7 @@ function InfoCardView({
               marginTop: 40,
               fontSize: 44,
               fontWeight: 600,
+              letterSpacing: ls,
               lineHeight: 1.5,
               color: ink,
               opacity: 0.72,
@@ -374,6 +607,13 @@ export default function CardCanvas({
     );
   }
   return (
-    <InfoCardView card={card as InfoCard} tokens={tokens} logo={logo} pageIndex={pageIndex} pageCount={pageCount} />
+    <InfoCardView
+      card={card as InfoCard}
+      tokens={tokens}
+      logo={logo}
+      photoSrc={photoSrc}
+      pageIndex={pageIndex}
+      pageCount={pageCount}
+    />
   );
 }
