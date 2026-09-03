@@ -86,6 +86,8 @@ export async function POST(request: Request) {
   const rules = await loadFileSafeFor('knowledge/seo/topic-rules.md', branchId);
   const branchKnowledge = await loadBranchKnowledgeFor(branch.name, branchId);
   const keywordContext = await loadKeywordContext(branchId);
+  // 브랜드 계정(아카데미·트리필드 등)은 카드뉴스 컨셉이 주제 각도의 SSOT — 홍보성 주제 방지
+  const brandConcept = await loadFileSafeFor(`knowledge/cardnews/concept-${branch.name}.md`, branchId);
 
   const fallback = () =>
     NextResponse.json({
@@ -102,7 +104,9 @@ export async function POST(request: Request) {
         '- 날짜마다 서로 다른 주제 1개. 짧은 제목(25자 이내)과 한 줄 이유.',
         '- 시즌(월)과 요일 흐름을 반영하고, 검색 수요가 있는 주제를 우선한다.',
         '- 이미 잡힌 주제 목록과 겹치지 않게 한다.',
+        '- 브랜드 컨셉이 함께 오면 그 컨셉의 필라·각도·"하지 말 것"이 최우선이다. 홍보·판매성 주제가 아니라 독자에게 정보를 주는 주제만 낸다.',
         '- 반드시 JSON으로만 답한다: {"items":[{"date":"YYYY-MM-DD","title":"...","reason":"..."}]}',
+        brandConcept ? `\n--- 브랜드 카드뉴스 컨셉 (${branch.name}) — 반드시 이 컨셉을 따를 것 ---\n${brandConcept}` : '',
         rules ? `\n--- 추천 규칙 (topic-rules.md) ---\n${rules}` : '',
         keywordContext ? `\n--- 이번 달 키워드 조사 (⭐는 우선) ---\n${keywordContext}` : '',
         branchKnowledge ? `\n--- 지점 컨텍스트 (${branch.name}) ---\n${branchKnowledge}` : '',

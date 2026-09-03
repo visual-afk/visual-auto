@@ -1,0 +1,12 @@
+-- ⚠️ 폐기됨 (실행하지 말 것) — 0029-cardnews-topics-multi.sql 로 대체
+--
+-- 원래 목적: topic-seed.ts 의 upsert(ON CONFLICT)가 동작하도록 unique (branch_id, topic_date) 보정.
+-- 폐기 사유(2026-09-03 대표 지시 "주제가 여러개여도 되잖아"):
+--   한 날짜에 주제를 여러 개 편성/드래그 이동할 수 있어야 해서 그 unique 제약을 없앴다.
+--   시드 코드(topic-seed.ts · salon-trend.ts)도 upsert 대신 일반 insert + 중복 필터로 바뀌어
+--   이 인덱스가 더 이상 필요하지 않다. 이 인덱스를 만들면 캘린더에서
+--   "옮기려는 날짜에 이미 주제가 있어요" 오류가 다시 난다.
+--
+-- 아래는 원본 내용 (참고용 — 실행 금지):
+--   create unique index if not exists cardnews_topics_branch_date_key
+--     on cardnews_topics (branch_id, topic_date);
