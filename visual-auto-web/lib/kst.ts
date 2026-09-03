@@ -7,6 +7,11 @@ export function kstTodayStr(): string {
   return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/** 어제 날짜(KST) 'YYYY-MM-DD'. 크롤은 "KST 기준 어제"를 수집한다. */
+export function kstYesterdayStr(): string {
+  return new Date(Date.now() + KST_OFFSET_MS - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /** 이번 달(KST) 'YYYY-MM'. */
 export function kstThisMonth(): string {
   return kstTodayStr().slice(0, 7);

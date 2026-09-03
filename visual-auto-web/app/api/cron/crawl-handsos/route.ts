@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { crawlDate } from '@/lib/handsos/crawl';
+import { kstYesterdayStr } from '@/lib/kst';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -19,8 +20,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // KST 기준 어제 (Vercel은 UTC로 도므로 +9h 보정 후 -1일)
-  const date = new Date(Date.now() + 9 * 3600e3 - 24 * 3600e3).toISOString().slice(0, 10);
+  const date = kstYesterdayStr();
 
   try {
     // 전 지점 + 디자이너별. crawlDate는 지점총합을 먼저 upsert하므로
@@ -28,9 +28,14 @@ export async function GET(request: Request) {
     const result = await crawlDate(date, { sleepBranches: 500, sleepDesigners: 300 });
     const okCount = result.branches.filter((b) => b.ok).length;
     console.log(`[cron crawl-handsos] ${date} — ${okCount}/${result.branches.length} 지점 OK`);
+    if (okCount < result.branches.length) {
+      const failed = result.branches.filter((b) => !b.ok).map((b) => `${b.branch}(${b.reason})`);
+      console.error(`[cron crawl-handsos] 실패 지점: ${failed.join(', ')}`);
+    }
     return NextResponse.json({ ok: true, date, branches: result.branches });
   } catch (e) {
-    console.error('[cron crawl-handsos]', (e as Error).message);
-    return NextResponse.json({ error: (e as Error).message, date }, { status: 502 });
+    const msg = (e as Error).message;
+    console.error('[cron crawl-handsos]', msg);
+    return NextResponse.json({ error: msg, date }, { status: 502 });
   }
 }

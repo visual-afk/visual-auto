@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
+import { kstTodayStr } from '@/lib/kst';
 import { fetchMemberBranchMap, effectiveBranchIds } from '@/lib/memberBranches';
 import { aggregateBranch, aggregateCompany, fetchComparisonBundle, type PeriodType } from '@/lib/metrics';
 import { aggregateBrand, fetchProductCatalog } from '@/lib/product-metrics';
@@ -82,6 +83,19 @@ const fmtSynced = (ts: string | null | undefined) =>
         timeZone: 'Asia/Seoul',
       })
     : '동기화 없음';
+
+/**
+ * 수집이 며칠째 멈췄는지 (KST 기준). 크롤은 "어제"치를 넣으므로 1일 지연은 정상.
+ * null 이면 데이터 자체가 없는 지점.
+ */
+function staleDaysOf(latestDate: string | null): number | null {
+  if (!latestDate) return null;
+  const days = Math.round(
+    (new Date(`${kstTodayStr()}T00:00:00+09:00`).getTime() - new Date(`${latestDate}T00:00:00+09:00`).getTime()) /
+      86400000,
+  );
+  return days;
+}
 
 /** 월 점프 드롭다운: 데이터가 있는 가장 이른 달 ~ 이번 달 (최신순) */
 function buildMonthOptions(from: string): { ref: string; label: string }[] {
@@ -261,6 +275,12 @@ export default async function PerformancePage({
   const { data: last } = await lastQ.order('created_at', { ascending: false }).limit(1).maybeSingle();
   const syncedLabel = fmtSynced((last as { created_at?: string } | null)?.created_at);
 
+  // 데이터 신선도 — 크롤이 멈추면 옛날 숫자를 조용히 보여주게 되므로 배너로 알린다
+  let dateQ = admin.from('metrics_daily').select('date');
+  if (!isAllSalonView) dateQ = dateQ.eq('branch_id', branchId);
+  const { data: latestRow } = await dateQ.order('date', { ascending: false }).limit(1).maybeSingle();
+  const latestDate = (latestRow as { date?: string } | null)?.date ?? null;
+
   return (
     <div className="space-y-8 py-6 md:py-0">
       {isHq && <CompanyBoard period={period} refDate={refDate} />}
@@ -273,6 +293,8 @@ export default async function PerformancePage({
         isHq={isHq}
         canPickBranch={canPickBranch}
         syncedLabel={syncedLabel}
+        latestDate={latestDate}
+        staleDays={staleDaysOf(latestDate)}
         refDate={refDate}
         prevRef={nav.prevRef}
         nextRef={nav.nextRef}

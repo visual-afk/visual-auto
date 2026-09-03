@@ -37,11 +37,18 @@ fi
 NODE_BIN_DIR=$(dirname "$(command -v node)")
 echo "✔ node: $(node -v)  ($NODE_BIN_DIR)"
 
-# --- 의존성 설치 (최초 1회) ---
-if [[ ! -d "$WEB_DIR/node_modules/tsx" ]]; then
-  echo "… 최초 준비: 의존성 설치 중 (몇 분 걸릴 수 있어요)"
-  ( cd "$WEB_DIR" && npm ci )
+# --- 실행기(tsx) ---
+# 레포의 node_modules 는 esbuild 네이티브 바이너리가 깨져 있으면 통째로 실행이 안 된다.
+# 수집기는 매일 무인으로 돌아야 하므로 레포 node_modules 에 기대지 않고
+# 버전 고정된 npx 캐시본을 쓴다 (최초 1회만 내려받고 이후 재사용).
+TSX="npx --yes tsx@4.19.2"
+echo "… 실행기 준비 중"
+if ! ( cd "$WEB_DIR" && eval "$TSX --version" >/dev/null 2>&1 ); then
+  echo "❌ tsx 실행기를 준비하지 못했어요. 인터넷 연결을 확인하고 다시 실행해주세요."
+  read "?엔터를 누르면 닫힙니다..."
+  exit 1
 fi
+echo "✔ 실행기 준비 완료"
 
 # --- 비밀값 입력 (이미 있으면 재사용) ---
 CONF_DIR="$HOME/.visualsalon"
@@ -76,10 +83,14 @@ cat > "$WRAP" <<WRAP_EOF
 export PATH="$NODE_BIN_DIR:/usr/bin:/bin:/usr/sbin:/sbin"
 source "$CONF"
 cd "$WEB_DIR" || exit 1
-START=\$(date -v-3d +%F); END=\$(date -v-1d +%F)
+# 최근 7일치를 매번 다시 받는다(upsert라 중복 무해) — 맥이 며칠 꺼져 있어도 자동으로 메워진다.
+START=\$(date -v-7d +%F); END=\$(date -v-1d +%F)
 { echo "==================================================="; echo "\$(date '+%F %T %Z') ▶ 수집 시작 (\$START ~ \$END)"; } >> "$CONF_DIR/crawl.log"
-npx tsx scripts/crawl-handsos.ts --backfill "\$START" "\$END" >> "$CONF_DIR/crawl.log" 2>&1
-echo "\$(date '+%F %T') ◀ 종료 (exit \$?)" >> "$CONF_DIR/crawl.log"
+$TSX scripts/crawl-handsos.ts --backfill "\$START" "\$END" >> "$CONF_DIR/crawl.log" 2>&1
+RC=\$?
+echo "\$(date '+%F %T') ◀ 종료 (exit \$RC)" >> "$CONF_DIR/crawl.log"
+[[ \$RC -ne 0 ]] && echo "  ⚠️ 실패 — 위 로그를 대표님/개발자에게 보여주세요" >> "$CONF_DIR/crawl.log"
+exit \$RC
 WRAP_EOF
 chmod +x "$WRAP"
 echo "✔ 야간 수집기 생성: $WRAP"
@@ -116,7 +127,7 @@ echo "=============================="
 echo " 비주얼살롱 지금 수집 (어제~오늘)"
 echo "=============================="
 echo "수집 중이에요… 1~3분 걸려요. 창을 닫지 말고 기다려주세요."
-npx tsx scripts/crawl-handsos.ts --backfill "\$(date -v-1d +%F)" "\$(date +%F)"
+$TSX scripts/crawl-handsos.ts --backfill "\$(date -v-1d +%F)" "\$(date +%F)"
 echo
 echo "✅ 완료! 앱 → 성과 대시보드에서 확인하세요."
 read "?엔터를 누르면 이 창이 닫힙니다..."
@@ -129,7 +140,7 @@ echo "======================================================"
 echo "  설치 끝! 지금 한 번 수집해서 확인해볼게요…"
 echo "======================================================"
 source "$CONF"
-( cd "$WEB_DIR" && npx tsx scripts/crawl-handsos.ts --date "$(date -v-1d +%F)" ) || true
+( cd "$WEB_DIR" && eval "$TSX scripts/crawl-handsos.ts --date $(date -v-1d +%F)" ) || true
 echo
 echo "🎉 모두 완료됐어요."
 echo "  • 매일 08:30 자동 수집 (이 맥이 켜져 있을 때)"
