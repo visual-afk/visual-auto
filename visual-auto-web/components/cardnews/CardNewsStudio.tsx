@@ -163,8 +163,8 @@ export default function CardNewsStudio({
     if (res.ok) router.push('/card-news');
   }
 
-  const photoSrcOf = (c: InfoCard | ImageCard) =>
-    mode === 'image' ? (photoUrls[(c as ImageCard).photo_path] ?? null) : null;
+  // 이미지형 슬라이드와 정보형 사진 표지 모두 photo_path 로 사진을 찾는다
+  const photoSrcOf = (c: InfoCard | ImageCard) => (c.photo_path ? (photoUrls[c.photo_path] ?? null) : null);
 
   return (
     <div className="py-6 md:py-0">
@@ -201,7 +201,12 @@ export default function CardNewsStudio({
       <div className="mt-5 space-y-4">
         {mode === 'info' ? (
           <>
-            <InfoCardsEditor cards={cards as InfoCard[]} onChange={updateCards} />
+            <InfoCardsEditor
+              cards={cards as InfoCard[]}
+              photoUrls={photoUrls}
+              onChange={updateCards}
+              onPhotoAdded={(path, url) => setPhotoUrls((prev) => ({ ...prev, [path]: url }))}
+            />
             {(caption || hashtags.length > 0) && (
               <CaptionPanel
                 caption={caption}

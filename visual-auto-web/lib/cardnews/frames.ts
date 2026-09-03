@@ -11,6 +11,9 @@ export interface CardFrameTokens {
   logoText: string; // 좌상단 로고 텍스트, 비우면 지점명 사용
   ctaBg?: string; // CTA 카드 배경 (정보형)
   ctaInk?: string; // CTA 카드 텍스트 (정보형)
+  // 'photo' = 표지를 실사 배경 + 하단 흰 글씨(그림자) + 말풍선으로 (트리필드 밈뉴스 문법).
+  // 없거나 'solid'면 기존 단색 표지. 브랜드별로 card_frames.tokens 에서 켠다.
+  coverStyle?: 'photo' | 'solid';
 }
 
 export interface CardFrame {

@@ -80,16 +80,201 @@ function Logo({ text, color }: { text: string; color: string }) {
   );
 }
 
-function InfoCardView({
+/**
+ * 사진 표지 (tokens.coverStyle === 'photo') — 밈뉴스 커버 문법.
+ * 실사 배경(없으면 "사진 자리" placeholder) + 말풍선 + 하단 흰 헤드라인(검정 그림자).
+ * satori 제약: 인라인 스타일 · flex만 · pseudo 요소 금지(말풍선 꼬리는 rotate 한 div).
+ */
+function PhotoCoverView({
   card,
   tokens,
   logo,
+  photoSrc,
   pageIndex,
   pageCount,
 }: {
   card: InfoCard;
   tokens: CardFrameTokens;
   logo: string;
+  photoSrc?: string | null;
+  pageIndex: number;
+  pageCount: number;
+}) {
+  const point = tokens.point || '#B8865B';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        position: 'relative',
+        width: CARD_W,
+        height: CARD_H,
+        backgroundColor: '#2A2A2E',
+        fontFamily: FONT,
+        overflow: 'hidden',
+      }}
+    >
+      {photoSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoSrc}
+          alt=""
+          width={CARD_W}
+          height={CARD_H}
+          style={{ position: 'absolute', top: 0, left: 0, width: CARD_W, height: CARD_H, objectFit: 'cover' }}
+        />
+      ) : (
+        // 사진 자리 — 예진매니저가 스튜디오에서 교체한다
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: CARD_W,
+            height: CARD_H,
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 120,
+            background: 'linear-gradient(160deg, #3A3A40 0%, #232327 100%)',
+          }}
+        >
+          <div style={{ display: 'flex', fontSize: 40, fontWeight: 800, letterSpacing: 6, color: point }}>사진 자리</div>
+          <div
+            style={{
+              display: 'flex',
+              marginTop: 24,
+              fontSize: 38,
+              fontWeight: 600,
+              lineHeight: 1.45,
+              color: '#FFFFFF',
+              opacity: 0.62,
+              textAlign: 'center',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.photo_hint || '표지 사진을 넣어주세요'}
+          </div>
+        </div>
+      )}
+
+      {/* 하단 헤드라인 가독용 스크림 */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          width: CARD_W,
+          height: 680,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.78) 100%)',
+        }}
+      />
+
+      {/* 말풍선 — 컷아웃의 1인칭 대사 */}
+      {card.bubble ? (
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 150,
+            right: 72,
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            maxWidth: 640,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              padding: '26px 40px',
+              borderRadius: 40,
+              backgroundColor: '#FFFFFF',
+              fontSize: 42,
+              fontWeight: 800,
+              lineHeight: 1.3,
+              color: '#1C1C1E',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {card.bubble}
+          </div>
+          {/* 꼬리 (pseudo 대신 회전 사각형) */}
+          <div
+            style={{
+              display: 'flex',
+              width: 40,
+              height: 40,
+              marginTop: -18,
+              marginRight: 64,
+              backgroundColor: '#FFFFFF',
+              transform: 'rotate(45deg)',
+            }}
+          />
+        </div>
+      ) : null}
+
+      {/* 하단: 로고 배지 + 헤드라인 */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          left: 72,
+          right: 72,
+          bottom: 96,
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            marginBottom: 28,
+            padding: '14px 32px',
+            borderRadius: 14,
+            backgroundColor: point,
+            fontSize: 34,
+            fontWeight: 800,
+            letterSpacing: 6,
+            color: '#FFFFFF',
+          }}
+        >
+          {logo}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            fontSize: 84,
+            fontWeight: 800,
+            lineHeight: 1.26,
+            color: '#FFFFFF',
+            // 밝은 사진 위에서도 흰 글씨가 살도록 3겹 (satori textShadow 지원 확인됨)
+            textShadow: '0 0 4px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.55)',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {card.title}
+        </div>
+        <div style={{ display: 'flex', marginTop: 36 }}>
+          <Dots index={pageIndex} count={pageCount} color="#FFFFFF" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoCardView({
+  card,
+  tokens,
+  logo,
+  photoSrc,
+  pageIndex,
+  pageCount,
+}: {
+  card: InfoCard;
+  tokens: CardFrameTokens;
+  logo: string;
+  photoSrc?: string | null;
   pageIndex: number;
   pageCount: number;
 }) {
@@ -104,6 +289,18 @@ function InfoCardView({
   };
 
   if (card.kind === 'cover') {
+    if (tokens.coverStyle === 'photo') {
+      return (
+        <PhotoCoverView
+          card={card}
+          tokens={tokens}
+          logo={logo}
+          photoSrc={photoSrc}
+          pageIndex={pageIndex}
+          pageCount={pageCount}
+        />
+      );
+    }
     const bg = tokens.bg ?? '#FFFFFF';
     const ink = readable(bg, tokens.ink);
     return (
@@ -374,6 +571,13 @@ export default function CardCanvas({
     );
   }
   return (
-    <InfoCardView card={card as InfoCard} tokens={tokens} logo={logo} pageIndex={pageIndex} pageCount={pageCount} />
+    <InfoCardView
+      card={card as InfoCard}
+      tokens={tokens}
+      logo={logo}
+      photoSrc={photoSrc}
+      pageIndex={pageIndex}
+      pageCount={pageCount}
+    />
   );
 }

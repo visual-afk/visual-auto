@@ -3,7 +3,7 @@ import { getMember, canActOnBranch } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { getFrameFor } from '@/lib/cardnews/frames';
 import CardNewsStudio from '@/components/cardnews/CardNewsStudio';
-import type { CardNews, ImageCard } from '@/lib/cardnews/cards';
+import type { CardNews, ImageCard, InfoCard } from '@/lib/cardnews/cards';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,13 +23,13 @@ export default async function CardNewsEditorPage({ params }: { params: Promise<{
   const branchName = (row.branches as unknown as { name: string } | null)?.name ?? '';
   const frame = await getFrameFor(row.branch_id);
 
-  // 이미지형: 카드 사진의 공개 URL 맵 (getPublicUrl은 네트워크 호출 없음)
+  // 카드 사진의 공개 URL 맵 (getPublicUrl은 네트워크 호출 없음).
+  // 이미지형 슬라이드 + 정보형 사진 표지(coverStyle: photo) 둘 다 photo_path 를 쓴다.
   const photoUrls: Record<string, string> = {};
-  if (row.mode === 'image') {
-    for (const card of (row.cards ?? []) as ImageCard[]) {
-      if (card.photo_path && !photoUrls[card.photo_path]) {
-        photoUrls[card.photo_path] = admin.storage.from('post-photos').getPublicUrl(card.photo_path).data.publicUrl;
-      }
+  for (const card of (row.cards ?? []) as (ImageCard | InfoCard)[]) {
+    const path = card.photo_path;
+    if (path && !photoUrls[path]) {
+      photoUrls[path] = admin.storage.from('post-photos').getPublicUrl(path).data.publicUrl;
     }
   }
 

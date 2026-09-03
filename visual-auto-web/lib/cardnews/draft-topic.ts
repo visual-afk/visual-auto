@@ -24,6 +24,8 @@ export interface TopicDraft {
   cards: InfoCard[];
   cardCount: number;
   coverHook: string;
+  bubble: string; // 표지 말풍선 대사 (주제 행의 bubble 컬럼에도 채운다)
+  photoHint: string; // 표지 사진 지시문
   caption: string | null;
   hashtags: string[];
 }
@@ -62,7 +64,9 @@ export async function generateTopicDraft(
       maxTokens: 4000,
     },
     [
-      { name: 'COVER_HOOK', description: '표지 훅 (최대 2줄)' },
+      { name: 'COVER_HOOK', description: '표지 훅 — 줄당 8~14자, 최대 2줄' },
+      { name: 'COVER_BUBBLE', description: '말풍선 대사 한 줄 — 팩트 당사자의 1인칭, 8~14자' },
+      { name: 'COVER_PHOTO', description: '표지 사진 지시 한 줄 — 피사체 + 구도' },
       { name: 'POINT_CARDS', description: `포인트 카드 ${pointCount}장 — 카드 사이 --- 구분, 첫 줄 제목 + 본문 최대 2줄` },
       { name: 'CTA_TITLE', description: 'CTA 카드 제목 한 줄' },
       { name: 'CTA_BODY', description: 'CTA 배지 문구 한 줄' },
@@ -72,19 +76,23 @@ export async function generateTopicDraft(
   );
 
   const coverHook = sections.COVER_HOOK?.trim() ?? '';
+  // 편성에 미리 적어둔 말풍선이 있으면 그게 우선 (사람 수정이 항상 이긴다)
+  const bubble = source.bubble?.trim() || sections.COVER_BUBBLE?.trim().replace(/^["']|["']$/g, '') || '';
+  const photoHint = sections.COVER_PHOTO?.trim() ?? '';
   const cards = buildInfoCards(
     count,
     coverHook,
     parsePointCards(sections.POINT_CARDS),
     sections.CTA_TITLE?.trim() ?? '',
     sections.CTA_BODY?.trim() ?? '프로필 링크 ↓',
+    { bubble, photo_hint: photoHint },
   );
   const hashtags = (sections.HASHTAGS ?? '')
     .split(/\s+/)
     .map((t) => (t.startsWith('#') ? t : t ? `#${t}` : ''))
     .filter(Boolean)
     .slice(0, 10);
-  return { cards, cardCount: count, coverHook, caption: sections.CAPTION?.trim() || null, hashtags };
+  return { cards, cardCount: count, coverHook, bubble, photoHint, caption: sections.CAPTION?.trim() || null, hashtags };
 }
 
 function addDaysUTC(dateStr: string, days: number): string {
@@ -141,6 +149,7 @@ export async function autoDraftUpcoming(daysAhead = 7, maxPerRun = 5): Promise<{
         .update({
           card_news_id: row.id,
           ...(t.headline_draft?.trim() ? {} : { headline_draft: draft.coverHook }),
+          ...(t.bubble?.trim() || !draft.bubble ? {} : { bubble: draft.bubble }),
           updated_at: new Date().toISOString(),
         })
         .eq('id', t.id);

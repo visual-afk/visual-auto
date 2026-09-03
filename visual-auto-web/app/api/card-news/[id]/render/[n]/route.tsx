@@ -43,9 +43,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const branchName = (row.branches as unknown as { name: string } | null)?.name ?? '';
   const frame = await getFrameFor(row.branch_id);
 
-  // 이미지형: 사진을 서버에서 받아 data URI로 — satori가 외부 URL을 fetch 하다 실패하는 일을 없앤다
+  // 사진을 서버에서 받아 data URI로 — satori가 외부 URL을 fetch 하다 실패하는 일을 없앤다.
+  // 이미지형 슬라이드 + 정보형 사진 표지 둘 다 photo_path 를 쓴다.
   let photoSrc: string | null = null;
-  const photoPath = row.mode === 'image' ? (card as ImageCard).photo_path : '';
+  const photoPath = (card as ImageCard | InfoCard).photo_path ?? '';
   if (photoPath) {
     const admin = getAdminSupabase();
     const { data: blob } = await admin.storage.from('post-photos').download(photoPath);

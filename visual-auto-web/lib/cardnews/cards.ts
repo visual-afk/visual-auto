@@ -8,6 +8,10 @@ export interface InfoCard {
   kind: 'cover' | 'point' | 'cta';
   title: string;
   body: string; // 표지는 비움, 포인트는 최대 2줄, CTA는 배지 문구
+  // ── 아래는 사진 표지(tokens.coverStyle === 'photo')에서만 쓰는 선택 필드 ──
+  photo_path?: string; // post-photos 버킷 경로. 비면 "사진 자리" placeholder로 렌더
+  bubble?: string; // 말풍선 대사 (팩트 당사자의 1인칭, 8~14자)
+  photo_hint?: string; // 어떤 사진을 넣어야 하는지 AI가 적어주는 지시문
 }
 
 /** 이미지형: 사진이 슬라이드, 카드엔 로고 + 한 줄 문구만 */
@@ -73,12 +77,20 @@ export function buildInfoCards(
   points: { title: string; body: string }[],
   ctaTitle: string,
   ctaBody: string,
+  cover?: { bubble?: string; photo_hint?: string },
 ): InfoCard[] {
   const pointCount = Math.max(1, count - 2);
   const chosen = points.slice(0, pointCount);
   while (chosen.length < pointCount) chosen.push({ title: '', body: '' });
   return [
-    { idx: 0, kind: 'cover', title: hook, body: '' },
+    {
+      idx: 0,
+      kind: 'cover',
+      title: hook,
+      body: '',
+      ...(cover?.bubble ? { bubble: cover.bubble } : {}),
+      ...(cover?.photo_hint ? { photo_hint: cover.photo_hint } : {}),
+    },
     ...chosen.map((p, i) => ({ idx: i + 1, kind: 'point' as const, title: p.title, body: p.body })),
     { idx: pointCount + 1, kind: 'cta', title: ctaTitle, body: ctaBody },
   ];

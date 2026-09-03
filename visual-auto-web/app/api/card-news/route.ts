@@ -118,6 +118,7 @@ export async function POST(request: Request) {
     let hashtags: string[] = [];
     let cardCount: number;
     let coverHook = '';
+    let coverBubble = '';
 
     if (!post) {
       // 주제 기반 — 공용 코어(draft-topic)로 생성. 정보 콘텐츠라 마케팅 지식은 주입하지 않는다 (07 §5-2).
@@ -127,6 +128,7 @@ export async function POST(request: Request) {
       caption = draft.caption;
       hashtags = draft.hashtags;
       coverHook = draft.coverHook;
+      coverBubble = draft.bubble;
     } else if (mode === 'info') {
       const prompt = await loadPromptFor('card-news-info', branchId);
       const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
@@ -249,6 +251,7 @@ export async function POST(request: Request) {
         .update({
           card_news_id: row.id,
           ...(topicRow.headline_draft?.trim() || !coverHook ? {} : { headline_draft: coverHook }),
+          ...(topicRow.bubble?.trim() || !coverBubble ? {} : { bubble: coverBubble }),
           updated_at: new Date().toISOString(),
         })
         .eq('id', topicRow.id);
