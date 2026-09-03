@@ -13,6 +13,30 @@ export interface InfoCard {
   bubble?: string; // 말풍선 대사 (팩트 당사자의 1인칭, 8~14자)
   photo_hint?: string; // 어떤 사진을 넣어야 하는지 AI가 적어주는 지시문
   letter_spacing?: number; // 자간(px). 없으면 0 — 스튜디오 슬라이더로 조절
+  photo_scale?: number; // 사진 확대 배율 (1~3). 없으면 1
+  photo_x?: number; // 사진 가로 이동 — 카드 폭 대비 비율. 없으면 0(가운데)
+  photo_y?: number; // 사진 세로 이동 — 카드 높이 대비 비율. 없으면 0(가운데)
+}
+
+export const PHOTO_SCALE_MIN = 1;
+export const PHOTO_SCALE_MAX = 3;
+
+/** 사진 확대 배율을 안전 범위로 (렌더러·편집기 공용) */
+export function clampPhotoScale(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(PHOTO_SCALE_MAX, Math.max(PHOTO_SCALE_MIN, Math.round(n * 100) / 100));
+}
+
+/**
+ * 사진 이동량을 "확대해서 남는 만큼"으로 제한한다.
+ * 배율 1이면 여백이 없으므로 이동 0 — 사진이 카드 밖으로 빠져 배경이 드러나는 일이 없다.
+ */
+export function clampPhotoOffset(v: unknown, scale: number): number {
+  const n = Number(v);
+  const limit = Math.max(0, (clampPhotoScale(scale) - 1) / 2);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(limit, Math.max(-limit, Math.round(n * 1000) / 1000));
 }
 
 /** 자간 조절 범위 (px) — 스튜디오 슬라이더와 렌더러가 공유 */
@@ -55,6 +79,27 @@ export interface CardNews {
   next_check_at: string | null;
   created_at: string;
   published_at: string | null;
+}
+
+/**
+ * 사진을 카드(또는 미리보기 박스) 안에 어떻게 놓을지 계산한다.
+ * 렌더러(CardCanvas)와 편집기 미리보기(PhotoAdjuster)가 **같은 식**을 써야
+ * 편집 화면에서 본 것이 그대로 PNG로 나온다.
+ */
+export function photoLayout(
+  card: Pick<InfoCard, 'photo_scale' | 'photo_x' | 'photo_y'>,
+  boxW: number,
+  boxH: number,
+): { w: number; h: number; left: number; top: number } {
+  const scale = clampPhotoScale(card.photo_scale);
+  const w = boxW * scale;
+  const h = boxH * scale;
+  return {
+    w,
+    h,
+    left: (boxW - w) / 2 + clampPhotoOffset(card.photo_x, scale) * boxW,
+    top: (boxH - h) / 2 + clampPhotoOffset(card.photo_y, scale) * boxH,
+  };
 }
 
 export const MIN_CARDS = 3;

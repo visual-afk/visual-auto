@@ -210,6 +210,7 @@ export default function CardNewsStudio({
           <>
             <InfoCardsEditor
               cards={cards as InfoCard[]}
+              cardNewsId={initial.id}
               photoUrls={photoUrls}
               photoCards={photoCards}
               onChange={updateCards}

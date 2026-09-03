@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, Plus, Camera } from 'lucide-react';
+import { Trash2, Plus, Camera, Sparkles } from 'lucide-react';
 import type { InfoCard } from '@/lib/cardnews/cards';
 import { MAX_CARDS, LETTER_SPACING_MIN, LETTER_SPACING_MAX, clampLetterSpacing } from '@/lib/cardnews/cards';
+import PhotoAdjuster from './PhotoAdjuster';
 
 const KIND_LABEL: Record<InfoCard['kind'], string> = { cover: '표지', point: '포인트', cta: 'CTA' };
 
@@ -13,18 +14,21 @@ const KIND_LABEL: Record<InfoCard['kind'], string> = { cover: '표지', point: '
  */
 export default function InfoCardsEditor({
   cards,
+  cardNewsId,
   photoUrls,
   photoCards,
   onChange,
   onPhotoAdded,
 }: {
   cards: InfoCard[];
+  cardNewsId: string; // AI 사진 생성 요청에 필요
   photoUrls: Record<string, string>;
   photoCards: boolean; // 사진 카드 브랜드면 카드마다 사진 넣기 UI를 띄운다
   onChange: (cards: InfoCard[]) => void;
   onPhotoAdded: (path: string, url: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [generatingIdx, setGeneratingIdx] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState('');
 
   function patch(idx: number, p: Partial<InfoCard>) {
@@ -51,6 +55,28 @@ export default function InfoCardsEditor({
       setPhotoError((err as Error).message);
     } finally {
       setUploading(false);
+    }
+  }
+
+  /** 사진 지시문대로 AI가 사진을 만들어 넣는다 (브랜드 사진 톤 파일 적용) */
+  async function generateCardPhoto(card: InfoCard) {
+    setGeneratingIdx(card.idx);
+    setPhotoError('');
+    try {
+      const res = await fetch('/api/card-news/generate-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_news_id: cardNewsId, idx: card.idx, hint: card.photo_hint ?? '' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '사진 생성 실패');
+      onPhotoAdded(data.storage_path, data.url);
+      // 새 사진이니 확대·위치는 기본으로
+      patch(card.idx, { photo_path: data.storage_path, photo_scale: 1, photo_x: 0, photo_y: 0 });
+    } catch (err) {
+      setPhotoError((err as Error).message);
+    } finally {
+      setGeneratingIdx(null);
     }
   }
 
@@ -126,23 +152,42 @@ export default function InfoCardsEditor({
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-xs font-medium text-ink-soft">
-                  <Camera size={14} />
-                  {uploading ? '올리는 중…' : c.photo_path ? '사진 바꾸기' : '사진 넣기'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => uploadCardPhoto(e, c.idx)}
-                    disabled={uploading}
-                  />
-                </label>
+                <div className="flex gap-2">
+                  <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-xs font-medium text-ink-soft">
+                    <Camera size={14} />
+                    {uploading ? '올리는 중…' : c.photo_path ? '사진 바꾸기' : '사진 넣기'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => uploadCardPhoto(e, c.idx)}
+                      disabled={uploading || generatingIdx !== null}
+                    />
+                  </label>
+                  <button
+                    onClick={() => generateCardPhoto(c)}
+                    disabled={generatingIdx !== null || uploading}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand py-2 text-xs font-semibold text-brand disabled:opacity-50"
+                  >
+                    <Sparkles size={14} />
+                    {generatingIdx === c.idx ? '만드는 중…' : 'AI 생성'}
+                  </button>
+                </div>
                 {c.photo_hint && <p className="mt-1.5 text-xs text-ink-faint">추천 사진: {c.photo_hint}</p>}
                 {!c.photo_path && !c.photo_hint && (
                   <p className="mt-1.5 text-xs text-ink-faint">사진을 넣기 전엔 &lsquo;사진 자리&rsquo;로 나와요</p>
                 )}
               </div>
             </div>
+          )}
+          {photoCards && c.photo_path && photoUrls[c.photo_path] && (
+            <PhotoAdjuster
+              photoUrl={photoUrls[c.photo_path]}
+              scale={c.photo_scale}
+              x={c.photo_x}
+              y={c.photo_y}
+              onChange={(v) => patch(c.idx, v)}
+            />
           )}
           <textarea
             className="field min-h-0 resize-none py-2.5"

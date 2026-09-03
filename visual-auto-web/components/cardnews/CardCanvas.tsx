@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { CardNewsMode, InfoCard, ImageCard } from '@/lib/cardnews/cards';
-import { clampLetterSpacing } from '@/lib/cardnews/cards';
+import { clampLetterSpacing, photoLayout } from '@/lib/cardnews/cards';
 import type { CardFrameTokens } from '@/lib/cardnews/frames';
 
 /**
@@ -110,6 +110,7 @@ function PhotoCardView({
   // 하단 배지: 표지=브랜드, 포인트=번호, CTA=배지 문구
   const badge = isCover ? logo : card.kind === 'cta' ? card.body || logo : `POINT ${String(card.idx).padStart(2, '0')}`;
   const titleSize = isCover ? 84 : card.kind === 'cta' ? 80 : 72;
+  const photoBox = photoLayout(card, CARD_W, CARD_H);
   return (
     <div
       style={{
@@ -123,13 +124,21 @@ function PhotoCardView({
       }}
     >
       {photoSrc ? (
+        // 확대·이동은 transform 대신 크기·좌표 계산으로 (satori에서 가장 안전한 방식)
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={photoSrc}
           alt=""
-          width={CARD_W}
-          height={CARD_H}
-          style={{ position: 'absolute', top: 0, left: 0, width: CARD_W, height: CARD_H, objectFit: 'cover' }}
+          width={photoBox.w}
+          height={photoBox.h}
+          style={{
+            position: 'absolute',
+            left: photoBox.left,
+            top: photoBox.top,
+            width: photoBox.w,
+            height: photoBox.h,
+            objectFit: 'cover',
+          }}
         />
       ) : (
         // 사진 자리 — 예진매니저가 스튜디오에서 교체한다
@@ -196,8 +205,8 @@ function PhotoCardView({
           <div
             style={{
               display: 'flex',
-              padding: '26px 40px',
-              borderRadius: 40,
+              padding: '15px 28px',
+              borderRadius: 28,
               backgroundColor: '#FFFFFF',
               fontSize: 42,
               fontWeight: 800,
@@ -212,10 +221,10 @@ function PhotoCardView({
           <div
             style={{
               display: 'flex',
-              width: 40,
-              height: 40,
-              marginTop: -18,
-              marginRight: 64,
+              width: 30,
+              height: 30,
+              marginTop: -13,
+              marginRight: 48,
               backgroundColor: '#FFFFFF',
               transform: 'rotate(45deg)',
             }}
@@ -239,13 +248,13 @@ function PhotoCardView({
           <div
             style={{
               display: 'flex',
-              marginBottom: 26,
-              padding: '14px 32px',
-              borderRadius: 14,
+              marginBottom: 24,
+              padding: '9px 20px',
+              borderRadius: 10,
               backgroundColor: point,
-              fontSize: 32,
+              fontSize: 30,
               fontWeight: 800,
-              letterSpacing: 5,
+              letterSpacing: 3,
               color: '#FFFFFF',
             }}
           >
