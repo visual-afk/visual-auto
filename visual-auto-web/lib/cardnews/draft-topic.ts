@@ -56,24 +56,54 @@ export async function generateTopicDraft(
     source.bubble && `말풍선 아이디어: ${source.bubble}`,
   ].filter(Boolean) as string[];
 
-  const sections = await callAIDelimited(
-    {
-      system,
-      userMessage: [`브랜드/지점: ${branchName}`, ...material, '', `포인트 카드는 정확히 ${pointCount}장.`].join('\n'),
-      temperature: 0.6,
-      maxTokens: 4000,
-    },
-    [
-      { name: 'COVER_HOOK', description: '표지 훅 — 줄당 8~14자, 최대 2줄' },
-      { name: 'COVER_BUBBLE', description: '말풍선 대사 한 줄 — 팩트 당사자의 1인칭, 8~14자' },
-      { name: 'COVER_PHOTO', description: '표지 사진 지시 한 줄 — 피사체 + 구도' },
-      { name: 'POINT_CARDS', description: `포인트 카드 ${pointCount}장 — 카드 사이 --- 구분, 첫 줄 제목 + 본문 최대 2줄` },
-      { name: 'CTA_TITLE', description: 'CTA 카드 제목 한 줄' },
-      { name: 'CTA_BODY', description: 'CTA 배지 문구 한 줄' },
-      { name: 'CAPTION', description: '인스타 캡션 3~4줄 — 정보 요약 + 저장·공유 유도, 홍보 문장 금지' },
-      { name: 'HASHTAGS', description: '해시태그 8~10개 한 줄' },
-    ],
-  );
+  const ask = () =>
+    callAIDelimited(
+      {
+        system,
+        userMessage: [
+          `브랜드/지점: ${branchName}`,
+          ...material,
+          '',
+          `포인트 카드는 정확히 ${pointCount}장. 카드와 카드 사이에는 반드시 --- 만 있는 줄을 넣는다.`,
+        ].join('\n'),
+        temperature: 0.6,
+        maxTokens: 4000,
+      },
+      [
+        { name: 'COVER_HOOK', description: '표지 훅 — 줄당 8~14자, 최대 2줄' },
+        {
+          name: 'COVER_BUBBLE',
+          description: '말풍선 대사 한 줄 — 팩트 당사자의 1인칭, 8~14자',
+        },
+        {
+          name: 'COVER_PHOTO',
+          description: '표지 사진 지시 한 줄 — 피사체 + 구도',
+        },
+        {
+          name: 'POINT_CARDS',
+          description: `포인트 카드 ${pointCount}장 — 카드 사이 --- 구분, 첫 줄 제목 + 본문 최대 2줄`,
+        },
+        { name: 'CTA_TITLE', description: 'CTA 카드 제목 한 줄' },
+        { name: 'CTA_BODY', description: 'CTA 배지 문구 한 줄' },
+        {
+          name: 'CAPTION',
+          description: '인스타 캡션 3~4줄 — 정보 요약 + 저장·공유 유도, 홍보 문장 금지',
+        },
+        { name: 'HASHTAGS', description: '해시태그 8~10개 한 줄' },
+      ],
+    );
+
+  // 포인트 카드가 모자라면(구분자 누락 등) 1회 재시도 — 빈 카드로 저장되는 것을 막는다
+  let sections = await ask();
+  let points = parsePointCards(sections.POINT_CARDS);
+  if (points.length < pointCount) {
+    const retry = await ask();
+    const retryPoints = parsePointCards(retry.POINT_CARDS);
+    if (retryPoints.length > points.length) {
+      sections = retry;
+      points = retryPoints;
+    }
+  }
 
   const coverHook = sections.COVER_HOOK?.trim() ?? '';
   // 편성에 미리 적어둔 말풍선이 있으면 그게 우선 (사람 수정이 항상 이긴다)
@@ -82,7 +112,7 @@ export async function generateTopicDraft(
   const cards = buildInfoCards(
     count,
     coverHook,
-    parsePointCards(sections.POINT_CARDS),
+    points,
     sections.CTA_TITLE?.trim() ?? '',
     sections.CTA_BODY?.trim() ?? '프로필 링크 ↓',
     { bubble, photo_hint: photoHint },
@@ -92,7 +122,15 @@ export async function generateTopicDraft(
     .map((t) => (t.startsWith('#') ? t : t ? `#${t}` : ''))
     .filter(Boolean)
     .slice(0, 10);
-  return { cards, cardCount: count, coverHook, bubble, photoHint, caption: sections.CAPTION?.trim() || null, hashtags };
+  return {
+    cards,
+    cardCount: count,
+    coverHook,
+    bubble,
+    photoHint,
+    caption: sections.CAPTION?.trim() || null,
+    hashtags,
+  };
 }
 
 function addDaysUTC(dateStr: string, days: number): string {

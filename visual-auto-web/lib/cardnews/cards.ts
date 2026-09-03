@@ -57,12 +57,24 @@ export function clampCardCount(n: unknown): number {
 /**
  * AI POINT_CARDS 섹션 파서 — 카드 사이 `---` 줄 구분,
  * 각 카드 첫 줄 = 제목, 나머지(최대 2줄) = 본문.
+ *
+ * 모델이 `---` 를 빼먹고 빈 줄로만 카드를 나누는 경우가 있어(카드가 한 덩어리로 뭉쳐
+ * 2·3번 카드가 통째로 유실됐다), 구분자가 없으면 **빈 줄 기준으로 한 번 더** 나눈다.
  */
 export function parsePointCards(section: string | undefined): { title: string; body: string }[] {
-  return (section ?? '')
-    .split(/^\s*---\s*$/m)
-    .map((block) => block.trim())
-    .filter(Boolean)
+  const raw = (section ?? '').trim();
+  let blocks = raw
+    .split(/^[ \t]*---+[ \t]*$/m)
+    .map((b) => b.trim())
+    .filter(Boolean);
+  if (blocks.length < 2) {
+    const byBlank = raw
+      .split(/\n[ \t]*\n/)
+      .map((b) => b.trim())
+      .filter(Boolean);
+    if (byBlank.length > blocks.length) blocks = byBlank;
+  }
+  return blocks
     .map((block) => {
       const lines = block.split('\n').map((l) => l.replace(/^[-*\d.)\s]+/, '').trim()).filter(Boolean);
       return { title: lines[0] ?? '', body: lines.slice(1, 3).join('\n') };
