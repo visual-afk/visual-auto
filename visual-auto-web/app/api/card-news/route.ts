@@ -114,7 +114,8 @@ export async function POST(request: Request) {
   try {
     const promptName = !post ? 'card-news-topic' : mode === 'image' ? 'card-news-image' : 'card-news-info';
     const prompt = await loadPromptFor(promptName, branchId);
-    const knowledge = await loadBranchKnowledgeFor(branchName, branchId);
+    // 지점 지식(blog용 CTA 사다리·SEO 키워드)은 글 기반 카드에만 — 주제 기반 브랜드 카드에 넣으면 홍보 톤이 샌다.
+    const knowledge = post ? await loadBranchKnowledgeFor(branchName, branchId) : '';
     const concept = await loadFileSafeFor(`knowledge/cardnews/concept-${branchName}.md`, branchId);
     const system = [
       prompt,

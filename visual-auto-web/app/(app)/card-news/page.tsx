@@ -2,7 +2,15 @@ import Link from 'next/link';
 import { getMember } from '@/lib/auth';
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { canMakeCardNews } from '@/lib/flags';
-import NewFromTopic from '@/components/cardnews/NewFromTopic';
+import { kstTodayStr } from '@/lib/kst';
+import NewFromTopic, { type TopicPick } from '@/components/cardnews/NewFromTopic';
+
+/** KST 오늘 기준 days만큼 이동한 YYYY-MM-DD */
+function shiftDate(todayStr: string, days: number): string {
+  const d = new Date(`${todayStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +38,33 @@ export default async function CardNewsListPage() {
     ? ((await admin.from('branches').select('id, name').eq('kind', 'brand').order('name')).data ?? [])
     : [];
 
+  // 콘텐츠 캘린더 편성 주제(지난 7일~앞으로 14일) — 여기서 골라 바로 만들 수 있게.
+  const today = kstTodayStr();
+  let topics: TopicPick[] = [];
+  if (canCreate) {
+    let q = admin
+      .from('cardnews_topics')
+      .select('id, branch_id, topic_date, material, headline_draft, status, card_news_id, verify_needed, fact_confirmed, branches(name)')
+      .gte('topic_date', shiftDate(today, -7))
+      .lte('topic_date', shiftDate(today, 14))
+      .neq('status', 'skipped')
+      .order('topic_date');
+    if (member.role !== 'hq_admin') q = q.in('branch_id', member.branchIds);
+    const { data: topicRows } = await q;
+    topics = (topicRows ?? []).map((t) => ({
+      id: t.id,
+      branch_id: t.branch_id,
+      topic_date: t.topic_date,
+      material: t.material,
+      headline_draft: t.headline_draft,
+      status: t.status,
+      card_news_id: t.card_news_id,
+      verify_needed: t.verify_needed,
+      fact_confirmed: t.fact_confirmed,
+      branchName: (t.branches as unknown as { name: string } | null)?.name ?? '',
+    }));
+  }
+
   return (
     <div className="py-6 md:py-0">
       <h1 className="mb-1 text-2xl font-bold">카드뉴스</h1>
@@ -44,7 +79,7 @@ export default async function CardNewsListPage() {
           의 초록 칩에서 바로 만들 수 있어요.
         </p>
       )}
-      {canCreate && <NewFromTopic brands={brands} />}
+      {canCreate && <NewFromTopic brands={brands} topics={topics} today={today} />}
 
       {list.length === 0 && (
         <div className="rounded-2xl border border-dashed border-line px-5 py-10 text-center text-sm text-ink-faint">
