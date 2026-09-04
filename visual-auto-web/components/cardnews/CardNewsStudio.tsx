@@ -100,29 +100,36 @@ export default function CardNewsStudio({
     }
   }
 
-  /** 카드 전부 PNG 저장 — 연속 다운로드 스로틀을 피해 400ms 간격 */
+  /**
+   * 카드 전부 저장 — 서버가 ZIP 하나로 묶어준다.
+   * 낱장을 연속으로 내려받으면 크롬이 두 번째부터 차단해서 표지만 저장되므로 응답을 1개로 유지한다.
+   */
   async function downloadAll() {
     if (dirty && !(await save())) return;
     setError('');
-    for (let i = 0; i < cards.length; i++) {
-      setDownloading(`${i + 1}/${cards.length} 저장 중…`);
-      try {
-        const res = await fetch(`/api/card-news/${initial.id}/render/${i}`);
-        if (!res.ok) throw new Error('카드 이미지를 못 만들었어요');
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `카드뉴스-${branchName}-${i + 1}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        setError((e as Error).message);
-        break;
+    setDownloading(cards.length > 1 ? `${cards.length}장 만드는 중…` : '만드는 중…');
+    try {
+      const res = await fetch(`/api/card-news/${initial.id}/download`);
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || '카드 이미지를 못 만들었어요');
       }
-      await new Promise((r) => setTimeout(r, 400));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `카드뉴스-${branchName}.${cards.length > 1 ? 'zip' : 'png'}`;
+      // 파이어폭스는 DOM에 붙어 있어야 클릭이 먹는다
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // 즉시 revoke 하면 다운로드가 시작되기 전에 blob이 사라질 수 있다
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDownloading(null);
     }
-    setDownloading(null);
   }
 
   async function openInstagram() {
@@ -271,7 +278,7 @@ export default function CardNewsStudio({
       <div className="mt-6 space-y-3 border-t border-line pt-5">
         <button onClick={downloadAll} disabled={!!downloading} className="btn-primary disabled:opacity-60">
           <span className="flex items-center justify-center gap-1.5">
-            <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 PNG)`}
+            <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 ${cards.length > 1 ? 'ZIP' : 'PNG'})`}
           </span>
         </button>
         <button onClick={openInstagram} className="btn-ghost">
