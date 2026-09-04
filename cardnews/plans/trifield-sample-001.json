@@ -1,0 +1,31 @@
+{
+  "$comment": "ref-001 치환 샘플 — 02-conversion-trifield.md §6 후보 #1. 파이프라인 [5] 카피 생성 입력 예시",
+  "plan_id": "trifield-sample-001",
+  "brand": "trifield",
+  "source_ref": "cardnews/references/dna/trifield/trifield-ref-001-meme-news-cover.json",
+  "topic": "고데기 180℃ — 케라틴은 60℃부터 익는다",
+  "pillar": "PIL-3",
+  "personas": ["T-P1", "T-P3"],
+  "hook_type": "H1",
+  "card_count": 7,
+  "sequence": ["HOOK", "FACT", "WHY", "MYTH", "HOW", "RECAP", "CTA"],
+  "cover": {
+    "headline_draft": "케라틴, 60℃부터 익기 시작함\n고데기는 180℃임ㅋㅋ",
+    "bubble_draft": "나도 단백질인데 왜",
+    "cutout": "계란후라이",
+    "evidence": "온도계 위젯: 60℃ vs 180℃"
+  },
+  "fact_basis": [
+    "케라틴 단백질은 약 60℃ 부근부터 변성 시작 (습윤모는 더 낮은 온도에서 시작)",
+    "단백질 변성은 비가역 — 익은 계란이 날계란으로 안 돌아가는 것과 동일 기전",
+    "모간은 죽은 조직이므로 생물학적 회복 없음 — 손상은 보수(코팅·충전)만 가능",
+    "젖은 모발에 고온 도구 사용 시 수증기 팽창으로 손상 가중 (버블 헤어)"
+  ],
+  "stolen_rhythm": {
+    "hook_formula": "충격 숫자 + 슬랭 어미, 말풍선 의인화 병렬",
+    "density": "카드당 팩트 1개",
+    "emphasis_at": 4
+  },
+  "design_note": "강조색은 FACT 카드 온도 숫자에만. 증거위젯틀 역할 토큰 사용 (04 확장 대기)",
+  "status": "ready_for_copy"
+}

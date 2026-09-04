@@ -1,0 +1,94 @@
+import { NextResponse } from 'next/server';
+import { requireMember } from '@/lib/auth';
+import { getServerSupabase } from '@/lib/supabase/server';
+
+/** 내 글 목록 (?scope=branch 면 우리 지점 전체) */
+export async function GET(request: Request) {
+  const res = await requireMember();
+  if ('error' in res) return res.error;
+  const { member } = res;
+  const scope = new URL(request.url).searchParams.get('scope');
+
+  const supabase = await getServerSupabase();
+  let q = supabase.from('posts').select('*').order('created_at', { ascending: false });
+  if (scope !== 'branch') q = q.eq('author_id', member.userId);
+  const { data, error } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ posts: data });
+}
+
+const EDITABLE = ['title', 'content', 'meta_description', 'tags'] as const;
+
+/** 글 수정 / 발행 / 조회수 입력 */
+export async function PATCH(request: Request) {
+  const res = await requireMember();
+  if ('error' in res) return res.error;
+
+  const body = await request.json().catch(() => ({}));
+  const id: string = body.id;
+  if (!id) return NextResponse.json({ error: 'id가 필요해요' }, { status: 400 });
+
+  const patch: Record<string, unknown> = {};
+  for (const k of EDITABLE) if (k in body) patch[k] = body[k];
+
+  // 발행 (⑥): 어디에 올렸는지(복수 가능) + 상태 + 3일 뒤 리마인드
+  if (body.action === 'publish') {
+    patch.status = 'published';
+    // 복수 발행처: publish_targets 배열(신규) 우선, 없으면 publish_target 단일(구버전 호환).
+    // 이미 true인 발행처는 유지(추가 발행). 켜진 것만 true로 올린다.
+    const targets: string[] = Array.isArray(body.publish_targets)
+      ? body.publish_targets
+      : body.publish_target
+        ? [body.publish_target]
+        : [];
+    if (targets.includes('imweb')) patch.posted_imweb = true;
+    if (targets.includes('naver')) patch.posted_naver = true;
+    patch.published_at = new Date().toISOString();
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    patch.next_check_at = d.toISOString().slice(0, 10);
+  }
+
+  // 조회수 입력 (⑦)
+  if (body.action === 'record_views') {
+    if (body.published_url !== undefined) patch.published_url = String(body.published_url).trim();
+    // 빈 조회수는 0으로 굳히지 않고 null(=미입력)로 남긴다 — /track에서 "조회수 입력" 유지, 총/평균 오염 방지
+    if (body.views !== undefined) patch.views = body.views === '' || body.views == null ? null : Number(body.views) || 0;
+    if (body.saves !== undefined) patch.saves = body.saves === '' || body.saves == null ? null : Number(body.saves) || 0;
+    patch.views_updated_at = new Date().toISOString();
+    if (patch.status == null) patch.status = 'published';
+    if (body.remind) {
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      patch.next_check_at = d.toISOString().slice(0, 10);
+    } else {
+      patch.next_check_at = null;
+    }
+  }
+
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase.from('posts').update(patch).eq('id', id).select('*').single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ post: data });
+}
+
+/** 초안 삭제 — 발행 글은 통계 보호를 위해 지울 수 없다 (RLS: 본인/원장/본사) */
+export async function DELETE(request: Request) {
+  const res = await requireMember();
+  if ('error' in res) return res.error;
+
+  const body = await request.json().catch(() => ({}));
+  const id: string = body.id;
+  if (!id) return NextResponse.json({ error: 'id가 필요해요' }, { status: 400 });
+
+  const supabase = await getServerSupabase();
+  const { data, error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', id)
+    .eq('status', 'draft')
+    .select('id');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: '발행된 글은 지울 수 없어요' }, { status: 403 });
+  return NextResponse.json({ ok: true });
+}

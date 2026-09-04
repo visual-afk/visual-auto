@@ -12,7 +12,10 @@
     "keywords:low": "tsx scripts/find-low-comp.ts",
     "keywords:month": "tsx scripts/build-monthly.ts",
     "keywords": "tsx scripts/fetch-keyword-volumes.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "npm --prefix visual-auto-web run dev",
+    "build": "npm --prefix visual-auto-web run build",
+    "start": "npm --prefix visual-auto-web run start"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
