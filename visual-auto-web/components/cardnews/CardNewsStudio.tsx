@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, Send, RotateCw, Check, Trash2 } from 'lucide-react';
 import type { CardNews, InfoCard, ImageCard } from '@/lib/cardnews/cards';
@@ -43,12 +43,26 @@ export default function CardNewsStudio({
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
 
-  function updateCards(next: typeof cards) {
-    setCards(next);
+  /**
+   * 편집할 때마다 올라가는 번호. 저장 요청이 오가는 동안 추가로 편집하면
+   * 번호가 달라지므로, 응답이 와도 "저장됨"으로 잘못 표시하지 않는다.
+   */
+  const revision = useRef(0);
+  /** 마지막으로 자동 저장을 시도한 번호 — 실패한 내용으로 무한 재시도하지 않기 위함 */
+  const lastAutoAttempt = useRef(-1);
+
+  function markDirty() {
+    revision.current += 1;
     setDirty(true);
   }
 
+  function updateCards(next: typeof cards) {
+    setCards(next);
+    markDirty();
+  }
+
   async function save(): Promise<boolean> {
+    const rev = revision.current;
     setSaving(true);
     setError('');
     try {
@@ -59,7 +73,8 @@ export default function CardNewsStudio({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '저장 실패');
-      setDirty(false);
+      // 저장하는 사이에 또 고쳤으면 dirty를 유지해야 그 편집도 저장된다
+      if (revision.current === rev) setDirty(false);
       setSavedTick(true);
       setTimeout(() => setSavedTick(false), 2000);
       return true;
@@ -70,6 +85,31 @@ export default function CardNewsStudio({
       setSaving(false);
     }
   }
+
+  /** 편집이 멈추면 1.2초 뒤 자동 저장 — 글쓰기·릴스와 같은 감각으로 */
+  useEffect(() => {
+    if (!dirty || saving) return;
+    // 같은 내용으로 이미 실패했으면 재시도하지 않는다 (새로 고치면 다시 시도)
+    if (lastAutoAttempt.current === revision.current) return;
+    const rev = revision.current;
+    const timer = setTimeout(() => {
+      lastAutoAttempt.current = rev;
+      void save();
+    }, 1200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, saving, cards, caption, hashtags]);
+
+  /** 저장 안 된 편집을 두고 창을 닫으려 하면 경고 */
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ''; // 사파리·구버전 크롬은 이게 있어야 경고가 뜬다
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   /** AI로 현재 장수 기준 다시 구성 (글 기반 + 편성 주제 기반) */
   async function regenerate() {
@@ -100,29 +140,36 @@ export default function CardNewsStudio({
     }
   }
 
-  /** 카드 전부 PNG 저장 — 연속 다운로드 스로틀을 피해 400ms 간격 */
+  /**
+   * 카드 전부 저장 — 서버가 ZIP 하나로 묶어준다.
+   * 낱장을 연속으로 내려받으면 크롬이 두 번째부터 차단해서 표지만 저장되므로 응답을 1개로 유지한다.
+   */
   async function downloadAll() {
     if (dirty && !(await save())) return;
     setError('');
-    for (let i = 0; i < cards.length; i++) {
-      setDownloading(`${i + 1}/${cards.length} 저장 중…`);
-      try {
-        const res = await fetch(`/api/card-news/${initial.id}/render/${i}`);
-        if (!res.ok) throw new Error('카드 이미지를 못 만들었어요');
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `카드뉴스-${branchName}-${i + 1}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        setError((e as Error).message);
-        break;
+    setDownloading(cards.length > 1 ? `${cards.length}장 만드는 중…` : '만드는 중…');
+    try {
+      const res = await fetch(`/api/card-news/${initial.id}/download`);
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        throw new Error(msg?.error || '카드 이미지를 못 만들었어요');
       }
-      await new Promise((r) => setTimeout(r, 400));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `카드뉴스-${branchName}.${cards.length > 1 ? 'zip' : 'png'}`;
+      // 파이어폭스는 DOM에 붙어 있어야 클릭이 먹는다
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // 즉시 revoke 하면 다운로드가 시작되기 전에 blob이 사라질 수 있다
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDownloading(null);
     }
-    setDownloading(null);
   }
 
   async function openInstagram() {
@@ -221,11 +268,11 @@ export default function CardNewsStudio({
                 hashtags={hashtags}
                 onCaptionChange={(v) => {
                   setCaption(v);
-                  setDirty(true);
+                  markDirty();
                 }}
                 onHashtagsChange={(v) => {
                   setHashtags(v);
-                  setDirty(true);
+                  markDirty();
                 }}
               />
             )}
@@ -252,26 +299,35 @@ export default function CardNewsStudio({
               hashtags={hashtags}
               onCaptionChange={(v) => {
                 setCaption(v);
-                setDirty(true);
+                markDirty();
               }}
               onHashtagsChange={(v) => {
                 setHashtags(v);
-                setDirty(true);
+                markDirty();
               }}
             />
           </>
         )}
 
         <button onClick={save} disabled={saving || !dirty} className="btn-ghost disabled:opacity-50">
-          {saving ? '저장 중…' : savedTick ? <span className="flex items-center justify-center gap-1"><Check size={16} /> 저장됐어요</span> : '수정 저장'}
+          {saving ? (
+            '저장 중…'
+          ) : dirty ? (
+            '지금 저장'
+          ) : savedTick ? (
+            <span className="flex items-center justify-center gap-1"><Check size={16} /> 저장됐어요</span>
+          ) : (
+            '저장됨'
+          )}
         </button>
+        <p className="text-center text-xs text-ink-faint">수정하면 자동 저장돼요. 새로고침해도 그대로 있어요.</p>
       </div>
 
       {/* 내보내기 */}
       <div className="mt-6 space-y-3 border-t border-line pt-5">
         <button onClick={downloadAll} disabled={!!downloading} className="btn-primary disabled:opacity-60">
           <span className="flex items-center justify-center gap-1.5">
-            <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 PNG)`}
+            <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 ${cards.length > 1 ? 'ZIP' : 'PNG'})`}
           </span>
         </button>
         <button onClick={openInstagram} className="btn-ghost">
