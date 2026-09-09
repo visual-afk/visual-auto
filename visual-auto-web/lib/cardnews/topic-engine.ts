@@ -39,16 +39,27 @@ export interface GeneratedTopic {
   live_slot: boolean;
 }
 
-/** 브랜드명 → 주제 은행. 은행이 없는 브랜드는 편성 대상이 아니다. */
-const BANKS: Record<string, TopicBank> = {
+/**
+ * 손으로 만든 파일 은행. 트리필드만 여기에 있고, 나머지 브랜드는 AI가 만든 은행을
+ * DB(cardnews_topic_banks)에서 읽는다 — topic-bank-store.ts 의 loadTopicBank 참고.
+ */
+const FILE_BANKS: Record<string, TopicBank> = {
   트리필드: trifieldBank as unknown as TopicBank,
 };
 
-export function getTopicBank(brandName: string): TopicBank | null {
-  return BANKS[brandName] ?? null;
+/** 파일 은행만 조회 (동기). DB 은행까지 포함한 조회는 loadTopicBank 를 쓴다. */
+export function getFileTopicBank(brandName: string): TopicBank | null {
+  return FILE_BANKS[brandName] ?? null;
 }
 
-export const TOPIC_FRAMES = (trifieldBank as unknown as TopicBank).frames;
+/**
+ * 전 브랜드 공용 뉴스 프레임.
+ * generateTopics 가 F5(반전)를 반드시 찾으므로(myth 소재 전용) 프레임만은 브랜드마다
+ * 새로 만들지 않고 이걸 재사용한다. AI가 F5를 빠뜨리면 편성이 터진다.
+ */
+export const SHARED_FRAMES = (trifieldBank as unknown as TopicBank).frames;
+
+export const TOPIC_FRAMES = SHARED_FRAMES;
 
 function addDays(dateStr: string, n: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);

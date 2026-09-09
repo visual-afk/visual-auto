@@ -7,7 +7,8 @@ export const maxDuration = 300;
 
 /**
  * 매일 KST 08:50 (vercel.json cron "50 23 * * *"):
- *   1) 주제 은행이 있는 브랜드의 카드뉴스 주제 편성을 90일 앞까지 append-only 시드 + 구글캘린더 내보내기
+ *   1) 브랜드별 카드뉴스 주제 편성을 90일 앞까지 append-only 시드 + 구글캘린더 내보내기
+ *      (은행이 없는 브랜드는 AI가 은행을 먼저 만든다 — 트리필드는 파일 은행 그대로)
  *   2) 앞으로 7일 안의 주제 중 초안 없는 것에 카드뉴스 초안 자동 생성 (헤드라인·카드·캡션 — 회당 최대 5개)
  * 사람은 수치 검증(팩트 확정)과 발행만 하면 된다.
  * 최초 시드도 이 라우트 — 배포 후 CRON_SECRET 으로 1회 호출하면 된다.
@@ -28,6 +29,10 @@ export async function GET(request: Request) {
       `[extend-cardnews-topics] 시드 ${result.inserted}건, gcal ${result.exported}건, 초안 ${draft.drafted}건(실패 ${draft.failed})`,
       result.perBrand,
     );
+    // 은행이 없어 AI 생성까지 실패한 브랜드는 그 요일이 통째로 비므로 눈에 띄게 남긴다
+    if (Object.keys(result.failures).length) {
+      console.error('[extend-cardnews-topics] 주제 은행 실패:', result.failures);
+    }
     return NextResponse.json({ ok: true, ...result, ...draft });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

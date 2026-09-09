@@ -9,7 +9,8 @@
 import { getAdminSupabase } from '@/lib/supabase/admin';
 import { kstTodayStr } from '@/lib/kst';
 import { upsertTopicEvent, type GcalTopicItem } from '@/lib/gcal';
-import { generateTopics, getTopicBank } from './topic-engine';
+import { generateTopics } from './topic-engine';
+import { ensureTopicBank, loadTopicBank } from './topic-bank-store';
 
 export interface SeededTopicRow {
   id: string;
@@ -41,8 +42,9 @@ export async function extendTopicSchedule(
   brandName: string,
   horizonDays = 90,
 ): Promise<SeededTopicRow[]> {
-  const bank = getTopicBank(brandName);
-  if (!bank) return [];
+  const stored = await loadTopicBank(brandName, branchId);
+  if (!stored) return [];
+  const bank = stored.bank;
 
   const admin = getAdminSupabase();
   const today = kstTodayStr();
@@ -103,6 +105,7 @@ export async function extendAllBrands(horizonDays = 90): Promise<{
   inserted: number;
   exported: number;
   perBrand: Record<string, number>;
+  failures: Record<string, string>;
 }> {
   const admin = getAdminSupabase();
   const { data: brands, error } = await admin.from('branches').select('id, name').eq('kind', 'brand');
@@ -111,9 +114,18 @@ export async function extendAllBrands(horizonDays = 90): Promise<{
   let inserted = 0;
   let exported = 0;
   const perBrand: Record<string, number> = {};
+  const failures: Record<string, string> = {}; // 브랜드별 은행 생성 실패 사유
 
   for (const b of (brands ?? []) as { id: string; name: string }[]) {
-    if (!getTopicBank(b.name)) continue; // 은행 없는 브랜드는 편성 대상 아님
+    // 은행이 없는 브랜드는 AI가 한 번 만들어 준다 — 그 다음부터는 트리필드와 같은 결정론 편성.
+    // 한 브랜드가 실패해도 나머지 브랜드 편성은 계속한다.
+    try {
+      const ensured = await ensureTopicBank(b.name, b.id);
+      if (!ensured) continue;
+    } catch (e) {
+      failures[b.name] = (e as Error).message;
+      continue;
+    }
     const rows = await extendTopicSchedule(b.id, b.name, horizonDays);
     inserted += rows.length;
     perBrand[b.name] = rows.length;
@@ -127,5 +139,5 @@ export async function extendAllBrands(horizonDays = 90): Promise<{
       }
     }
   }
-  return { inserted, exported, perBrand };
+  return { inserted, exported, perBrand, failures };
 }

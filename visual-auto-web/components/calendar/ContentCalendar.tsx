@@ -158,7 +158,13 @@ export default function ContentCalendar({
   }
 
   async function reseed() {
-    if (!confirm('브랜드 주제를 지금 다시 편성할까요? (마지막 편성일 이후를 은행에서 채워요)')) return;
+    if (
+      !confirm(
+        '브랜드 주제를 지금 다시 편성할까요? (마지막 편성일 이후를 은행에서 채워요)\n' +
+          '주제 은행이 아직 없는 브랜드는 AI가 은행을 먼저 만들어서 1~2분 걸릴 수 있어요.',
+      )
+    )
+      return;
     setBusy(true);
     const res = await fetch('/api/cardnews-topics/reseed', { method: 'POST' });
     const body = await res.json().catch(() => ({}));
@@ -167,7 +173,13 @@ export default function ContentCalendar({
       alert(body.error || '편성에 실패했어요');
       return;
     }
-    alert(body.inserted > 0 ? `${body.inserted}개 주제를 새로 편성했어요` : '추가할 날짜가 없어요 (이미 채워져 있어요)');
+    // 은행을 못 만든 브랜드는 그 브랜드만 통째로 비므로 반드시 알려준다
+    const failures = Object.entries((body.failures ?? {}) as Record<string, string>);
+    const failNote = failures.length ? `\n\n못 만든 브랜드:\n${failures.map(([n, m]) => `· ${n} — ${m}`).join('\n')}` : '';
+    alert(
+      (body.inserted > 0 ? `${body.inserted}개 주제를 새로 편성했어요` : '추가할 날짜가 없어요 (이미 채워져 있어요)') +
+        failNote,
+    );
     router.refresh();
   }
 
