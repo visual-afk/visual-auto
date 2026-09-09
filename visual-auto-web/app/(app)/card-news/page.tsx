@@ -21,15 +21,28 @@ function fmtDate(s: string) {
   return `${d.getMonth() + 1}.${d.getDate()}`;
 }
 
-/** 내 카드뉴스 목록 — 새 카드뉴스는 글쓰기 초안에서 "카드뉴스로"로 만든다. */
+/**
+ * 카드뉴스 목록 — 내가 만든 것 + 크론이 자동으로 뽑아둔 것.
+ * 자동 초안(autoDraftUpcoming)은 author_id 가 null 이라, 내 것만 걸러내면
+ * 만들어져 있어도 목록에 영영 안 떠서 캘린더로만 접근할 수 있었다.
+ */
 export default async function CardNewsListPage() {
   const member = (await getMember())!;
   const admin = getAdminSupabase();
-  const { data } = await admin
+  let q = admin
     .from('card_news')
-    .select('id, mode, card_count, status, views, created_at, cards, branches(name), posts(title)')
-    .eq('author_id', member.userId)
+    .select('id, mode, card_count, status, views, created_at, author_id, cards, branches(name), posts(title)')
     .order('created_at', { ascending: false });
+  // 주인 없는 자동 초안은 볼 수 있는 지점 범위 안에서만 (본사는 전부)
+  q =
+    member.role === 'hq_admin'
+      ? q.or(`author_id.eq.${member.userId},author_id.is.null`)
+      : member.branchIds.length
+        ? q.or(
+            `author_id.eq.${member.userId},and(author_id.is.null,branch_id.in.(${member.branchIds.join(',')}))`,
+          )
+        : q.eq('author_id', member.userId);
+  const { data } = await q;
   const list = data ?? [];
 
   // 주제로 만들기: 본사(또는 정보형 개방 플래그)만. 브랜드 계정 목록을 넘긴다.
@@ -110,6 +123,7 @@ export default async function CardNewsListPage() {
                 </div>
                 <p className="mt-1 text-sm text-ink-soft">
                   {branch?.name} · {c.card_count}장 · {c.status === 'published' ? (c.views != null ? `조회 ${c.views.toLocaleString()}` : '추적 중') : '초안'} · {fmtDate(c.created_at)}
+                  {c.author_id === null && ' · 자동 생성'}
                 </p>
               </Link>
             </li>
