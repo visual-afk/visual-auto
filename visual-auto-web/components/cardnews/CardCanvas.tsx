@@ -1,6 +1,13 @@
 import type { CSSProperties } from 'react';
 import type { CardNewsMode, InfoCard, ImageCard } from '@/lib/cardnews/cards';
-import { clampLetterSpacing } from '@/lib/cardnews/cards';
+import {
+  clampLetterSpacing,
+  clampBubblePos,
+  clampBubbleRot,
+  hasBubblePosition,
+  BUBBLE_DEFAULT_X,
+  BUBBLE_DEFAULT_Y,
+} from '@/lib/cardnews/cards';
 import type { CardFrameTokens } from '@/lib/cardnews/frames';
 
 /**
@@ -186,8 +193,21 @@ function PhotoCardView({
           style={{
             display: 'flex',
             position: 'absolute',
-            top: 150,
-            right: 72,
+            // 옮긴 적 없으면 예전 자리 그대로 (이미 만든 카드가 움직이지 않게).
+            // 옮겼으면 %로 중심을 잡는다 — 미리보기(DOM)와 저장 이미지(satori)가 같은 결과를 낸다.
+            ...(hasBubblePosition(card)
+              ? {
+                  top: `${clampBubblePos(card.bubble_y, BUBBLE_DEFAULT_Y)}%`,
+                  left: `${clampBubblePos(card.bubble_x, BUBBLE_DEFAULT_X)}%`,
+                  transform: `translate(-50%, -50%) rotate(${clampBubbleRot(card.bubble_rot)}deg)`,
+                }
+              : {
+                  top: 150,
+                  right: 72,
+                  ...(clampBubbleRot(card.bubble_rot)
+                    ? { transform: `rotate(${clampBubbleRot(card.bubble_rot)}deg)` }
+                    : {}),
+                }),
             flexDirection: 'column',
             alignItems: 'flex-end',
             maxWidth: 640,
