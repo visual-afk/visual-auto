@@ -100,6 +100,25 @@ export default function CardNewsStudio({
     }
   }
 
+  /** 응답 하나를 파일 하나로 저장 — 브라우저 차이(파이어폭스 DOM 부착 / blob 조기 해제)를 여기서 흡수한다 */
+  async function saveResponseAsFile(res: Response, filename: string) {
+    if (!res.ok) {
+      const msg = await res.json().catch(() => null);
+      throw new Error(msg?.error || '카드 이미지를 못 만들었어요');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    // 파이어폭스는 DOM에 붙어 있어야 클릭이 먹는다
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // 즉시 revoke 하면 다운로드가 시작되기 전에 blob이 사라질 수 있다
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   /**
    * 카드 전부 저장 — 서버가 ZIP 하나로 묶어준다.
    * 낱장을 연속으로 내려받으면 크롬이 두 번째부터 차단해서 표지만 저장되므로 응답을 1개로 유지한다.
@@ -110,21 +129,25 @@ export default function CardNewsStudio({
     setDownloading(cards.length > 1 ? `${cards.length}장 만드는 중…` : '만드는 중…');
     try {
       const res = await fetch(`/api/card-news/${initial.id}/download`);
-      if (!res.ok) {
-        const msg = await res.json().catch(() => null);
-        throw new Error(msg?.error || '카드 이미지를 못 만들었어요');
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `카드뉴스-${branchName}.${cards.length > 1 ? 'zip' : 'png'}`;
-      // 파이어폭스는 DOM에 붙어 있어야 클릭이 먹는다
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // 즉시 revoke 하면 다운로드가 시작되기 전에 blob이 사라질 수 있다
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      await saveResponseAsFile(res, `카드뉴스-${branchName}.${cards.length > 1 ? 'zip' : 'png'}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  /**
+   * 카드 한 장만 저장 — 한 장 고쳤을 때 5장을 다시 받지 않게.
+   * 서버가 DB를 보고 그리므로 고친 내용이 있으면 먼저 저장해야 반영된다.
+   */
+  async function downloadOne(index: number) {
+    if (dirty && !(await save())) return;
+    setError('');
+    setDownloading(`${index + 1}번 카드 만드는 중…`);
+    try {
+      const res = await fetch(`/api/card-news/${initial.id}/render/${index}`);
+      await saveResponseAsFile(res, `카드뉴스-${branchName}-${String(index + 1).padStart(2, '0')}.png`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -194,20 +217,28 @@ export default function CardNewsStudio({
         {branchName} · {mode === 'info' ? '정보형 — 글이 카드에 들어가요' : '이미지형 — 사진이 슬라이드, 글은 캡션으로'}
       </p>
 
-      {/* 미리보기 스트립 */}
+      {/* 미리보기 스트립 — 카드마다 낱장 저장 */}
       <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
         {cards.map((c, i) => (
-          <ScaledCard
-            key={i}
-            width={236}
-            mode={mode}
-            card={c}
-            tokens={frame.tokens}
-            branchName={branchName}
-            photoSrc={photoSrcOf(c)}
-            pageIndex={i}
-            pageCount={cards.length}
-          />
+          <div key={i} className="shrink-0">
+            <ScaledCard
+              width={236}
+              mode={mode}
+              card={c}
+              tokens={frame.tokens}
+              branchName={branchName}
+              photoSrc={photoSrcOf(c)}
+              pageIndex={i}
+              pageCount={cards.length}
+            />
+            <button
+              onClick={() => downloadOne(i)}
+              disabled={!!downloading}
+              className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-xl border border-line bg-surface py-1.5 text-xs font-semibold text-ink-soft hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              <Download size={13} /> {i + 1}번만 저장
+            </button>
+          </div>
         ))}
       </div>
 
@@ -286,7 +317,9 @@ export default function CardNewsStudio({
             <Send size={18} /> 인스타 열기{mode === 'image' ? ' (캡션 복사됨)' : ''}
           </span>
         </button>
-        <p className="text-center text-xs text-ink-faint">저장한 사진을 인스타에서 캐러셀로 올려주세요. 자동 업로드는 안 해요.</p>
+        <p className="text-center text-xs text-ink-faint">
+          한 장만 고쳤으면 미리보기 아래 <b>“N번만 저장”</b>을 쓰세요. 저장한 사진은 인스타에서 캐러셀로 올려주세요 — 자동 업로드는 안 해요.
+        </p>
       </div>
 
       {/* 올린 뒤 링크 등록 → 조회수 추적 (릴스와 동일 패턴) */}
