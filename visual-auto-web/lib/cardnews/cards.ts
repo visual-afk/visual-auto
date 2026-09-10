@@ -13,11 +13,44 @@ export interface InfoCard {
   bubble?: string; // 말풍선 대사 (팩트 당사자의 1인칭, 8~14자)
   photo_hint?: string; // 어떤 사진을 넣어야 하는지 AI가 적어주는 지시문
   letter_spacing?: number; // 자간(px). 없으면 0 — 스튜디오 슬라이더로 조절
+  // 말풍선 위치·기울기. 셋 다 없으면 기존 기본 자리(우상단)에 그대로 그린다.
+  bubble_x?: number; // 카드 가로 기준 %, 말풍선 중심 (0=왼쪽 끝, 100=오른쪽 끝)
+  bubble_y?: number; // 카드 세로 기준 %, 말풍선 중심
+  bubble_rot?: number; // 기울기(도). 음수=왼쪽으로 기울임
 }
 
 /** 자간 조절 범위 (px) — 스튜디오 슬라이더와 렌더러가 공유 */
 export const LETTER_SPACING_MIN = -6;
 export const LETTER_SPACING_MAX = 6;
+
+/**
+ * 말풍선 위치·기울기 범위.
+ * 위치는 카드 크기 대비 %라 미리보기(DOM)와 저장 이미지(satori)가 같은 값을 쓴다.
+ */
+export const BUBBLE_ROT_MIN = -30;
+export const BUBBLE_ROT_MAX = 30;
+/** 슬라이더를 처음 만졌을 때 시작점 — 기존 기본 자리(우상단)와 거의 같은 지점 */
+export const BUBBLE_DEFAULT_X = 70;
+export const BUBBLE_DEFAULT_Y = 16;
+
+/** 말풍선을 옮긴 적이 있나 (없으면 기존 기본 자리로 그린다) */
+export function hasBubblePosition(card: { bubble_x?: number; bubble_y?: number }): boolean {
+  return Number.isFinite(Number(card.bubble_x)) && Number.isFinite(Number(card.bubble_y));
+}
+
+/** 말풍선이 카드 밖으로 나가지 않게 자른다 */
+export function clampBubblePos(v: unknown, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** 저장된 기울기를 안전한 범위로 자른다 */
+export function clampBubbleRot(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(BUBBLE_ROT_MAX, Math.max(BUBBLE_ROT_MIN, Math.round(n)));
+}
 
 /** 저장된 자간을 안전한 범위로 자른다 (렌더 깨짐 방지) */
 export function clampLetterSpacing(v: unknown): number {

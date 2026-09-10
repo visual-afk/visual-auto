@@ -3,7 +3,18 @@
 import { useState } from 'react';
 import { Trash2, Plus, Camera } from 'lucide-react';
 import type { InfoCard } from '@/lib/cardnews/cards';
-import { MAX_CARDS, LETTER_SPACING_MIN, LETTER_SPACING_MAX, clampLetterSpacing } from '@/lib/cardnews/cards';
+import {
+  MAX_CARDS,
+  LETTER_SPACING_MIN,
+  LETTER_SPACING_MAX,
+  clampLetterSpacing,
+  BUBBLE_ROT_MIN,
+  BUBBLE_ROT_MAX,
+  BUBBLE_DEFAULT_X,
+  BUBBLE_DEFAULT_Y,
+  clampBubblePos,
+  clampBubbleRot,
+} from '@/lib/cardnews/cards';
 
 const KIND_LABEL: Record<InfoCard['kind'], string> = { cover: '표지', point: '포인트', cta: 'CTA' };
 
@@ -152,12 +163,61 @@ export default function InfoCardsEditor({
             onChange={(e) => patch(c.idx, { title: e.target.value })}
           />
           {c.kind === 'cover' && (
-            <input
-              className="field mt-2 py-2.5"
-              placeholder="말풍선 대사 (8~14자, 비우면 안 나와요)"
-              value={c.bubble ?? ''}
-              onChange={(e) => patch(c.idx, { bubble: e.target.value })}
-            />
+            <>
+              <input
+                className="field mt-2 py-2.5"
+                placeholder="말풍선 대사 (8~14자, 비우면 안 나와요)"
+                value={c.bubble ?? ''}
+                onChange={(e) => patch(c.idx, { bubble: e.target.value })}
+              />
+              {/* 대사가 있을 때만 — 말풍선이 안 보이는데 조절칸만 있으면 헷갈린다 */}
+              {!!c.bubble?.trim() && (
+                <div className="mt-2 rounded-2xl border border-line bg-surface p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-ink-faint">말풍선 위치·기울기</span>
+                    {(c.bubble_x != null || c.bubble_y != null || c.bubble_rot) && (
+                      <button
+                        onClick={() => patch(c.idx, { bubble_x: undefined, bubble_y: undefined, bubble_rot: undefined })}
+                        className="text-xs font-medium text-brand"
+                      >
+                        기본 자리로
+                      </button>
+                    )}
+                  </div>
+                  <BubbleSlider
+                    label="좌우"
+                    hint="← 왼쪽 · 오른쪽 →"
+                    min={0}
+                    max={100}
+                    value={clampBubblePos(c.bubble_x, BUBBLE_DEFAULT_X)}
+                    display={`${clampBubblePos(c.bubble_x, BUBBLE_DEFAULT_X)}%`}
+                    onChange={(v) =>
+                      patch(c.idx, { bubble_x: v, bubble_y: clampBubblePos(c.bubble_y, BUBBLE_DEFAULT_Y) })
+                    }
+                  />
+                  <BubbleSlider
+                    label="위아래"
+                    hint="← 위 · 아래 →"
+                    min={0}
+                    max={100}
+                    value={clampBubblePos(c.bubble_y, BUBBLE_DEFAULT_Y)}
+                    display={`${clampBubblePos(c.bubble_y, BUBBLE_DEFAULT_Y)}%`}
+                    onChange={(v) =>
+                      patch(c.idx, { bubble_y: v, bubble_x: clampBubblePos(c.bubble_x, BUBBLE_DEFAULT_X) })
+                    }
+                  />
+                  <BubbleSlider
+                    label="기울기"
+                    hint="← 왼쪽으로 · 오른쪽으로 →"
+                    min={BUBBLE_ROT_MIN}
+                    max={BUBBLE_ROT_MAX}
+                    value={clampBubbleRot(c.bubble_rot)}
+                    display={`${clampBubbleRot(c.bubble_rot)}°`}
+                    onChange={(v) => patch(c.idx, { bubble_rot: v })}
+                  />
+                </div>
+              )}
+            </>
           )}
           {c.kind !== 'cover' && (
             <textarea
@@ -176,6 +236,45 @@ export default function InfoCardsEditor({
           <Plus size={16} /> 포인트 카드 추가
         </button>
       )}
+    </div>
+  );
+}
+
+/** 말풍선 조절 슬라이더 한 줄 — 자간 슬라이더와 같은 생김새 */
+function BubbleSlider({
+  label,
+  hint,
+  min,
+  max,
+  value,
+  display,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  min: number;
+  max: number;
+  value: number;
+  display: string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="mb-2 last:mb-0">
+      <div className="flex items-center justify-between text-xs text-ink-soft">
+        <span>{label}</span>
+        <span className="tabular-nums">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-brand"
+        aria-label={`말풍선 ${label}`}
+      />
+      <p className="text-[11px] text-ink-faint">{hint}</p>
     </div>
   );
 }
