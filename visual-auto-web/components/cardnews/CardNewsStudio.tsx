@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Send, RotateCw, Check, Trash2 } from 'lucide-react';
+import { Download, Send, RotateCw, Check, Trash2, Share2 } from 'lucide-react';
 import type { CardNews, InfoCard, ImageCard } from '@/lib/cardnews/cards';
 import type { CardFrame } from '@/lib/cardnews/frames';
 import ScaledCard from './ScaledCard';
@@ -38,6 +38,10 @@ export default function CardNewsStudio({
   const [savedTick, setSavedTick] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  /** 이 기기가 파일 공유(사진 앱에 바로 저장)를 지원하나 — 사실상 모바일 */
+  const [canShareFiles, setCanShareFiles] = useState(false);
+  /** 만들어둔 카드 이미지. iOS가 탭 제스처 만료로 공유를 막으면 다시 안 만들고 바로 재시도한다 */
+  const [readyFiles, setReadyFiles] = useState<File[] | null>(null);
   const [publishedUrl, setPublishedUrl] = useState(initial.published_url ?? '');
   const [published, setPublished] = useState(initial.status === 'published');
   const [registering, setRegistering] = useState(false);
@@ -148,6 +152,57 @@ export default function CardNewsStudio({
     try {
       const res = await fetch(`/api/card-news/${initial.id}/render/${index}`);
       await saveResponseAsFile(res, `카드뉴스-${branchName}-${String(index + 1).padStart(2, '0')}.png`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  /** 카드 전체를 이미지 파일로 만든다 (공유용) */
+  async function buildCardFiles(): Promise<File[]> {
+    const files: File[] = [];
+    for (let i = 0; i < cards.length; i++) {
+      setDownloading(`사진 만드는 중… ${i + 1}/${cards.length}`);
+      const res = await fetch(`/api/card-news/${initial.id}/render/${i}`);
+      if (!res.ok) throw new Error('카드 이미지를 못 만들었어요');
+      const blob = await res.blob();
+      files.push(
+        new File([blob], `카드뉴스-${branchName}-${String(i + 1).padStart(2, '0')}.png`, { type: 'image/png' }),
+      );
+    }
+    return files;
+  }
+
+  async function shareFiles(files: File[]) {
+    try {
+      await navigator.share({ files, title: `카드뉴스 ${files.length}장` });
+      setReadyFiles(null);
+    } catch (e) {
+      // 사용자가 공유창을 닫은 것도 예외로 온다 — 에러로 보여주지 않는다
+      const name = (e as Error).name;
+      setReadyFiles(files); // 어느 쪽이든 다시 누르면 바로 열리게 들고 있는다
+      if (name !== 'AbortError') {
+        setError('한 번 더 눌러주세요. 사진은 다 만들어놨어요.');
+      }
+    }
+  }
+
+  /**
+   * 모바일: 사진 앱·인스타로 바로 보내기.
+   * 사진을 만드는 사이 탭 제스처가 만료되면 iOS가 공유를 막으므로,
+   * 만들어둔 파일을 들고 있다가 두 번째 탭에서 곧바로 공유창을 연다.
+   */
+  async function shareAll() {
+    if (dirty && !(await save())) return;
+    setError('');
+    if (readyFiles && readyFiles.length === cards.length) {
+      await shareFiles(readyFiles);
+      return;
+    }
+    try {
+      const files = await buildCardFiles();
+      await shareFiles(files);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -307,18 +362,36 @@ export default function CardNewsStudio({
 
       {/* 내보내기 */}
       <div className="mt-6 space-y-3 border-t border-line pt-5">
-        <button onClick={downloadAll} disabled={!!downloading} className="btn-primary disabled:opacity-60">
-          <span className="flex items-center justify-center gap-1.5">
-            <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 ${cards.length > 1 ? 'ZIP' : 'PNG'})`}
-          </span>
-        </button>
+        {canShareFiles ? (
+          <>
+            <button onClick={shareAll} disabled={!!downloading} className="btn-primary disabled:opacity-60">
+              <span className="flex items-center justify-center gap-1.5">
+                <Share2 size={18} />{' '}
+                {downloading ?? (readyFiles ? '한 번 더 눌러 저장' : `사진 앱에 저장 (${cards.length}장)`)}
+              </span>
+            </button>
+            <button onClick={downloadAll} disabled={!!downloading} className="btn-ghost disabled:opacity-60">
+              <span className="flex items-center justify-center gap-1.5">
+                <Download size={18} /> 압축파일로 받기
+              </span>
+            </button>
+          </>
+        ) : (
+          <button onClick={downloadAll} disabled={!!downloading} className="btn-primary disabled:opacity-60">
+            <span className="flex items-center justify-center gap-1.5">
+              <Download size={18} /> {downloading ?? `전부 저장 (${cards.length}장 ${cards.length > 1 ? 'ZIP' : 'PNG'})`}
+            </span>
+          </button>
+        )}
         <button onClick={openInstagram} className="btn-ghost">
           <span className="flex items-center justify-center gap-1.5">
             <Send size={18} /> 인스타 열기{mode === 'image' ? ' (캡션 복사됨)' : ''}
           </span>
         </button>
         <p className="text-center text-xs text-ink-faint">
-          한 장만 고쳤으면 미리보기 아래 <b>“N번만 저장”</b>을 쓰세요. 저장한 사진은 인스타에서 캐러셀로 올려주세요 — 자동 업로드는 안 해요.
+          {canShareFiles
+            ? '“사진 앱에 저장”을 누르면 5장을 한 번에 사진 앱이나 인스타로 보낼 수 있어요. 자동 업로드는 안 해요.'
+            : '한 장만 고쳤으면 미리보기 아래 “N번만 저장”을 쓰세요. 저장한 사진은 인스타에서 캐러셀로 올려주세요 — 자동 업로드는 안 해요.'}
         </p>
       </div>
 
