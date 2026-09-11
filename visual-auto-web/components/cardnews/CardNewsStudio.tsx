@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, Send, RotateCw, Check, Trash2, Share2 } from 'lucide-react';
 import type { CardNews, InfoCard, ImageCard } from '@/lib/cardnews/cards';
@@ -46,6 +46,25 @@ export default function CardNewsStudio({
   const [published, setPublished] = useState(initial.status === 'published');
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
+
+  /**
+   * 모바일은 브라우저 다운로드가 사진 앱이 아니라 파일 앱으로 가서, ZIP을 받아도
+   * 인스타에 올릴 수가 없다. 파일 공유를 지원하는 기기면 그쪽을 기본 경로로 쓴다.
+   *
+   * 윈도우 크롬·맥 사파리도 공유 API가 있지만 데스크톱 공유창은 이 용도에 쓸모가 없고,
+   * 이미 잘 쓰던 ZIP 흐름을 바꿀 이유도 없다 → 터치 기기일 때만 켠다.
+   * (아이패드는 데스크톱 UA로 오므로 maxTouchPoints 로도 걸러낸다)
+   */
+  useEffect(() => {
+    try {
+      const touch = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 1;
+      if (!touch) return;
+      const probe = new File([new Uint8Array([0])], 'probe.png', { type: 'image/png' });
+      setCanShareFiles(Boolean(navigator.canShare?.({ files: [probe] })));
+    } catch {
+      setCanShareFiles(false);
+    }
+  }, []);
 
   function updateCards(next: typeof cards) {
     setCards(next);
@@ -390,7 +409,7 @@ export default function CardNewsStudio({
         </button>
         <p className="text-center text-xs text-ink-faint">
           {canShareFiles
-            ? '“사진 앱에 저장”을 누르면 5장을 한 번에 사진 앱이나 인스타로 보낼 수 있어요. 자동 업로드는 안 해요.'
+            ? `“사진 앱에 저장”을 누르면 공유창이 떠요. 거기서 사진 앱에 저장하거나 인스타를 바로 고르면 ${cards.length}장이 함께 넘어가요.`
             : '한 장만 고쳤으면 미리보기 아래 “N번만 저장”을 쓰세요. 저장한 사진은 인스타에서 캐러셀로 올려주세요 — 자동 업로드는 안 해요.'}
         </p>
       </div>
